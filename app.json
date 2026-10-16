@@ -1,0 +1,145 @@
+{
+  "expo": {
+    "name": "TRIPIS",
+    "slug": "vibetrip",
+    "version": "1.0.4",
+    "orientation": "portrait",
+    "icon": "./assets/images/tripis-app-icon.png",
+    "scheme": "vibetrip",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.sonanie.guide",
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "Allow $(PRODUCT_NAME) to use speech recognition.",
+        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to use the microphone.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "buildNumber": "1"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FAF6EF",
+        "foregroundImage": "./assets/images/tripis-adaptive-foreground.png"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.sonanie.guide",
+      "versionCode": 28,
+      "runtimeVersion": "1.0.3",
+      "blockedPermissions": [
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO"
+      ],
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR"
+      ]
+    },
+    "web": {
+      "output": "single",
+      "favicon": "./assets/images/tripis-favicon.png",
+      "lang": "en",
+      "name": "TRIPIS - Your AI travel friend",
+      "description": "TRIPIS — Your AI travel friend that plans trips tailored to your taste. Itinerary, stays, and restaurants all in one place."
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "ios": {
+            "image": "./assets/images/tripis-splash.png",
+            "imageWidth": 280,
+            "resizeMode": "contain",
+            "backgroundColor": "#FFFFFF"
+          },
+          "android": {
+            "image": "./assets/images/tripis-splash-android-icon.png",
+            "imageWidth": 150,
+            "resizeMode": "contain",
+            "backgroundColor": "#FFFFFF"
+          }
+        }
+      ],
+      "expo-web-browser",
+      "expo-localization",
+      "@react-native-community/datetimepicker",
+      "./plugins/withKakaoNative",
+      "./plugins/withGoogleNative",
+      "./plugins/withKakaoMavenRepo",
+      "./plugins/withAndroidGradleMemory",
+      "expo-speech-recognition",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "가이드가 사진을 보고 여행 정보를 해설하기 위해 카메라를 사용합니다.",
+          "microphonePermission": "라이브 여행비서와 음성으로 대화하기 위해 마이크를 사용합니다.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "가이드가 갤러리 사진을 보고 여행 정보를 해설하기 위해 사진 접근을 사용합니다."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "현재 위치 기반 여행 정보·SOS 안내를 위해 위치를 사용합니다."
+        }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "여정을 캘린더에 추가하기 위해 캘린더를 사용합니다."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "extraPods": [
+              {
+                "name": "GoogleUtilities",
+                "modular_headers": true
+              },
+              {
+                "name": "RecaptchaInterop",
+                "modular_headers": true
+              }
+            ]
+          }
+        }
+      ],
+      "expo-asset",
+      [
+        "@stripe/stripe-react-native",
+        {
+          "enableGooglePay": false
+        }
+      ]
+    ],
+    "experiments": {
+      "reactCompiler": false
+    },
+    "extra": {
+      "eas": {
+        "projectId": "f13f4f4b-7116-44be-b0c8-c91b633a5fb5"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/f13f4f4b-7116-44be-b0c8-c91b633a5fb5"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "owner": "vrois"
+  }
+}

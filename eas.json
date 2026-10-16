@@ -1,0 +1,52 @@
+{
+  "cli": {
+    "version": ">= 13.0.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "channel": "main",
+      "environment": "development",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "main",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "channel": "main",
+      "environment": "development",
+      "env": {
+        "EXPO_IMAGE_UTILS_NO_SHARP": "1"
+      },
+      "ios": {
+        "credentialsSource": "local"
+      },
+      "android": {
+        "buildType": "app-bundle",
+        "credentialsSource": "local",
+        "image": "ubuntu-22.04-jdk-17-ndk-r26b",
+        "env": {
+          "EXPO_ANDROID_GRADLE_FLAGS": "--no-daemon"
+        }
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "6760204083",
+        "ascApiKeyIssuerId": "ee01eefd-4883-4ce6-b5cf-fd44073b2e08",
+        "ascApiKeyId": "H92XS2QHYH",
+        "ascApiKeyPath": "ios-credentials/AuthKey_H92XS2QHYH.p8"
+      }
+    }
+  }
+}

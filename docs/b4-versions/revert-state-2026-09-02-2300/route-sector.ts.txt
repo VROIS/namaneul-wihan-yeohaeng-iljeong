@@ -1,0 +1,136 @@
+import type { PlaceResult } from "../agents/types";
+import { haversineKm } from "../agents/transit-haversine";
+
+type LatLng = { lat: number; lng: number };
+
+const hasCoord = (p: { lat?: number | null; lng?: number | null }): boolean =>
+  p.lat != null && p.lng != null && p.lat !== 0 && p.lng !== 0;
+
+const dist = (a: LatLng, b: LatLng) => haversineKm(a.lat, a.lng, b.lat, b.lng);
+
+// ⚠️ 수정금지(승인필요) 2026-09-02 사장님 승인(B4 v26 계획 A·B·C) = 구역 1.5km · 방향 한 바퀴 시간 균등(구역 통째) · 하루 = 가장 먼 곳 출발 → 최근접 → 도심 귀소 (정본 B4 v26)
+const ZONE_LINK_KM = 1.5;
+
+export function homePath(items: PlaceResult[], center: LatLng): PlaceResult[] {
+  const pts = items.filter(hasCoord);
+  if (pts.length <= 1) return [...pts];
+  const start = pts.reduce((a, b) =>
+    dist(center, b) > dist(center, a) ? b : a,
+  );
+  const rem = pts.filter((p) => p !== start);
+  const nodes: LatLng[] = [start];
+  let cur: LatLng = start;
+  while (rem.length) {
+    let bi = 0;
+    let bd = Infinity;
+    rem.forEach((p, i) => {
+      const d = dist(cur, p);
+      if (d < bd) {
+        bd = d;
+        bi = i;
+      }
+    });
+    cur = rem[bi];
+    nodes.push(rem.splice(bi, 1)[0]);
+  }
+  nodes.push(center);
+  const n = nodes.length;
+  let improved = true;
+  while (improved) {
+    improved = false;
+    for (let i = 1; i <= n - 3; i++) {
+      for (let j = i + 1; j <= n - 2; j++) {
+        const delta =
+          dist(nodes[i - 1], nodes[j]) +
+          dist(nodes[i], nodes[j + 1]) -
+          dist(nodes[i - 1], nodes[i]) -
+          dist(nodes[j], nodes[j + 1]);
+        if (delta < -1e-9) {
+          nodes.splice(i, j - i + 1, ...nodes.slice(i, j + 1).reverse());
+          improved = true;
+        }
+      }
+    }
+  }
+  return nodes.slice(0, -1) as PlaceResult[];
+}
+
+export function buildZoneDays(
+  items: PlaceResult[],
+  center: LatLng,
+  dayCapMin: number[],
+  stayMin: (p: PlaceResult) => number,
+): PlaceResult[][] {
+  const N = dayCapMin.length;
+  const empty = () => Array.from({ length: N }, () => [] as PlaceResult[]);
+  if (!N) return [];
+  const pts = items.filter(hasCoord);
+  if (!pts.length) return empty();
+  const load = (xs: PlaceResult[]) => xs.reduce((s, p) => s + stayMin(p), 0);
+
+  const par = pts.map((_, i) => i);
+  const find = (i: number): number =>
+    par[i] === i ? i : (par[i] = find(par[i]));
+  for (let i = 0; i < pts.length; i++)
+    for (let j = i + 1; j < pts.length; j++)
+      if (dist(pts[i], pts[j]) <= ZONE_LINK_KM) par[find(i)] = find(j);
+  const byRoot = new Map<number, PlaceResult[]>();
+  pts.forEach((p, i) => {
+    const r = find(i);
+    if (!byRoot.has(r)) byRoot.set(r, []);
+    byRoot.get(r)!.push(p);
+  });
+  type Cluster = { items: PlaceResult[]; c: LatLng };
+  const centroid = (xs: PlaceResult[]): LatLng => ({
+    lat: xs.reduce((s, p) => s + p.lat, 0) / xs.length,
+    lng: xs.reduce((s, p) => s + p.lng, 0) / xs.length,
+  });
+  const cap1 = Math.min(...dayCapMin);
+  const clusters: Cluster[] = [];
+  for (const zone of byRoot.values()) {
+    if (load(zone) <= cap1) {
+      clusters.push({ items: zone, c: centroid(zone) });
+      continue;
+    }
+    let chunk: PlaceResult[] = [];
+    for (const p of homePath(zone, center)) {
+      if (chunk.length && load(chunk) + stayMin(p) > cap1) {
+        clusters.push({ items: chunk, c: centroid(chunk) });
+        chunk = [];
+      }
+      chunk.push(p);
+    }
+    if (chunk.length) clusters.push({ items: chunk, c: centroid(chunk) });
+  }
+
+  const ang = (pt: LatLng) =>
+    ((Math.atan2(
+      pt.lat - center.lat,
+      (pt.lng - center.lng) * Math.cos((center.lat * Math.PI) / 180),
+    ) *
+      180) /
+      Math.PI +
+      360) %
+    360;
+  const byAng = [...clusters].sort((a, b) => ang(a.c) - ang(b.c));
+  const K = byAng.length;
+  const cap = Math.ceil(load(pts) / N);
+  let best: { days: PlaceResult[][]; score: number } | null = null;
+  for (let o = 0; o < K; o++) {
+    const seq = [...byAng.slice(o), ...byAng.slice(0, o)];
+    const days: Cluster[][] = [[]];
+    for (const c of seq) {
+      const cur = days[days.length - 1];
+      const curLoad = load(cur.flatMap((x) => x.items));
+      if (cur.length && curLoad + load(c.items) > cap && days.length < N)
+        days.push([c]);
+      else cur.push(c);
+    }
+    while (days.length < N) days.push([]);
+    const loads = days.map((d) => load(d.flatMap((x) => x.items)));
+    const score = Math.max(...loads) - Math.min(...loads);
+    if (!best || score < best.score)
+      best = { days: days.map((d) => d.flatMap((x) => x.items)), score };
+  }
+  return best ? best.days : empty();
+}

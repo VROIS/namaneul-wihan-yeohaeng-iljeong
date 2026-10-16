@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;700&amp;family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "on-secondary-container": "#fdf5ff",
+            "surface-tint": "#8bacff",
+            "surface-container-lowest": "#000000",
+            "inverse-on-surface": "#4d527a",
+            "on-surface": "#e2e3ff",
+            "primary-fixed-dim": "#6390f7",
+            "on-surface-variant": "#a3a8d5",
+            "surface-container": "#0d1442",
+            "on-primary-fixed-variant": "#002868",
+            "on-secondary-fixed": "#470093",
+            "surface": "#050930",
+            "secondary-fixed": "#dec8ff",
+            "primary-dim": "#709bff",
+            "tertiary-dim": "#ff51fa",
+            "primary-fixed": "#759eff",
+            "on-error-container": "#ffa8a3",
+            "tertiary-fixed-dim": "#ff61f8",
+            "on-tertiary": "#400040",
+            "tertiary": "#ff51fa",
+            "on-background": "#e2e3ff",
+            "secondary-fixed-dim": "#d3b7ff",
+            "secondary-container": "#7d00fa",
+            "surface-bright": "#1e2660",
+            "on-primary-container": "#001f55",
+            "on-primary-fixed": "#000000",
+            "primary-container": "#759eff",
+            "secondary": "#b486ff",
+            "surface-container-highest": "#182056",
+            "on-tertiary-container": "#230023",
+            "inverse-surface": "#fbf8ff",
+            "background": "#050930",
+            "surface-container-high": "#131a4c",
+            "on-secondary": "#2d0062",
+            "on-primary": "#002a6c",
+            "error": "#ff716c",
+            "outline": "#6d739d",
+            "tertiary-container": "#fe00fe",
+            "on-error": "#490006",
+            "on-tertiary-fixed-variant": "#6a006a",
+            "on-secondary-fixed-variant": "#6b00d9",
+            "tertiary-fixed": "#ff81f5",
+            "surface-variant": "#182056",
+            "outline-variant": "#40456c",
+            "inverse-primary": "#255abe",
+            "error-dim": "#d7383b",
+            "secondary-dim": "#9146ff",
+            "surface-container-low": "#080e38",
+            "primary": "#8bacff",
+            "on-tertiary-fixed": "#320032",
+            "error-container": "#9f0519",
+            "surface-dim": "#050930"
+          },
+          fontFamily: {
+            "headline": ["Noto Serif"],
+            "body": ["Plus Jakarta Sans"],
+            "label": ["Plus Jakarta Sans"]
+          },
+          borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+        },
+      },
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    .ethereal-glow {
+      background: radial-gradient(circle at 50% -20%, rgba(139, 172, 255, 0.15) 0%, rgba(5, 9, 48, 0) 60%);
+    }
+    .glass-shimmer {
+      background: linear-gradient(135deg, rgba(24, 32, 86, 0.4) 0%, rgba(13, 20, 66, 0.2) 100%);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface font-body overflow-hidden selection:bg-primary/30">
+<!-- Shared Component: TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-transparent backdrop-blur-xl flex justify-between items-center px-6 py-4 w-full">
+<div class="flex items-center gap-4">
+<button class="text-slate-400 hover:text-white transition-colors duration-300">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+</div>
+<div class="font-['Noto_Serif'] text-xl font-bold text-[#8bacff] drop-shadow-[0_0_8px_rgba(139,172,255,0.6)] uppercase tracking-widest">
+      BTS WORLD TOUR 2026
+    </div>
+<div class="flex items-center gap-4">
+<button class="text-slate-400 hover:text-white transition-colors duration-300">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+</button>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="relative h-screen w-full flex flex-col items-center justify-start pt-32 overflow-hidden ethereal-glow">
+<!-- Hero Title Section -->
+<div class="text-center z-10 px-8">
+<h2 class="font-headline text-slate-500 text-sm tracking-[0.4em] uppercase mb-2 opacity-60">NEXT DESTINATION</h2>
+<h1 class="font-headline text-6xl md:text-8xl font-bold text-on-surface tracking-tighter drop-shadow-2xl">
+        GOYANG
+      </h1>
+<div class="mt-6 flex items-center justify-center gap-4">
+<div class="h-[1px] w-12 bg-gradient-to-r from-transparent to-primary/40"></div>
+<span class="text-primary font-medium tracking-widest text-xs uppercase">Stadium Live Experience</span>
+<div class="h-[1px] w-12 bg-gradient-to-l from-transparent to-primary/40"></div>
+</div>
+</div>
+<!-- Background Atmospheric Elements -->
+<div class="absolute inset-0 z-0 pointer-events-none">
+<!-- Lightstick Glow Simulation -->
+<div class="absolute -bottom-24 left-1/2 -translate-x-1/2 w-[120vw] h-[530px] bg-primary/5 blur-[120px] rounded-full"></div>
+<div class="absolute top-1/4 left-1/4 w-64 h-64 bg-secondary/5 blur-[100px] rounded-full"></div>
+<!-- Subtle Texture Overlays -->
+<div class="absolute inset-0 opacity-10" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCjD5yCDMlaYkY0cl4msr0oLblKbAYPY6GDB-tcFzjIZba7sb1BBRVp8etHmalSjdCc7N8JL97jgm-UbEZ5pj3_84-OvGeg3gx6_xDugMlxWXyYlWr5HN06IsA2p90DRjB5jpO8q-hbATF403tRK6-GWVILTPk2N0o_HzD7zbAHg_lBT5g7VMIZ1Ays0Glul03rKxE5Ssz7y_6OICcSKoZI6_4Y5xK6tyB5U2vVvEWuTxWRX3u4A80r3hD1hVxkytBBsaasF__8fE6U');"></div>
+</div>
+<!-- The Peeking Lightstick Authentication Module -->
+<div class="absolute bottom-[-550px] left-1/2 -translate-x-1/2 w-full max-w-lg aspect-square z-20 group">
+<!-- Lightstick Body (Glass) -->
+<div class="w-full h-full glass-shimmer backdrop-blur-3xl rounded-full border border-outline-variant/20 shadow-[0_0_100px_rgba(139,172,255,0.1)] p-12 flex flex-col items-center justify-start text-center">
+<!-- Interactive Handle/Indicator -->
+<div class="w-16 h-1 bg-primary/30 rounded-full mb-12"></div>
+<div class="mb-8">
+<span class="material-symbols-outlined text-primary text-5xl" data-icon="blur_on" style="font-variation-settings: 'FILL' 1;">blur_on</span>
+</div>
+<h3 class="font-headline text-3xl mb-4 text-on-surface">Enter the Light</h3>
+<p class="text-on-surface-variant text-sm mb-10 max-w-xs leading-relaxed">
+          Sync your Official Lightstick to access the exclusive fan experience and live seating map.
+        </p>
+<!-- Placeholder for Authentication Form (Partially Visible) -->
+<div class="w-full space-y-4 opacity-40">
+<div class="w-full h-14 bg-surface-container-highest/50 rounded-xl border border-outline-variant/10 flex items-center px-6">
+<span class="text-on-surface-variant text-sm">Membership ID</span>
+</div>
+<button class="w-full h-14 bg-gradient-to-r from-primary to-primary-container rounded-xl flex items-center justify-center">
+<span class="font-bold text-on-primary-fixed uppercase tracking-widest text-sm">Synchronize</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Visual Polish: Floating Particles -->
+<div class="absolute top-1/2 left-1/3 w-1 h-1 bg-primary rounded-full animate-pulse opacity-40"></div>
+<div class="absolute top-1/3 right-1/4 w-1.5 h-1.5 bg-secondary rounded-full animate-pulse opacity-30"></div>
+<div class="absolute bottom-1/4 left-1/2 w-1 h-1 bg-white rounded-full animate-pulse opacity-20"></div>
+</main>
+<!-- Shared Component: Footer -->
+<footer class="fixed bottom-0 w-full z-40 bg-[#050930]/80 backdrop-blur-md flex flex-col items-center gap-4 px-8 py-8 w-full border-t border-[#8bacff]/10">
+<div class="flex gap-8">
+<a class="text-slate-500 hover:text-[#b486ff] transition-colors font-['Plus_Jakarta_Sans'] text-xs tracking-tighter transition-colors duration-300" href="#">Privacy Policy</a>
+<a class="text-slate-500 hover:text-[#b486ff] transition-colors font-['Plus_Jakarta_Sans'] text-xs tracking-tighter transition-colors duration-300" href="#">Terms of Service</a>
+<a class="text-slate-500 hover:text-[#b486ff] transition-colors font-['Plus_Jakarta_Sans'] text-xs tracking-tighter transition-colors duration-300" href="#">Cookie Settings</a>
+</div>
+<div class="font-['Plus_Jakarta_Sans'] text-xs tracking-tighter text-[#8bacff] text-opacity-80">
+      © 2026 BIGHIT MUSIC / HYBE. ALL RIGHTS RESERVED.
+    </div>
+</footer>
+<!-- Background Image Reference Layers (Hidden but semantic) -->
+<div class="hidden">
+<img data-alt="Close-up of a K-pop lightstick glowing with soft cobalt blue light in a dark stadium with subtle bokeh highlights." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBQnCDda4z1b320lwLFUNYO3MTZvzDdRxgljMeFJ9erJkBkl9sHB3DhwZVrtJLpaWGr9ZqScM1yqWy0LPFthy51ORmS9euE7nneRfsbCsGw-0BJbWEp-ioB9ErPUuU2xlGIyrwewkQAG_cFvr-4dRYSrI_Dy5Z1hQM9Wio757QhMQXB2_lpDrniioyntkEsXnU7XYyj0ALQcGBhBRyEtO2tWxe_u_-FaGM9AfuEXiNn7yy7dsaiMo48wykDFTEI8Ituo3mAWkJRTRff"/>
+<img data-alt="Dramatic stadium concert stage lighting at night with deep blue spotlights and hazy atmosphere, cinematic wide angle." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDoiLs8o-zhwq1_DZPYu3s-aOQWWmdz4hbYSScEtJwF76YnTbNW7htNeTXhHjBLiKwY2eaY4afmI2TrPTrudlqE4SH7st7bEf_TAifPCBhQOJAqTnDUbuVZvfvVEN1R0IpAvMMVcXquVETkfzfBQDSHeTXArBOcA3EblrQCL6AlMVR7pw6_0YTROrpAhFUxj7nc-oVHDxU8WFbtI5uoFV0tJCbWcPSeB_9pjW--97-wlcee2EDaFLv1zzWHkkqwYX8d9JCLPHJHecqG"/>
+</div>
+</body></html>

@@ -1,0 +1,4 @@
+루브르 박물관                    langs=7  ko,en,ja,fr,zh,es,de | by=불변5 | anchor=psr 61963 | regrade=None
+베르사유 궁전                    langs=7  ko,en,ja,fr,zh,es,de | by=불변5 | anchor=psr 61955 | regrade=None
+오르세 미술관                    langs=7  ko,en,ja,fr,zh,es,de | by=불변5 | anchor=psr 61956 | regrade=None
+파리 카타콤                     langs=7  ko,en,ja,fr,zh,es,de | by=불변6 | anchor=psr 61884 | regrade=None

@@ -1,0 +1,211 @@
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+# ⚠️ 2026-07-31 = 애플 서명 파일·비밀번호는 **절대 올리지 않는다.**
+#   유출되면 남이 우리 이름으로 앱을 만들 수 있다. 파일은 이 PC 에만 둔다.
+ios-credentials/
+credentials.json
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env
+.env*.local
+.env.cursor
+
+# 로그 파일
+import_*.txt
+*.log
+
+# 백업 파일 (별도 보관)
+backup*.sql
+
+# typescript
+*.tsbuildinfo
+
+app-example
+
+# generated native folders
+/ios
+/android
+
+# dev scripts & test output
+dev/
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!tsconfig.*.json
+!app.json
+!eas.json
+!babel.config.json
+!client/lib/i18n/locales/*.json
+
+# migrations meta (auto-generated)
+migrations/meta/
+
+# Cursor IDE settings
+.cursor/
+
+# 내손안에 가이드 레거시 (참고용, 185MB)
+legacy-guide/
+
+# 마이그레이션 임시 데이터
+scripts/migration-data/
+
+# AI 에이전트 스킬
+_agent/
+
+# Claude Code IDE 자산 (메모리/플랜/worktrees - 절대 push 금지)
+# 단, 슬래시 커맨드 + 스킬 + settings.json(팀 공유 자산 = git rebase/reset 차단 훅 등) 만 예외
+.claude/*
+!.claude/commands/
+!.claude/skills/
+!.claude/settings.json
+.claude/commands/*.local.md
+
+# 2026-06-29 임의 커밋 차단 = 사장님 허가 토큰 (= 1회용, 절대 커밋 X)
+.commit-approved
+
+# 2026-07-04 rebase/reset 차단 = 사장님 허가 토큰 (= 1회용, 절대 커밋 X)
+.history-rewrite-approved
+
+# Playwright MCP 캐시
+.playwright-mcp/
+
+# 디버그/테스트 스크린샷
+D-*.png
+assets/screenshot-*.png
+assets/test-screenshots/
+
+# APK 다운로드 임시 폴더
+apk-download/
+
+# 디버그/검증/1회용 스크립트 (운영 X, 로컬 보관용)
+scripts/db_investigate*.mjs
+scripts/debug-*.mjs
+scripts/test-*.mjs
+scripts/check_*.mjs
+scripts/check-*.mjs
+scripts/verify-*.mjs
+# ⚠️ 2026-07-31 예외 = **아이폰 인증 3종 검사기는 올린다**(§16 상시 도구).
+#   이유: 이 검사는 리눅스(GitHub)에서만 돌 수 있다(윈도우는 iOS 설정 생성 자체가 불가).
+#   레포에 없으면 GitHub 작업이 부를 수가 없다 = 1회용이 아니라 빌드 전 상시 관문.
+!scripts/verify-ios-auth.mjs
+# ⚠️ 2026-08-06 예외 = §22 파이프라인 오케스트레이터·기계4 검증기 = 커밋 훅의 필수 의존(§22 판단검증 적발: 제외되면 7-25 훅 유실 사고 재생산 = 다른 클론에서 커밋 파손)
+!scripts/verify-pipeline.mjs
+!scripts/verify-before-commit.mjs
+scripts/final-verify.mjs
+scripts/bulk-trigger-*.mjs
+scripts/insert-cron-schedules.mjs
+scripts/set-use-mcp-raw.mjs
+scripts/add-unique-constraint.mjs
+scripts/download-apk.sh
+
+# 임시 메모/문서
+commit_msg.txt
+next-prompt.md
+이
+
+# 2026-05 임시 SQL chunk / 마이그레이션 잔여물
+_chunk*.sql
+_mx_*.sql
+_wiki_*.sql
+
+# 2026-05 디버깅 임시 스크립트
+scripts/_tmp_*.mjs
+scripts/_tmp_*.ts
+scripts/sql-*.mjs
+
+# 2026-05-19 1 회용 진단/마이그레이션 스크립트 (= 로컬 보관 = 영구 컴포넌트 아님)
+scripts/_diag-*.mjs
+scripts/_diag-*.ts
+scripts/_migration-*.mjs
+scripts/_migration-*.ts
+
+# 2026-05-19 보안 사고 = DB 비밀번호 하드코딩 파일 (= 절대 커밋 X)
+paris_*.js
+schema_check.js
+schema_*.js
+
+# 2026-05 임시 텍스트 메모 (사용자 작업 중간 산출물)
+docs/Skip to content.txt
+docs/Top *.txt
+docs/paris*.txt
+docs/stanford_*.txt
+docs/rank*.txt
+docs/결정*.txt
+docs/부산*.txt
+docs/정정된*.txt
+docs/PARIS_DEEP_RESEARCH_PROMPT.md
+
+# 2026-05 검수용 baseline / qa 폴더 (= 로컬 시뮬 결과물)
+docs/baseline-*/
+docs/changed-*/
+docs/ssot-*/
+docs/db-only-*/
+docs/bts-test-*/
+docs/raw/
+docs/qa/
+docs/paris_qa.html
+.history
+tmp/
+
+# 2026-06-07 앱 화면 캡처 PDF (= 로컬 전용 보관, 커밋 X / 추적된 PDF 0개라 안전)
+_seed_raw/**/*.pdf
+
+# 2026-06-11 = 구글 드라이브 동기화 임시폴더 (= 207 파일 노이즈 = 프로젝트 파일 아님 = 추적 X)
+.tmp.driveupload/
+
+attached_assets/
+
+# 2026-07-14 = 루트 최상위 검증용 스크린샷 PNG (= Playwright/DevTools 실증 캡처 = 로컬 전용, 레포 오염 방지). 앱 에셋은 assets/ 안에 있어 무관.
+/*.png
+
+# 2026-07-22 지브리영상 = 외부작업(Antigravity) 산출물 사본·1회용 스크립트 = 레포 커밋 금지(§16·§19, 원본 보존은 로컬 폴더)
+deliverables_ghibli_video/
+scratch_*.ts
+
+# ⚠️ 2026-08-05 사장님 지시 = **비밀 메모는 공개 저장소에 올리지 않는다.**
+#   이 저장소는 PUBLIC(github.com/VROIS/namaneul-wihan-yeohaeng-iljeong) 이라
+#   계정·생년월일·개인 메일·DB 조작값을 문서에 적으면 그대로 인터넷에 공개된다(2026-08-05 푸시 차단으로 발각).
+#   → 그런 값은 아래 폴더에만 둔다. 이 PC 에서는 평소처럼 열어볼 수 있고, git 에는 안 올라간다.
+docs/_비공개/
+.verify-state.json
+
+# 2026-08-20 = 옵시디언(Obsidian) vault 개인설정 폴더. 사장님 PC 로컬 전용, 공개저장소에 올릴 이유 없음.
+.obsidian/
+
+# Cloudflare Workers Assets 조립 산출물(2026-09-06) = dist+assets+admin 머지본, 재생성 가능
+public-dist/
+
+# wrangler deploy --dry-run 산출물(기계검증 6번째) = 저장소에 남기지 않는다
+.wrangler-dry/
+**/.wrangler-dry/

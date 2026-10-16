@@ -1,0 +1,102 @@
+════════ 파리 7개국어 raw 정밀분석 ════════
+
+【1】 랜드마크 합집합 30곳 — 카테고리(c)별 분포
+  heritage     총 17곳   7개국어만장일치 10   4개국어이상 14
+  attraction   총  8곳   7개국어만장일치  1   4개국어이상  3
+  shopping     총  3곳   7개국어만장일치  0   4개국어이상  2
+  adventure    총  1곳   7개국어만장일치  1   4개국어이상  1
+  hotspot      총  1곳   7개국어만장일치  0   4개국어이상  0
+
+【2】 랜드마크 전체 목록 (언어수 순)
+  ★7 heritage    Eiffel Tower                           4.2km  [de,en,es,fr,ja,zh,ko]
+  ★7 heritage    Louvre Museum                          1.2km  [de,en,es,fr,ja,zh,ko]
+  ★7 heritage    Arc de Triomphe                        4.6km  [de,en,es,fr,ja,zh,ko]
+  ★7 heritage    Sacré-Cœur Basilica                    3.4km  [de,en,es,fr,ja,zh,ko]
+  ★7 heritage    Musée d'Orsay                          1.9km  [de,en,es,fr,ja,zh,ko]
+  ★7 heritage    Palace of Versailles                  17.9km  [de,en,es,fr,ja,zh,ko]
+  ★7 heritage    Sainte-Chapelle                        0.5km  [de,en,es,fr,ja,zh,ko]
+  ★7 heritage    Panthéon                               1.2km  [de,en,es,fr,ja,zh,ko]
+  ★7 heritage    Palais Garnier                         2.3km  [de,en,es,fr,ja,zh,ko]
+  ★7 attraction/heritage/hotspot Centre Pompidou                        0.4km  [de,en,es,fr,ja,zh,ko]
+  ★7 heritage    Les Invalides                          2.9km  [de,en,es,fr,ja,zh,ko]
+  ★7 adventure/heritage Catacombs of Paris                     2.9km  [de,en,es,fr,ja,zh,ko]
+  ★6 heritage    Notre-Dame Cathedral                   0.4km  [de,en,es,fr,zh,ko]
+  ★6 attraction/heritage Pont Neuf                              0.8km  [de,en,fr,ja,zh,ko]
+  ★5 attraction/heritage/hotspot Montmartre                             3.4km  [de,en,es,zh,ko]
+  ★5 heritage    Père Lachaise Cemetery                 3.1km  [de,en,es,fr,zh]
+  ★5 shopping    Galeries Lafayette Haussmann           2.4km  [es,fr,ja,zh,ko]
+  ★4 shopping    Champs-Élysées                         3.6km  [de,en,es,ko]
+  ★4 heritage/attraction/healing Luxembourg Gardens                     1.6km  [es,fr,zh,ko]
+  ★4 heritage    Place de la Concorde                   2.5km  [fr,ja,zh,ko]
+  ★3 attraction  Jardin du Luxembourg                   1.6km  [de,en,ja]
+  ★3 heritage    Conciergerie                           0.5km  [en,ja,ko]
+  ★3 heritage/hotspot Place des Vosges                       1.0km  [fr,ja,zh]
+  ★2 attraction  Disneyland Paris                      31.0km  [en,fr]
+  ★1 attraction  Tuileries Garden                       2.0km  [de]
+  ★1 shopping    Galeries Lafayette                     2.4km  [de]
+  ★1 attraction  Moulin Rouge                           3.4km  [es]
+  ★1 attraction  Canal Saint-Martin                     2.2km  [es]
+  ★1 heritage    Cathédrale Notre-Dame de Paris         0.4km  [ja]
+  ★1 hotspot     Montparnasse Tower                     2.7km  [ja]
+
+【3】 식당 합집합 182곳 — 언어수 × 가격대 교차표
+  언어수 |        eco ≤24 reason 25-60  prem 61-180     lux 181+   계
+    ★7   |              1            5            0            0     6
+    ★6   |              0            7            2            0     9
+    ★5   |              0           13            1            0    14
+    ★4   |              2            9            2            0    13
+    ★3   |              0            9            1            1    11
+    ★2   |              2           21            3            0    26
+    ★1   |             12           83            6            0   101
+    계   |             18          148           15            1   182
+
+【4】 4개국어 이상 식당 = 우리가 "베스트 식당"이라 부르는 것 전부
+  ★8  €  21  Bouillon Chartier Grands Boule  딸린랜드마크: Palais Garnier / Galeries Lafayette Haussmann
+  ★8  €  60  Café Marly                      딸린랜드마크: Louvre Museum / Place de la Concorde
+  ★7  €  14  L'As du Fallafel                딸린랜드마크: Centre Pompidou / Notre-Dame Cathedral
+  ★7  €  37  Le Relais de l'Entrecôte        딸린랜드마크: Champs-Élysées / Jardin du Luxembourg
+  ★7  €  38  Les Antiquaires                 딸린랜드마크: Musée d'Orsay / Louvre Museum
+  ★7  €  40  Le Hide                         딸린랜드마크: Arc de Triomphe
+  ★7  €  45  Les Cocottes                    딸린랜드마크: Eiffel Tower
+  ★7  €  59  Café de l'Esplanade             딸린랜드마크: Les Invalides
+  ★6  €  26  Sanuki Ya                       딸린랜드마크: Louvre Museum
+  ★6  €  33  Les Deux Palais                 딸린랜드마크: Sainte-Chapelle / Conciergerie
+  ★6  €  39  La Boîte aux Lettres            딸린랜드마크: Sacré-Cœur Basilica
+  ★6  €  43  Le Sept                         딸린랜드마크: Palace of Versailles
+  ★6  €  48  Le Moulin de la Galette         딸린랜드마크: Montmartre / Sacré-Cœur Basilica
+  ★6  €  49  Le Petit Sommelier              딸린랜드마크: Catacombs of Paris / Les Invalides
+  ★6  €  51  César                           딸린랜드마크: Arc de Triomphe
+  ★6  €  63  La Table de Colette             딸린랜드마크: Panthéon
+  ★6  €  70  Café de la Paix                 딸린랜드마크: Palais Garnier
+  ★5  €  27  Le Petit Cler                   딸린랜드마크: Eiffel Tower
+  ★5  €  32  L'Etoile 1903                   딸린랜드마크: Arc de Triomphe
+  ★5  €  33  Le Consulat                     딸린랜드마크: Montmartre / Sacré-Cœur Basilica
+  ★5  €  35  Le Comptoir des Saints-Pères    딸린랜드마크: Musée d'Orsay
+  ★5  €  36  Le Trumilou                     딸린랜드마크: Notre-Dame Cathedral / Centre Pompidou
+  ★5  €  37  Pink Mamma                      딸린랜드마크: Moulin Rouge / Galeries Lafayette Haussmann
+  ★5  €  41  Auberge de la Reine Blanche     딸린랜드마크: Notre-Dame Cathedral / Cathédrale Notre-Dame de Paris
+  ★5  €  44  Café de Flore                   딸린랜드마크: Jardin du Luxembourg / Luxembourg Gardens
+  ★5  €  44  Les Deux Magots                 딸린랜드마크: Jardin du Luxembourg / Pont Neuf
+  ★5  €  47  Café de l'Alma                  딸린랜드마크: Eiffel Tower
+  ★5  €  53  Le Procope                      딸린랜드마크: Sainte-Chapelle / Pont Neuf
+  ★5  €  56  Le Grand Colbert                딸린랜드마크: Galeries Lafayette / Sainte-Chapelle
+  ★5  €  57  Auberge Bressane                딸린랜드마크: Les Invalides
+  ★5  €  71  Le Café de la Paix              딸린랜드마크: Palais Garnier / Galeries Lafayette Haussmann
+  ★4  €  15  Happy Caffé                     딸린랜드마크: Place de la Concorde / Louvre Museum
+  ★4  €  21  Bouillon Pigalle                딸린랜드마크: Galeries Lafayette / Moulin Rouge
+  ★4  €  26  Hardware Société                딸린랜드마크: Sacré-Cœur Basilica
+  ★4  €  29  Le Comptoir du Panthéon         딸린랜드마크: Panthéon
+  ★4  €  30  L'Entracte                      딸린랜드마크: Galeries Lafayette / Palais Garnier
+  ★4  €  33  Bread and Roses                 딸린랜드마크: Jardin du Luxembourg / Luxembourg Gardens
+  ★4  €  34  Le Saint-Régis                  딸린랜드마크: Notre-Dame Cathedral
+  ★4  €  35  Pain Vin Fromage                딸린랜드마크: Centre Pompidou
+  ★4  €  40  L'Opportun                      딸린랜드마크: Catacombs of Paris
+  ★4  €  43  Daguerre Marée                  딸린랜드마크: Catacombs of Paris
+  ★4  €  44  Flottes                         딸린랜드마크: Tuileries Garden / Place de la Concorde
+  ★4  €  88  Benoit                          딸린랜드마크: Centre Pompidou
+  ★4  €  89  La Table du 11                  딸린랜드마크: Palace of Versailles
+
+【5】 ★1~3 식당(= 언어 1~3개만 고른 것) 가격대 분포 = 폭이 넓은지
+  ★3  11곳  최저€26 중앙€43 최고€367   €25-60 구간 9곳
+  ★2  26곳  최저€8 중앙€45 최고€135   €25-60 구간 21곳
+  ★1 101곳  최저€10 중앙€35 최고€120   €25-60 구간 83곳

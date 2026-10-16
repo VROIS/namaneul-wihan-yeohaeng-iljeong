@@ -1,0 +1,443 @@
+// ⚠️ 수정금지(승인필요) — 2026-05-06 BTS Screen 4 카트 캐러셀 → 인앱 지도 (Web 직접 div + Native WebView)
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, StyleSheet, View, Platform } from "react-native";
+import { useTranslation } from "react-i18next";
+import { BTS_MAP_HTML, type BTSMapPlace } from "./bts-map-html";
+import type { BTSPlace } from "@/contexts/BTSContext";
+
+// ⚠️ 수정금지(승인필요) 2026-05-19 = COLORS + LUCIDE = 단일 SSOT bts-marker-svg.ts 로 분리
+import { COLORS, LUCIDE } from "./bts-marker-svg";
+
+type Props = {
+  places: BTSPlace[]; // top-places 응답 8 슬롯 (= 공연장 1 + 활동 7)
+  selectedIds: number[]; // 카트에 담긴 카드 id (= 마커 등장 트리거)
+  venueId: number | null; // slot 1 = bts_venue id (= 항상 표시)
+  apiKey: string | null; // /api/bts/map-config 에서 fetch
+  onMarkerPress: (id: number) => void;
+  height?: number; // 단계 3 사용자 시각 검수로 확정 (초기 = 240)
+  tint?: string;
+};
+
+function toMapPlace(p: BTSPlace): BTSMapPlace {
+  return {
+    id: p.id,
+    nameEn: p.nameEn,
+    nameKo: p.nameKo,
+    seedCategory: p.seedCategory,
+    latitude: p.latitude ?? null,
+    longitude: p.longitude ?? null,
+  };
+}
+
+function makeIcon(
+  google: any,
+  cat: string,
+  isVenue: boolean,
+  isActive: boolean,
+) {
+  const color = COLORS[cat] || "#666";
+  const path = LUCIDE[cat] || '<circle cx="12" cy="12" r="6"/>';
+  const size = isVenue ? 56 : 40;
+  const iconSize = isVenue ? 28 : 20;
+  const off = (size - iconSize) / 2;
+  const sc = iconSize / 24;
+  let label = "";
+  if (isVenue && isActive) {
+    label =
+      '<g transform="translate(' +
+      size / 2 +
+      "," +
+      (size - 8) +
+      ')"><rect x="-13" y="-7" width="26" height="13" rx="3" fill="white" stroke="' +
+      color +
+      '" stroke-width="1.5"/><text x="0" y="3" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="' +
+      color +
+      '">BTS</text></g>';
+  }
+  const svg =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="' +
+    size +
+    '" height="' +
+    size +
+    '" viewBox="0 0 ' +
+    size +
+    " " +
+    size +
+    '"><circle cx="' +
+    size / 2 +
+    '" cy="' +
+    size / 2 +
+    '" r="' +
+    (size / 2 - 2) +
+    '" fill="' +
+    color +
+    '" stroke="white" stroke-width="3"/><g transform="translate(' +
+    off +
+    "," +
+    off +
+    ") scale(" +
+    sc +
+    ')" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    path +
+    "</g>" +
+    label +
+    "</svg>";
+  return {
+    url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg),
+    scaledSize: new google.maps.Size(size, size),
+    anchor: new google.maps.Point(size / 2, size / 2),
+  };
+}
+
+const MAP_STYLES = [
+  { elementType: "geometry", stylers: [{ color: "#f8f7fb" }] },
+  { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+  {
+    featureType: "poi",
+    elementType: "labels",
+    stylers: [{ visibility: "off" }],
+  },
+  { featureType: "transit", stylers: [{ visibility: "off" }] },
+  {
+    featureType: "road",
+    elementType: "geometry",
+    stylers: [{ color: "#e9e6f0" }],
+  },
+  {
+    featureType: "road",
+    elementType: "labels",
+    stylers: [{ visibility: "off" }],
+  },
+  {
+    featureType: "water",
+    elementType: "geometry",
+    stylers: [{ color: "#e9d5ff" }],
+  },
+  {
+    featureType: "poi.park",
+    elementType: "geometry",
+    stylers: [{ color: "#dcfce7" }],
+  },
+];
+
+let sdkPromise: Promise<any> | null = null;
+function loadGoogleMaps(apiKey: string): Promise<any> {
+  if (typeof window === "undefined") return Promise.reject("ssr");
+  const w = window as any;
+  if (w.google?.maps) return Promise.resolve(w.google);
+  if (sdkPromise) return sdkPromise;
+  sdkPromise = new Promise((resolve, reject) => {
+    const cb = `__btsMapInit_${Date.now()}`;
+    (w as any)[cb] = () => {
+      try {
+        delete (w as any)[cb];
+      } catch {}
+      resolve(w.google);
+    };
+    const s = document.createElement("script");
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=${cb}&v=quarterly`;
+    s.async = true;
+    s.onerror = () => {
+      sdkPromise = null;
+      reject(new Error("Google Maps SDK load failed"));
+    };
+    document.body.appendChild(s);
+  });
+  return sdkPromise;
+}
+
+function BTSPlaceMapWeb({
+  selectedIds,
+  apiKey,
+  onMarkerPress,
+  height = 240,
+  tint = "#9333ea",
+  mapPlaces: validPlaces,
+  mapVenue: venue,
+  venueId,
+}: InternalProps) {
+  const mapDivRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<any>(null);
+  const venueMarkerRef = useRef<any>(null);
+  const markersRef = useRef<Record<number, any>>({});
+  const obsRef = useRef<{ io?: IntersectionObserver; ro?: ResizeObserver }>({});
+  const [mapReady, setMapReady] = useState(false);
+
+  // ⚠️ 수정금지(승인필요) — 2026-05-06: ScrollView 안 mapSection 이 viewport 밖일 때 = init 시 container 0x0 = tile load X.
+  useEffect(() => {
+    if (!apiKey || !mapDivRef.current) return;
+    let cancelled = false;
+    loadGoogleMaps(apiKey)
+      .then((google) => {
+        if (cancelled || !mapDivRef.current) return;
+        mapRef.current = new google.maps.Map(mapDivRef.current, {
+          center: { lat: 19.4049, lng: -99.0959 },
+          zoom: 11,
+          disableDefaultUI: true,
+          zoomControl: true,
+          gestureHandling: "greedy",
+          clickableIcons: false,
+          styles: MAP_STYLES,
+        });
+        setMapReady(true);
+
+        try {
+          const io = new IntersectionObserver(
+            (entries) => {
+              for (const e of entries) {
+                if (e.isIntersecting && mapRef.current) {
+                  google.maps.event.trigger(mapRef.current, "resize");
+                  io.disconnect();
+                  obsRef.current.io = undefined;
+                  break;
+                }
+              }
+            },
+            { threshold: 0.1 },
+          );
+          io.observe(mapDivRef.current as any);
+          obsRef.current.io = io;
+          let raf = 0;
+          const ro = new ResizeObserver(() => {
+            if (raf) cancelAnimationFrame(raf);
+            raf = requestAnimationFrame(() => {
+              if (mapRef.current)
+                google.maps.event.trigger(mapRef.current, "resize");
+            });
+          });
+          ro.observe(mapDivRef.current as any);
+          obsRef.current.ro = ro;
+        } catch {}
+      })
+      .catch((e) => console.warn("[BTSPlaceMap-web] SDK load failed:", e));
+    return () => {
+      cancelled = true;
+      obsRef.current.io?.disconnect();
+      obsRef.current.ro?.disconnect();
+      obsRef.current = {};
+    };
+  }, [apiKey]);
+
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const w = window as any;
+    const google = w.google;
+    if (!google) return;
+    if (venueMarkerRef.current) {
+      venueMarkerRef.current.setMap(null);
+      venueMarkerRef.current = null;
+    }
+    if (venue && venue.latitude != null && venue.longitude != null) {
+      const isActive = selectedIds.length >= 1;
+      const m = new google.maps.Marker({
+        position: { lat: Number(venue.latitude), lng: Number(venue.longitude) },
+        map: mapRef.current,
+        icon: makeIcon(
+          google,
+          venue.seedCategory || "bts_venue",
+          true,
+          isActive,
+        ),
+        title: venue.nameEn || "",
+        zIndex: 999,
+      });
+      m.addListener("click", () => onMarkerPress(venue.id));
+      venueMarkerRef.current = m;
+    }
+  }, [mapReady, venue, selectedIds.length, onMarkerPress]);
+
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const w = window as any;
+    const google = w.google;
+    if (!google) return;
+    const want = new Set(selectedIds);
+    const placesById: Record<number, BTSMapPlace> = {};
+    for (const p of validPlaces) placesById[p.id] = p;
+    for (const idStr of Object.keys(markersRef.current)) {
+      const id = Number(idStr);
+      if (!want.has(id)) {
+        markersRef.current[id]?.setMap(null);
+        delete markersRef.current[id];
+      }
+    }
+    for (const id of selectedIds) {
+      if (markersRef.current[id]) continue;
+      const p = placesById[id];
+      if (!p || p.latitude == null || p.longitude == null) continue;
+      if (venue && p.id === venue.id) continue;
+      const m = new google.maps.Marker({
+        position: { lat: Number(p.latitude), lng: Number(p.longitude) },
+        map: mapRef.current,
+        icon: makeIcon(google, p.seedCategory || "attraction", false, false),
+        title: p.nameEn || "",
+      });
+      m.addListener("click", () => onMarkerPress(p.id));
+      markersRef.current[id] = m;
+    }
+    const ks = Object.keys(markersRef.current);
+    let count = 0;
+    const b = new google.maps.LatLngBounds();
+    if (venueMarkerRef.current) {
+      b.extend(venueMarkerRef.current.getPosition());
+      count++;
+    }
+    for (const k of ks) {
+      b.extend(markersRef.current[Number(k)].getPosition());
+      count++;
+    }
+    if (count === 0) return;
+    if (count === 1) {
+      mapRef.current.setCenter(b.getCenter());
+      mapRef.current.setZoom(13);
+    } else {
+      mapRef.current.fitBounds(b, { top: 60, right: 60, bottom: 60, left: 60 });
+    }
+  }, [mapReady, validPlaces, venue, selectedIds, onMarkerPress]);
+
+  useEffect(() => {
+    return () => {
+      for (const idStr of Object.keys(markersRef.current)) {
+        markersRef.current[Number(idStr)]?.setMap(null);
+      }
+      markersRef.current = {};
+    };
+  }, [venueId]);
+
+  if (!apiKey) {
+    return (
+      <View style={[styles.container, { height }]}>
+        <ActivityIndicator size="small" color={tint} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.container, { height }]}>
+      <View ref={mapDivRef as any} style={{ width: "100%", height: "100%" }} />
+      {!mapReady && (
+        <View style={styles.loadingOverlay} pointerEvents="none">
+          <ActivityIndicator size="small" color={tint} />
+        </View>
+      )}
+    </View>
+  );
+}
+
+function BTSPlaceMapNative(props: InternalProps) {
+  const { WebView } =
+    require("react-native-webview") as typeof import("react-native-webview");
+  const {
+    selectedIds,
+    apiKey,
+    onMarkerPress,
+    height = 240,
+    tint = "#9333ea",
+    mapPlaces: validPlaces,
+    mapVenue: venue,
+  } = props;
+
+  const webRef = useRef<any>(null);
+  const [mapReady, setMapReady] = useState(false);
+  const { i18n } = useTranslation();
+
+  const html = useMemo(
+    () => (apiKey ? BTS_MAP_HTML(apiKey, i18n.language) : ""),
+    [apiKey, i18n.language],
+  );
+
+  useEffect(() => {
+    if (!mapReady) return;
+    const payload = { places: validPlaces, venue, selectedIds };
+    webRef.current?.injectJavaScript(
+      `window.syncPlaces(${JSON.stringify(payload)}); true;`,
+    );
+  }, [mapReady, validPlaces, venue, selectedIds]);
+
+  function onMessage(e: any) {
+    try {
+      const data = JSON.parse(e.nativeEvent.data || "{}");
+      if (data.type === "ready") setMapReady(true);
+      else if (data.type === "marker" && typeof data.id === "number")
+        onMarkerPress(data.id);
+      else if (data.type === "error")
+        console.warn("[BTSPlaceMap] WebView error:", data.message);
+    } catch {}
+  }
+
+  if (!apiKey) {
+    return (
+      <View style={[styles.container, { height }]}>
+        <ActivityIndicator size="small" color={tint} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.container, { height }]}>
+      <WebView
+        ref={webRef}
+        key={apiKey}
+        originWhitelist={["*"]}
+        source={{ html, baseUrl: "https://maps.googleapis.com/" }}
+        javaScriptEnabled
+        domStorageEnabled
+        scrollEnabled={false}
+        onMessage={onMessage}
+        mixedContentMode={Platform.OS === "android" ? "always" : undefined}
+        setSupportMultipleWindows={false}
+        allowsInlineMediaPlayback
+        style={styles.webview}
+      />
+      {!mapReady && (
+        <View style={styles.loadingOverlay} pointerEvents="none">
+          <ActivityIndicator size="small" color={tint} />
+        </View>
+      )}
+    </View>
+  );
+}
+
+type InternalProps = Props & {
+  mapPlaces: BTSMapPlace[];
+  mapVenue: BTSMapPlace | null;
+};
+
+export default function BTSPlaceMap(props: Props) {
+  const mapPlaces = useMemo(
+    () =>
+      props.places
+        .filter((p) => p.latitude != null && p.longitude != null)
+        .map(toMapPlace),
+    [props.places],
+  );
+  const mapVenue = useMemo<BTSMapPlace | null>(() => {
+    if (props.venueId == null) return null;
+    const v = props.places.find((p) => p.id === props.venueId);
+    return v && v.latitude != null && v.longitude != null
+      ? toMapPlace(v)
+      : null;
+  }, [props.venueId, props.places]);
+
+  const internal: InternalProps = { ...props, mapPlaces, mapVenue };
+  if (Platform.OS === "web") return <BTSPlaceMapWeb {...internal} />;
+  return <BTSPlaceMapNative {...internal} />;
+}
+
+const styles = StyleSheet.create({
+  container: {
+    width: "100%",
+    backgroundColor: "#f8f7fb",
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  webview: {
+    flex: 1,
+    backgroundColor: "transparent",
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});

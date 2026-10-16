@@ -1,0 +1,133 @@
+# ⚠️ 수정금지(승인필요) — Android APK 로컬 빌드 (2026-04-18)
+# 목적: Expo 무료 플랜 빌드 한도 회피 (eas build --local 로 GitHub Actions 러너에서 직접 빌드)
+# 트리거:
+#   (1) 자동 — main 브랜치에 네이티브 관련 파일 변경 push 시 자동 빌드 (package.json, app.json, plugins/ 등)
+#   (2) 수동 — Actions 탭 "Run workflow" 클릭 (언제든 강제 리빌드 가능)
+# 결과: Artifacts 섹션에서 APK 다운로드 → 폰에 설치 (자동 빌드 완료 이메일 알림 GitHub 기본 제공)
+# Secret 필수: EXPO_TOKEN (EAS 인증용)
+# ⚠️ 2026-07-26 §22 승인 변경 — 소셜로그인 열쇠(EXPO_PUBLIC_*) 주입 추가.
+#   사유: EXPO_PUBLIC_* 는 빌드타임 인라인이라 여기서 안 넘기면 APK 번들에 키가 빈칸 →
+#         isGoogleOAuthConfigured()/isKakaoOAuthConfigured() = false → 앱에서 로그인 불가.
+
+name: Build Android APK (local)
+
+on:
+  # ⚠️ 수정금지(승인필요) 2026-07-30 사장님 지시 = **APK 는 모아서 굽는다 = 수동 실행만.**
+  #   사유: 수정할 때마다 굽는 것은 낭비(1회 36분). 평소 확인은 EAS Update(OTA) + 아이폰 Expo 로 충분.
+  #   옛 자동 발동(package.json 등이 바뀌면 push 마다 자동 빌드)은 삭제 §19.
+  #   ⇒ 필요할 때 Actions 탭 "Run workflow" 로 실행.
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ⚠️ 2026-08-24 = eas-cli(latest, 43행)가 Node 22+ 요구로 바뀌어 Node 20 설치 실패.
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Setup Java (Android 빌드 필수)
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Install dependencies
+        run: npm ci --no-audit --prefer-offline
+
+      # ⚠️ 2026-07-26 신설 — 소셜로그인 열쇠 사전 검사.
+      # 열쇠가 빠진 채로 APK 가 나가면 = 폰에서 로그인이 "조용히" 실패 = 원인 추적 불가(과거 사고 재발).
+      # 그래서 앱을 굽기 전에 여기서 크게 실패시킴.
+      - name: 소셜로그인 열쇠 확인 (없으면 빌드 중단)
+        env:
+          G: ${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID }}
+          K: ${{ secrets.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY }}
+        run: |
+          # 앱이 실제로 쓰는 열쇠 = 구글 웹 클라이언트 ID + 카카오 네이티브 앱 키(2026-07-27 §19).
+          # 카카오 키가 없으면 plugins/withKakaoNative.js 가 설정을 건너뛰어
+          # AuthCodeHandlerActivity(복귀 통로) 없는 APK 가 나가고 로그인이 조용히 실패한다.
+          # OTA 로는 못 고침 = APK 재빌드가 필요하므로 굽기 전에 여기서 크게 실패시킨다.
+          MISSING=""
+          [ -z "$G" ] && MISSING="$MISSING EXPO_PUBLIC_GOOGLE_CLIENT_ID"
+          [ -z "$K" ] && MISSING="$MISSING EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY"
+          if [ -n "$MISSING" ]; then
+            echo "❌ GitHub Secrets 에 없는 열쇠:$MISSING"
+            echo "   등록 위치 = repo Settings > Secrets and variables > Actions"
+            exit 1
+          fi
+          echo "✅ 앱 로그인 열쇠 확인"
+
+      # ⚠️ 2026-08-11 신설(판단3종 지적) = app.json 은 이 preview(APK) 빌드와 production(AAB) 빌드가
+      #   **1벌을 공유**한다(managed 프로젝트라 프로필별 app.json 이 따로 없음). 그래서 AAB 작업 중
+      #   android.package 가 라이브 앱과 같은 com.sonanie.guide 로 바뀌어 있는 동안 이 워크플로를 돌리면,
+      #   나오는 APK 도 com.sonanie.guide 라 **사장님 폰의 라이브 '내 손안의 가이드'를 덮을 수 있다**(되돌리기 어려움).
+      #   차단은 안 함(패키지가 그 값인 게 항상 위험한 건 아님, AAB 작업 기간엔 오히려 의도된 상태) — 대신 크게 경고만.
+      - name: 패키지명 경고 (라이브 앱과 같은 신원이면 사이드로드 주의)
+        run: |
+          PKG=$(node -e 'console.log(require("./app.json").expo.android.package)')
+          echo "현재 app.json 패키지명 = $PKG"
+          if [ "$PKG" = "com.sonanie.guide" ]; then
+            echo "⚠️⚠️ 경고: 지금 패키지명이 라이브 '내 손안의 가이드'와 동일합니다."
+            echo "   이 APK 를 라이브 앱이 이미 깔린 폰에 설치하면 그 앱이 Tripis 로 덮일 수 있습니다(되돌리기 어려움)."
+            echo "   사이드로드 전 반드시 확인할 것."
+          fi
+
+      # ⚠️ 수정금지(승인필요) — preview 프로필 + --local 로 GitHub 러너에서 직접 빌드
+      # eas.json의 build.preview 정의 사용 (internal 배포, apk, Dev Launcher 없음)
+      # 앱 켜자마자 vibetrip 본체 실행 + EAS Update channel=main 자동 fetch
+      - name: Build Android APK (preview profile, local runner)
+        run: eas build --local --platform android --profile preview --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PUBLIC_DOMAIN: ${{ secrets.EXPO_PUBLIC_DOMAIN }}
+          # 소셜로그인 열쇠 (빌드타임 인라인 = 여기 없으면 앱에서 로그인 불가)
+          EXPO_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID }}
+          EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID }}
+          # 2026-08-11 신설 = 패키지가 com.sonanie.guide 인 동안 이 빌드로도 구글 로그인 되게(My-handyguide 프로젝트 값)
+          EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID }}
+          EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY }}
+          # 앱 카카오 로그인(네이티브 SDK) 전용 = 없으면 앱에서 카카오 로그인 불가
+          EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY }}
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-preview-apk-${{ github.sha }}
+          path: "*.apk"
+          retention-days: 14
+
+      # ⚠️ 2026-07-26 신설 — 사장님 콘솔 등록용 "앱 지문" 자동 출력.
+      # 구글 콘솔 Android 클라이언트 = SHA-1 / 카카오 콘솔 Android 플랫폼 = 키 해시(SHA-1 원문의 base64).
+      # 이 단계가 없으면 사장님이 두 값을 알 방법이 없음.
+      # ⚠️ APK 업로드 "뒤"에 두고 continue-on-error = 지문 계산이 실패해도 30분 구운 APK 는 반드시 남게(§22 리뷰 반영).
+      - name: 앱 지문 출력 (구글 SHA-1 / 카카오 키 해시)
+        continue-on-error: true
+        run: |
+          APK=$(ls *.apk | head -n 1)
+          echo "대상 APK = $APK"
+          APKSIGNER=$(find "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools" -name apksigner 2>/dev/null | sort -V | tail -n 1)
+          if [ -n "$APKSIGNER" ]; then
+            SHA1=$("$APKSIGNER" verify --print-certs "$APK" | grep -i "SHA-1 digest" | head -n 1 | awk '{print $NF}')
+          else
+            SHA1=$(keytool -printcert -jarfile "$APK" | grep -i "SHA1:" | head -n 1 | sed 's/.*SHA1: *//')
+          fi
+          SHA1_CLEAN=$(printf '%s' "$SHA1" | tr -d ': ' | tr 'A-F' 'a-f')
+          KEYHASH=$(printf '%s' "$SHA1_CLEAN" | xxd -r -p | openssl base64)
+          # ⚠️ 2026-08-11 = 하드코딩 삭제(§19) — app.json 이 production(AAB) 빌드와 공유라 패키지명이 바뀔 수 있다(판단3종 지적).
+          PKG=$(node -e 'console.log(require("./app.json").expo.android.package)')
+          echo "=================================================="
+          echo "구글 콘솔용 SHA-1  = $(printf '%s' "$SHA1_CLEAN" | sed 's/../&:/g; s/:$//' | tr 'a-f' 'A-F')"
+          echo "카카오 콘솔용 키 해시 = $KEYHASH"
+          echo "패키지명 / 번들ID  = $PKG"
+          echo "=================================================="

@@ -1,0 +1,106 @@
+# ⚠️ 수정금지(승인필요) 2026-07-31 = 아이폰 앱 만들기.
+#   아이폰 앱은 맥에서만 만들 수 있어 사장님 PC(윈도우)로는 불가 → EAS 서버에 맡긴다.
+#   ⚠️ 자동 실행 안 함(workflow_dispatch 만) = 사장님 지시 없이 굽지 않는다(2026-07-24 SSOT).
+name: 아이폰 앱 만들기
+
+#   ⚠️ 수정금지(승인필요) 2026-09-14 사장님 결정 = **production 1벌로 고정**(옛 3지선다 폐기 §19).
+#   왜 = 서명 열쇠(credentials.json)를 쓰는 프로필은 eas.json 의 production 뿐이다.
+#   development/preview 로 구우면 그 열쇠를 무시하고 EAS 서버 보관본으로 서명해
+#   **라이브 앱(com.sonanie.guide)과 다른 신원의 빌드가 조용히 나간다**(2026-09-14 판단검증 적발).
+#   build-android-aab.yml 이 production 고정인 것과 같은 1벌(§16).
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # ⚠️ 2026-08-24 = eas-cli(latest)가 Node 22+ 요구로 바뀌어 Node 20 설치 실패.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --prefer-offline
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # ⚠️ 수정금지(승인필요) 2026-09-14 사장님 결정 = 신원 가드 = build-android-aab.yml 의 것과 같은 1벌(§16).
+      #   왜 = app.json 이 다른 판으로 돌아간 채 돌아도 라이브 앱과 다른 신원으로 서명된 빌드가 나가는 것을 막는다.
+      #   ⚠️ buildNumber 하한을 특정 숫자로 박지 않는다 = version 이 오르면 build 는 1 부터 다시 센다(애플 규칙).
+      #   그 숫자는 굽기 전 ASC 실측으로 정한다(정본 = 버전 이력 원장).
+      - name: 신원 가드 (번들ID·buildNumber 확인)
+        run: |
+          node -e '
+            const a = require("./app.json").expo;
+            const id = a.ios && a.ios.bundleIdentifier;
+            const bn = a.ios && a.ios.buildNumber;
+            if (id !== "com.sonanie.guide") {
+              console.error("❌ 번들ID 불일치 = " + id + " (기대값: com.sonanie.guide) = 빌드 중단");
+              process.exit(1);
+            }
+            if (!bn || !/^[0-9]+$/.test(String(bn)) || Number(bn) < 1) {
+              console.error("❌ buildNumber 이상 = " + bn + " (1 이상의 숫자여야 함) = 빌드 중단");
+              process.exit(1);
+            }
+            console.log("✅ 신원 확인: " + id + " / version " + a.version + " / buildNumber " + bn);
+          '
+
+      # 열쇠가 없으면 폰에서 로그인 버튼이 죽는다 = 크게 실패시킨다(조용한 실패 금지 §0)
+      - name: 로그인 열쇠 확인
+        env:
+          G_WEB: ${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID }}
+          G_IOS: ${{ secrets.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID }}
+          K_NATIVE: ${{ secrets.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY }}
+        run: |
+          m=""
+          [ -z "$G_WEB" ] && m="$m EXPO_PUBLIC_GOOGLE_CLIENT_ID"
+          [ -z "$G_IOS" ] && m="$m EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID"
+          [ -z "$K_NATIVE" ] && m="$m EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY"
+          if [ -n "$m" ]; then echo "❌ 열쇠 없음:$m"; exit 1; fi
+          echo "✅ 로그인 열쇠 3종 확인"
+
+      # ⚠️ 수정금지(승인필요) 2026-09-14 사장님 결정 = 아이폰 서명 열쇠도 Secret 에서 복원한다 (정본 §24)
+      #   왜 = credentials.json·p12·mobileprovision 은 .gitignore 대상이라 러너 체크아웃에 없다
+      #   (2026-09-14 실패 원문 = "credentials.json does not exist in the project root directory").
+      #   방식 = build-android-aab.yml 의 검증된 복원 단계와 같은 1벌(비밀번호는 Secret, YAML 평문 금지).
+      - name: 아이폰 서명키 복원 (라이브 앱 인증서·프로파일)
+        env:
+          P12_B64: ${{ secrets.IOS_DIST_P12_BASE64 }}
+          PROFILE_B64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          P12_PW: ${{ secrets.IOS_DIST_P12_PASSWORD }}
+        run: |
+          m=""
+          [ -z "$P12_B64" ] && m="$m IOS_DIST_P12_BASE64"
+          [ -z "$PROFILE_B64" ] && m="$m IOS_PROVISIONING_PROFILE_BASE64"
+          [ -z "$P12_PW" ] && m="$m IOS_DIST_P12_PASSWORD"
+          if [ -n "$m" ]; then echo "❌ 아이폰 서명 Secret 없음:$m"; exit 1; fi
+          mkdir -p ios-credentials
+          echo "$P12_B64" | base64 -d > ios-credentials/dist.p12
+          echo "$PROFILE_B64" | base64 -d > ios-credentials/dist.mobileprovision
+          cat > credentials.json << EOF
+          {
+            "ios": {
+              "distributionCertificate": {
+                "path": "ios-credentials/dist.p12",
+                "password": "$P12_PW"
+              },
+              "provisioningProfilePath": "ios-credentials/dist.mobileprovision"
+            }
+          }
+          EOF
+          echo "✅ 아이폰 인증서·프로파일 + credentials.json 복원 완료"
+
+      - name: 아이폰 앱 만들기
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PUBLIC_DOMAIN: ${{ secrets.EXPO_PUBLIC_DOMAIN }}
+          EXPO_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID }}
+          EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID }}
+          EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY }}
+          EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY }}
+        run: |
+          eas build --platform ios --profile production --non-interactive --no-wait
+          echo "주문 완료. 20~30분 뒤 https://expo.dev/accounts/vrois/projects/vibetrip/builds 에서 확인"

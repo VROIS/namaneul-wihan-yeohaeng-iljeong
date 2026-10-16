@@ -1,0 +1,753 @@
+// ⚠️ 수정금지(승인필요) 2026-06-06 = DB-only 결정적 동선 빌더 v2 = handleRouteRequest(Gemini) 동형 대체 (= 사용자 SSOT)
+import type { AG1Output, PlaceResult } from "../agents/types";
+import { minutesToTime, MEAL_BUDGET } from "../agents/types";
+import { normalizeTravelStyle } from "../agents/pipeline-v3-types";
+import {
+  haversineKm,
+  calcTransitHaversine,
+  pickTransitMode,
+} from "../agents/transit-haversine";
+import type {
+  RouteResponse,
+  RouteScene,
+  RouteHandlerResult,
+} from "./route-types";
+import { orderHoming } from "./route-sector";
+// ⚠️ 2026-07-04 사장님 SSOT = 드라이빙 가이드 판별 단일 SSOT(Gemini·MIX 경로와 동일 함수 = 3경로 정합, §16 재발명 금지).
+import { shouldApplyGuidePrice } from "../transport-pricing-service";
+import {
+  slotMinutesFor,
+  FREE_THRESHOLD_EUR,
+  PRICED_STAY_CATEGORIES,
+} from "../shared/slot-duration";
+import { bestRankLangCount } from "../shared/best-rank";
+import { tierRange, type CityMealTiers } from "../shared/meal-budget-tiers";
+
+type LatLng = { lat: number; lng: number };
+
+const hasCoord = (p: { lat?: number | null; lng?: number | null }): boolean =>
+  p.lat != null && p.lng != null && p.lat !== 0 && p.lng !== 0;
+
+const toMin = (t: string): number => {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+};
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+function orderByNN(items: PlaceResult[], center: LatLng): PlaceResult[] {
+  const valid = items.filter(hasCoord);
+  const invalid = items.filter((p) => !hasCoord(p));
+  if (valid.length <= 1) return [...valid, ...invalid];
+  if (valid.length <= 11) return [...heldKarpPath(valid, center), ...invalid];
+  return [...nn2opt(valid, center), ...invalid];
+}
+
+function heldKarpPath(nodes: PlaceResult[], center: LatLng): PlaceResult[] {
+  const n = nodes.length;
+  if (n <= 1) return [...nodes];
+  const d0 = nodes.map((p) =>
+    haversineKm(center.lat, center.lng, p.lat, p.lng),
+  ); // center→j
+  const d = nodes.map((a) =>
+    nodes.map((b) => haversineKm(a.lat, a.lng, b.lat, b.lng)),
+  ); // i→j
+  const FULL = 1 << n;
+  const dp = Array.from({ length: FULL }, () =>
+    new Float64Array(n).fill(Infinity),
+  );
+  const par = Array.from({ length: FULL }, () => new Int8Array(n).fill(-1));
+  for (let j = 0; j < n; j++) dp[1 << j][j] = d0[j];
+  for (let S = 1; S < FULL; S++) {
+    for (let j = 0; j < n; j++) {
+      if (!(S & (1 << j))) continue;
+      const base = dp[S][j];
+      if (base === Infinity) continue;
+      for (let kk = 0; kk < n; kk++) {
+        if (S & (1 << kk)) continue;
+        const nS = S | (1 << kk);
+        const cost = base + d[j][kk];
+        if (cost < dp[nS][kk]) {
+          dp[nS][kk] = cost;
+          par[nS][kk] = j;
+        }
+      }
+    }
+  }
+  let best = Infinity,
+    endJ = 0;
+  for (let j = 0; j < n; j++) {
+    const total =
+      dp[FULL - 1][j] +
+      haversineKm(nodes[j].lat, nodes[j].lng, center.lat, center.lng);
+    if (total < best) {
+      best = total;
+      endJ = j;
+    }
+  }
+  const path: PlaceResult[] = [];
+  let S = FULL - 1,
+    j = endJ;
+  while (j !== -1) {
+    path.push(nodes[j]);
+    const pj = par[S][j];
+    S &= ~(1 << j);
+    j = pj;
+  }
+  return path.reverse();
+}
+
+function nn2opt(valid: PlaceResult[], center: LatLng): PlaceResult[] {
+  const remaining = [...valid];
+  const ordered: PlaceResult[] = [];
+  let cur: LatLng = center;
+  while (remaining.length > 0) {
+    let bi = 0,
+      bd = Infinity;
+    for (let i = 0; i < remaining.length; i++) {
+      const dd = haversineKm(
+        cur.lat,
+        cur.lng,
+        remaining[i].lat,
+        remaining[i].lng,
+      );
+      if (dd < bd) {
+        bd = dd;
+        bi = i;
+      }
+    }
+    ordered.push(remaining[bi]);
+    cur = { lat: remaining[bi].lat, lng: remaining[bi].lng };
+    remaining.splice(bi, 1);
+  }
+  let improved = true,
+    iter = 0;
+  while (improved && iter < 50) {
+    improved = false;
+    iter++;
+    for (let i = -1; i < ordered.length - 2; i++) {
+      const a: LatLng =
+        i < 0 ? center : { lat: ordered[i].lat, lng: ordered[i].lng };
+      for (let j = i + 2; j < ordered.length; j++) {
+        const isLast = j + 1 >= ordered.length;
+        const next: LatLng = isLast
+          ? center
+          : { lat: ordered[j + 1].lat, lng: ordered[j + 1].lng }; // 폐루프 귀환
+        const b = ordered[i + 1],
+          c = ordered[j];
+        const d1 = haversineKm(a.lat, a.lng, b.lat, b.lng);
+        const d2 = haversineKm(c.lat, c.lng, next.lat, next.lng);
+        const n1 = haversineKm(a.lat, a.lng, c.lat, c.lng);
+        const n2 = haversineKm(b.lat, b.lng, next.lat, next.lng);
+        if (n1 + n2 < d1 + d2 - 1e-9) {
+          const seg = ordered.slice(i + 1, j + 1).reverse();
+          ordered.splice(i + 1, j - i, ...seg);
+          improved = true;
+        }
+      }
+    }
+  }
+  return ordered;
+}
+
+export function buildRouteLocal(
+  skeleton: AG1Output,
+  places: PlaceResult[],
+  cityCoords: LatLng | undefined,
+  restaurantPool?: PlaceResult[],
+  hourlyRate?: number | null,
+  mealTiers?: CityMealTiers | null,
+): RouteHandlerResult {
+  const t0 = Date.now();
+  const { formData, daySlotsConfig, paceConfig, companionCount } = skeleton;
+  const slotDuration = paceConfig.slotDurationMinutes; // 활동 1곳 시간
+  const mealDuration = paceConfig.mealDurationMinutes; // 식사 1회 시간(밀도별, 활동보다 짧음)
+  // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 확정 = 예산 구간 = 그 도시 분포 경계선(20/60/20) (정본 B4)
+  //   = 전 도시 고정 유로(점심 상한 €16 등)는 물가를 못 담아 근처 후보를 전부 떨어뜨림 = 폐기 §19.
+  //   = 표본 부족 도시만 MEAL_BUDGET 고정값으로 되돌린다.
+  const style = normalizeTravelStyle(formData.travelStyle);
+  const fixed = MEAL_BUDGET[style];
+  const band = mealTiers
+    ? tierRange(style, mealTiers)
+    : { min: fixed.min, cap: fixed.max };
+  // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 승인(BTS D단계 BE-3) = 핀 식당 id 집합(풀 id 형식 = "db-<번호>").
+  const pinnedRestIds = new Set(
+    (formData.pinnedPlaceIds ?? []).map((n) => `db-${n}`),
+  );
+
+  // ⚠️ 2026-07-04 사장님 SSOT = 출발/종료 앵커 = 숙소 좌표 최우선(§14 A안=여행 전체 공통 숙소) → 없으면 도심 중심.
+  const firstValid = places.find(hasCoord);
+  const center: LatLng =
+    formData.accommodationCoords && hasCoord(formData.accommodationCoords)
+      ? formData.accommodationCoords
+      : cityCoords && hasCoord(cityCoords)
+        ? cityCoords
+        : formData.destinationCoords && hasCoord(formData.destinationCoords)
+          ? formData.destinationCoords
+          : firstValid
+            ? { lat: firstValid.lat, lng: firstValid.lng }
+            : { lat: 0, lng: 0 };
+
+  // ⚠️ 2026-07-04 사장님 SSOT = 드라이빙 가이드 = 이동(Minimal·Moderate) OR 예산(Premium·Luxury) 중 하나라도 = 무조건 가이드(본업 퍼널).
+  const transport: "public_transit" | "private_driver_guide" =
+    shouldApplyGuidePrice(formData.mobilityStyle, formData.travelStyle)
+      ? "private_driver_guide"
+      : "public_transit";
+
+  // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 곳수 상한 없음 = 선정은 분(minute) 기준이 유일 (정본 B4)
+  const candidates = places.filter(
+    (p) => p.seedCategory !== "restaurant" && hasCoord(p),
+  );
+  const activities = [...candidates].sort(
+    (a, b) =>
+      bestRankLangCount(b.bestRank) - bestRankLangCount(a.bestRank) ||
+      (a.rank ?? 9999) - (b.rank ?? 9999),
+  );
+
+  const restaurants = (
+    restaurantPool && restaurantPool.length
+      ? restaurantPool
+      : places.filter((p) => p.seedCategory === "restaurant")
+  ).filter(hasCoord);
+
+  const usedRest = new Set<string>();
+  // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 확정 = 식당 = 동선(도보권부터) → 베스트 → RC → 예산 (정본 B4)
+  //   = 점심은 오전 마지막 슬롯, 저녁은 마지막 활동 기준. 1~5일차 동일.
+  const WALK_KM = 1;
+  const pickMealPriority = (
+    anchors: LatLng[],
+    priceMin: number,
+    priceCap: number,
+  ): PlaceResult | null => {
+    const refs = anchors.filter((a) => a && a.lat != null && a.lat !== 0);
+    const useRefs = refs.length ? refs : [center];
+    const scored = restaurants
+      .filter((r) => !usedRest.has(r.id))
+      .map((r) => ({
+        r,
+        d: Math.min(
+          ...useRefs.map((a) => haversineKm(a.lat, a.lng, r.lat, r.lng)),
+        ),
+      }));
+    if (!scored.length) return null;
+
+    // ① 핀 식당 = 사용자가 직접 고른 것 = 모든 기준보다 우선(2026-07-31 사장님 승인).
+    const pinnedPick = scored.find((x) => pinnedRestIds.has(x.r.id));
+    if (pinnedPick) {
+      usedRest.add(pinnedPick.r.id);
+      return pinnedPick.r;
+    }
+
+    const lo = Math.min(priceMin, priceCap);
+    const byBestRc = (a: (typeof scored)[0], b: (typeof scored)[0]) =>
+      bestRankLangCount(b.r.bestRank) - bestRankLangCount(a.r.bestRank) ||
+      (a.r.rank ?? 9999) - (b.r.rank ?? 9999) ||
+      a.d - b.d;
+    const inBudget = (x: (typeof scored)[0]) =>
+      x.r.estimatedPriceEur != null &&
+      x.r.estimatedPriceEur >= lo &&
+      x.r.estimatedPriceEur <= priceCap;
+    const underCap = (x: (typeof scored)[0]) =>
+      x.r.estimatedPriceEur != null && x.r.estimatedPriceEur <= priceCap;
+
+    // ② 도보권부터 시작해 후보가 나올 때까지만 반경을 넓힌다(거리가 1순위).
+    const RINGS = [WALK_KM, 3, 8, Infinity];
+    // 예산 안 → 상한 이하 순으로, 각 조건마다 가까운 반경부터 찾는다(예산이 반경보다 먼저 깨지지 않게).
+    for (const ok of [inBudget, underCap]) {
+      for (const radius of RINGS) {
+        const hit = scored
+          .filter((x) => x.d <= radius && ok(x))
+          .sort(byBestRc)[0];
+        if (hit) {
+          usedRest.add(hit.r.id);
+          return hit.r;
+        }
+      }
+    }
+    const any = [...scored].sort((a, b) => a.d - b.d)[0];
+    usedRest.add(any.r.id);
+    return any.r;
+  };
+
+  const USE_SECTOR_ROUTE = process.env.USE_SECTOR_ROUTE !== "false";
+  const SAME_SPOT_KM = 0.5; // 이 안 = 같은 자리(리조트·단지) = 같은 날에 묶음
+  const OUTSKIRT_MAX_KM = 100;
+  const kmFromCenter = (p: PlaceResult) =>
+    haversineKm(center.lat, center.lng, p.lat, p.lng);
+  const byBestThenRank = (a: PlaceResult, b: PlaceResult) =>
+    bestRankLangCount(b.bestRank) - bestRankLangCount(a.bestRank) ||
+    (a.rank ?? 9999) - (b.rank ?? 9999);
+
+  // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 확정 = ① 여행 전체에서 뽑을 곳을 먼저 확정(베스트 전부 → 카테고리별 RC) (정본 B4)
+  //   = 날짜별로 그때그때 고르면 앞날이 자리를 다 써 뒤에 남은 만장일치가 통째 탈락함(파리 ★7 3곳 실측).
+  // 자리 = 곳수가 아니라 분(minute) = 입장료 슬롯이 밀도값보다 길어 곳수로 세면 뒤쪽이 통째 탈락함.
+  const stayMin = (p: PlaceResult) =>
+    slotMinutesFor(
+      p.estimatedPriceEur,
+      slotDuration,
+      hourlyRate ?? null,
+      p.seedCategory,
+    );
+  // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 배분에도 슬롯당 이동 여유를 얹는다 (정본 B4)
+  //   = 슬롯시간만으로 하루를 꽉 채우면 실제 배치에서 이동시간(실측 108분)만큼 뒤쪽이 통째 탈락함.
+  const AVG_LEG_MIN = 15;
+  const LUNCH_START = 12 * 60;
+  const legMinOf = (from: LatLng, to: PlaceResult): number => {
+    const km = haversineKm(from.lat, from.lng, to.lat, to.lng);
+    const { calc } = pickTransitMode(km, transport === "private_driver_guide");
+    return calcTransitHaversine(
+      from,
+      { lat: to.lat, lng: to.lng },
+      calc,
+      companionCount,
+      center,
+    ).duration;
+  };
+  const BACKFILL_NEAR_KM = 5; // 빈틈 보충 = 지금 자리에서 이 거리 안
+  // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 저녁 2시간 전부터 유료 입장지 배치 금지 (정본 B4)
+  //   = 폐관시간 데이터가 없어도(opening_hours 17% 채움) 닫힌 곳에 들여보내는 일을 막는다.
+  const PAID_CUTOFF_BEFORE_DINNER = 120;
+  const dayActMinutes = daySlotsConfig.map(
+    (dc) => toMin(dc.endTime) - toMin(dc.startTime) - mealDuration * 2,
+  );
+  const totalMinutes = dayActMinutes.reduce((s, v) => s + v, 0);
+  const inRange = activities.filter((p) => kmFromCenter(p) <= OUTSKIRT_MAX_KM);
+  const bests = inRange
+    .filter((p) => bestRankLangCount(p.bestRank) > 0)
+    .sort(byBestThenRank);
+  const rest = inRange
+    .filter((p) => bestRankLangCount(p.bestRank) === 0)
+    .sort((a, b) => (a.rank ?? 9999) - (b.rank ?? 9999));
+  const selected: PlaceResult[] = [];
+  let usedMin = 0;
+  for (const p of [...bests, ...rest]) {
+    const m = stayMin(p) + AVG_LEG_MIN;
+    if (usedMin + m > totalMinutes) continue;
+    selected.push(p);
+    usedMin += m;
+  }
+
+  // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 거리 제약 없이 100km 하나로, 베스트 순서대로 배분 (정본 B4)
+  //   = 도심/외곽 구분·기점 강제 폐기 §19. 베스트가 먼저 자리를 다 쓰고, 하루 안에서만 최근접으로 잇는다.
+  const usedActs = new Set<string>();
+  // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 실제로 여정에 놓인 것만 별도 추적 (정본 B4)
+  //   = 배분만 되고 시간이 없어 탈락한 곳(사크레쾨르 실측)이 usedActs 에 남아
+  //     보충 후보에서 영영 빠지던 문제 차단. 보충은 이 집합만 본다.
+  const placedActs = new Set<string>();
+  const dayGroups: PlaceResult[][] = (() => {
+    const groups: PlaceResult[][] = Array.from(
+      { length: daySlotsConfig.length },
+      () => [] as PlaceResult[],
+    );
+    const dayUsed = daySlotsConfig.map(() => 0);
+    const costOf = (p: PlaceResult) => stayMin(p) + AVG_LEG_MIN;
+    // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 유료 가능 시간도 배분에서 함께 본다 (정본 B4)
+    //   = 총 분만 보면 유료 배제선(저녁 2시간 전)에 걸려 그 날 배치에서 버려지고, 다음 날로 못 넘어감.
+    //   = 유료는 "그 날 유료 가능 시간(출발~저녁2시간전)" 안에 들어갈 때만 그 날에 넣는다.
+    const dayPaidUsed = daySlotsConfig.map(() => 0);
+    //   유료 가능 시간 = 출발 ~ (저녁 − 배제선). 그 사이에 점심 1회가 끼므로 그것도 뺀다.
+    const dayPaidMinutes = daySlotsConfig.map(
+      (dc) =>
+        toMin(dc.endTime) -
+        toMin(dc.startTime) -
+        mealDuration * 2 -
+        PAID_CUTOFF_BEFORE_DINNER -
+        mealDuration,
+    );
+    const isPaidPlace = (p: PlaceResult) =>
+      (p.estimatedPriceEur ?? 0) > FREE_THRESHOLD_EUR &&
+      PRICED_STAY_CATEGORIES.has(p.seedCategory ?? "");
+    // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 베스트는 유료 시간대 제약 면제 (정본 B4)
+    //   = 베스트 13곳(파리)은 전체 가용시간 안이면 무조건 들어간다. 하루 유료창(420분)에 걸려
+    //     루브르 같은 만장일치가 빠지고 RC 가 대신 들어가던 문제 차단.
+    const fits = (d: number, p: PlaceResult, isBest = false) => {
+      if (dayUsed[d] + costOf(p) > dayActMinutes[d]) return false;
+      if (
+        !isBest &&
+        isPaidPlace(p) &&
+        dayPaidUsed[d] + costOf(p) > dayPaidMinutes[d]
+      )
+        return false;
+      return true;
+    };
+    const take = (d: number, p: PlaceResult) => {
+      groups[d].push(p);
+      dayUsed[d] += costOf(p);
+      if (isPaidPlace(p)) dayPaidUsed[d] += costOf(p);
+      usedActs.add(p.id);
+    };
+
+    // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = spread=true = 여유 큰 날에 분산 배치 (정본 B4)
+    const placeOne = (p: PlaceResult, spread = false): boolean => {
+      let best = -1;
+      let bestScore = -Infinity;
+      for (let d = 0; d < groups.length; d++) {
+        if (!fits(d, p, spread)) continue;
+        const room = isPaidPlace(p)
+          ? dayPaidMinutes[d] - dayPaidUsed[d]
+          : dayActMinutes[d] - dayUsed[d];
+        const near = groups[d].length
+          ? Math.min(
+              ...groups[d].map((x) => haversineKm(x.lat, x.lng, p.lat, p.lng)),
+            )
+          : OUTSKIRT_MAX_KM;
+        // 베스트 = 여유 큰 날 우선(동점이면 가까운 날) / RC = 가까운 날 우선
+        const score = spread ? room * 1000 - near : -near;
+        if (score > bestScore) {
+          bestScore = score;
+          best = d;
+        }
+      }
+      if (best < 0) return false;
+      take(best, p);
+      return true;
+    };
+
+    // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 베스트 전체(★7~★1)를 먼저 다 넣고 그다음 RC (정본 B4)
+    //   = ★7 만 보고 끊으면 앞날이 포화돼 ★6·★5·★4 가 통째 밀림(파리 5일 실측).
+    //   = 베스트 단계는 "여유 큰 날"에 퍼뜨려 넣는다(spread) → RC 단계에서 동선으로 메운다.
+    const bestAll = selected
+      .filter((p) => bestRankLangCount(p.bestRank) > 0)
+      .sort(
+        (a, b) =>
+          bestRankLangCount(b.bestRank) - bestRankLangCount(a.bestRank) ||
+          (a.rank ?? 9999) - (b.rank ?? 9999),
+      );
+    for (const p of bestAll) if (!usedActs.has(p.id)) placeOne(p, true);
+    // 베스트를 다 쓴 뒤에야 RC(rank) 순 = 여기서는 동선(가까운 날) 우선.
+    const rest2 = selected
+      .filter((p) => !usedActs.has(p.id) && bestRankLangCount(p.bestRank) === 0)
+      .sort((a, b) => (a.rank ?? 9999) - (b.rank ?? 9999));
+    for (const p of rest2) placeOne(p);
+
+    // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 버리지 말고 홀드 → 다른 날 재시도 (정본 B4)
+    //   = 배분만으로는 실제 시각을 알 수 없어 그 날 배치에서 밀려 사라짐(사크레쾨르 ★7 실측).
+    //   = 각 날을 실제로 시뮬해 못 들어간 것을 회수하고, 자리가 있는 다른 날로 다시 넣는다.
+    const simulate = (d: number, list: PlaceResult[]) => {
+      const dc = daySlotsConfig[d];
+      const dl = toMin(dc.endTime) - mealDuration; // 저녁 자리 확보
+      const paidLine = dl - PAID_CUTOFF_BEFORE_DINNER;
+      let t = toMin(dc.startTime);
+      let cur: LatLng = center;
+      let lunched = false;
+      const ok: PlaceResult[] = [];
+      const out: PlaceResult[] = [];
+      for (const q of list) {
+        const dur = stayMin(q);
+        const leg = legMinOf(cur, q);
+        if (!lunched && t + leg >= LUNCH_START) {
+          t = Math.max(t, LUNCH_START) + mealDuration;
+          lunched = true;
+        }
+        const at = t + leg;
+        if (at + dur > dl || (isPaidPlace(q) && at + dur > paidLine)) {
+          out.push(q);
+          continue;
+        }
+        t = at + dur;
+        cur = { lat: q.lat, lng: q.lng };
+        ok.push(q);
+      }
+      return { ok, out };
+    };
+
+    for (let pass = 0; pass < 3; pass++) {
+      const leftover: PlaceResult[] = [];
+      for (let d = 0; d < groups.length; d++) {
+        const ordered =
+          groups[d].length > 1 ? orderHoming(groups[d], center) : groups[d];
+        const paid = ordered.filter(isPaidPlace);
+        const free = ordered.filter((x) => !isPaidPlace(x));
+        const r = simulate(d, [...paid, ...free]);
+        groups[d] = r.ok;
+        dayUsed[d] = r.ok.reduce((a, x) => a + costOf(x), 0);
+        dayPaidUsed[d] = r.ok
+          .filter(isPaidPlace)
+          .reduce((a, x) => a + costOf(x), 0);
+        leftover.push(...r.out);
+      }
+      if (!leftover.length) break;
+      let movedAny = false;
+      for (const q of leftover) {
+        usedActs.delete(q.id);
+        if (placeOne(q)) movedAny = true;
+      }
+      if (!movedAny) break;
+    }
+    // 하루 안 순서 = 가장 먼 곳에서 시작해 최근접으로 잇는다(귀소).
+    return groups.map((g) => (g.length > 1 ? orderHoming(g, center) : g));
+  })();
+
+  const days: RouteResponse["days"] = [];
+  let grandKm = 0;
+  let grandSec = 0;
+
+  for (let di = 0; di < daySlotsConfig.length; di++) {
+    const dc = daySlotsConfig[di];
+    // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 결정 = 하루 순서 = dayGroups 가 정한 기점→도심 역순 그대로 (정본 B4)
+    //   = 3일차+ 는 그룹을 만들 때 이미 "가장 먼 기점 → 최근접으로 도심 귀환" 순서로 담았으므로 재정렬하지 않는다.
+    //   = 1·2일차(도심)만 귀소 정렬로 최단화한다.
+    const dayGroup = dayGroups[di] || [];
+    const dayPicked = dayGroup;
+    // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 모든 날 = 먼 곳에서 시작해 도심으로 귀환 (정본 B4)
+    //   = 1·2일차 도심 / 3일차+ 외곽 구분 폐기 §19. 도시 전체를 하나로 보고 베스트부터 채운다.
+    const homed = USE_SECTOR_ROUTE
+      ? orderHoming(dayPicked, center)
+      : orderByNN(dayPicked, center);
+    // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 유료 입장지를 하루 앞쪽에 먼저 (정본 B4)
+    //   = 저녁 2시간 전 유료 금지에 걸려 ★7 유료(루브르·팡테옹·생트샤펠·카타콤)가 통째 탈락하던 문제 차단.
+    //   = 동선(귀소) 순서는 유료끼리·무료끼리 각각 그대로 유지된다.
+    const paidOf = (p: PlaceResult) =>
+      (p.estimatedPriceEur ?? 0) > FREE_THRESHOLD_EUR &&
+      PRICED_STAY_CATEGORIES.has(p.seedCategory ?? "");
+    const dayActs = [
+      ...homed.filter(paidOf),
+      ...homed.filter((p) => !paidOf(p)),
+    ];
+
+    // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 결정 = 점심 12시 넘는 첫 지점 / 저녁 = 마지막 슬롯(19시 이후) 자리 선확보 / 마감 = 사용자 종료시각 (정본 B4)
+    const startMin = toMin(dc.startTime);
+    const endMin = toMin(dc.endTime);
+    const LUNCH_FROM = 12 * 60;
+    // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 확정 = 6시간 넘는 곳은 점심 건너뛰고 돌아와 저녁 (정본 B4)
+    const LONG_STAY_MIN = 360;
+    const DINNER_FROM = 19 * 60;
+
+    // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 모든 날 이동시간을 시각에 더한다 (정본 B4)
+    const legMin = (from: LatLng, to: LatLng): number => {
+      const km = haversineKm(from.lat, from.lng, to.lat, to.lng);
+      const { calc } = pickTransitMode(
+        km,
+        transport === "private_driver_guide",
+      );
+      return calcTransitHaversine(
+        from,
+        { lat: to.lat, lng: to.lng },
+        calc,
+        companionCount,
+        center,
+      ).duration;
+    };
+
+    // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 확정 = 저녁 앵커 = 마지막 활동 1곳만 (정본 B4)
+    //   = center 를 같이 넣으면 도심 식당이 항상 0km 로 이겨 외곽에서도 도심으로 감(베르사유 17.9km 실측).
+    const lastAct = dayActs[dayActs.length - 1];
+    const dinner = pickMealPriority(
+      lastAct ? [{ lat: lastAct.lat, lng: lastAct.lng }] : [center],
+      band.min,
+      band.cap,
+    );
+    // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 결정 = 저녁 시각 고정 해제 = 하루 일정 마지막에 자연히 배치 (정본 B4)
+    //   = 저녁 자리만 비워두고(마감−식사시간) 활동을 끝까지 채운 뒤 붙임.
+    const actDeadline = dinner != null ? endMin - mealDuration : endMin;
+
+    const seq: { p: PlaceResult; rest: boolean }[] = [];
+    const slotStartMins: number[] = [];
+    const slotDurations: number[] = [];
+    let acc = startMin;
+    let cursor: LatLng = center;
+    let lunchDone = false;
+
+    const place = (p: PlaceResult, rest: boolean, dur: number, at: number) => {
+      seq.push({ p, rest });
+      slotStartMins.push(at);
+      slotDurations.push(dur);
+      cursor = { lat: p.lat, lng: p.lng };
+      acc = at + dur;
+    };
+
+    // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 확정 = 점심은 먼 곳으로 이동하기 전에 지금 자리에서 먼저 찾는다 (정본 B4)
+    //   = 12시를 넘겼는지만 보면 외곽에서 도심으로 이동한 뒤에야 찾아 바로 옆 식당이 영영 안 뽑힘.
+    const takeLunch = (at: number): boolean => {
+      const lunch = pickMealPriority(
+        [{ lat: cursor.lat, lng: cursor.lng }],
+        band.min,
+        band.cap,
+      );
+      if (!lunch) return false;
+      const to = acc + legMin(cursor, lunch);
+      const startAt = Math.max(at, to);
+      if (startAt + mealDuration > actDeadline) return false;
+      place(lunch, true, mealDuration, startAt);
+      lunchDone = true;
+      return true;
+    };
+
+    for (const act of dayActs) {
+      const dur = slotMinutesFor(
+        act.estimatedPriceEur,
+        slotDuration,
+        hourlyRate ?? null,
+        act.seedCategory,
+      );
+      if (!lunchDone) {
+        // 6시간 넘는 곳(테마파크 등) = 그 안에서 손님이 알아서 해결 = 점심 건너뜀.
+        if (dur >= LONG_STAY_MIN) lunchDone = true;
+        else {
+          // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 확정 = 외곽을 뜨기 전에 그 자리에서 점심 (정본 B4)
+          //   = 12시만 보면 도심으로 돌아온 뒤 찾아 외곽 바로 옆 식당이 영영 안 뽑힘(샹티이 37km 실측).
+          const hereKm = haversineKm(
+            center.lat,
+            center.lng,
+            cursor.lat,
+            cursor.lng,
+          );
+          const nextKm = haversineKm(center.lat, center.lng, act.lat, act.lng);
+          const leavingOutskirt = hereKm > 5 && nextKm < hereKm - 5;
+          if (
+            acc >= LUNCH_FROM ||
+            acc + legMin(cursor, act) >= LUNCH_FROM ||
+            leavingOutskirt
+          )
+            takeLunch(Math.max(acc, LUNCH_FROM));
+        }
+      }
+      const at = acc + legMin(cursor, act);
+      if (at + dur > actDeadline) continue; // 시간 안 되는 곳만 건너뜀
+      // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 저녁 2시간 전부터 유료 입장지 금지 (정본 B4)
+      const isPaid =
+        (act.estimatedPriceEur ?? 0) > FREE_THRESHOLD_EUR &&
+        PRICED_STAY_CATEGORIES.has(act.seedCategory ?? "");
+      // 베스트는 유료 시간대 제약 면제(배분과 동일 기준) = 만장일치가 빠지지 않게.
+      if (
+        isPaid &&
+        bestRankLangCount(act.bestRank) === 0 &&
+        at + dur > actDeadline - PAID_CUTOFF_BEFORE_DINNER
+      )
+        continue;
+      // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 이미 담은 곳과 SAME_SPOT_KM 안이면 건너뜀 (정본 B4)
+      //   = 창고에 같은 장소가 여러 행으로 있어도(앵발리드 45m 실측) 한 번만 들어간다.
+      if (
+        seq.some(
+          (x) =>
+            !x.rest &&
+            haversineKm(x.p.lat, x.p.lng, act.lat, act.lng) <= SAME_SPOT_KM,
+        )
+      )
+        continue;
+      placedActs.add(act.id);
+      place(act, false, dur, at);
+    }
+
+    // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 유료를 막았으면 그 자리를 무료로 대신 채운다 (정본 B4)
+    //   = 막기만 하고 안 채우면 저녁 앞이 통째로 빈다(Day2 15:30~19:00 3시간30분 실측).
+    //   = 후보 = 선정 밖이라도 그 도시 무료·상시 활동 중 지금 자리에서 가까운 순.
+    const freeFill = candidates
+      .filter((p) => !placedActs.has(p.id))
+      .filter((p) => kmFromCenter(p) <= OUTSKIRT_MAX_KM)
+      .sort((a2, b2) => (a2.rank ?? 9999) - (b2.rank ?? 9999));
+
+    for (;;) {
+      const fillable = freeFill.filter((p) => {
+        if (placedActs.has(p.id)) return false;
+        // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 보충은 지금 자리 근처면 된다 (정본 B4)
+        if (
+          haversineKm(cursor.lat, cursor.lng, p.lat, p.lng) > BACKFILL_NEAR_KM
+        )
+          return false;
+        if (
+          seq.some(
+            (x) =>
+              !x.rest &&
+              haversineKm(x.p.lat, x.p.lng, p.lat, p.lng) <= SAME_SPOT_KM,
+          )
+        )
+          return false;
+        const d = slotMinutesFor(
+          p.estimatedPriceEur,
+          slotDuration,
+          hourlyRate ?? null,
+          p.seedCategory,
+        );
+        const t = acc + legMin(cursor, p);
+        if (t + d > actDeadline) return false;
+        const paid =
+          (p.estimatedPriceEur ?? 0) > FREE_THRESHOLD_EUR &&
+          PRICED_STAY_CATEGORIES.has(p.seedCategory ?? "");
+        if (paid && t + d > actDeadline - PAID_CUTOFF_BEFORE_DINNER)
+          return false;
+        return true;
+      });
+      if (!fillable.length) break;
+      const cand = fillable.sort(
+        (a2, b2) =>
+          haversineKm(cursor.lat, cursor.lng, a2.lat, a2.lng) -
+          haversineKm(cursor.lat, cursor.lng, b2.lat, b2.lng),
+      )[0];
+      const dur2 = slotMinutesFor(
+        cand.estimatedPriceEur,
+        slotDuration,
+        hourlyRate ?? null,
+        cand.seedCategory,
+      );
+      placedActs.add(cand.id);
+      place(cand, false, dur2, acc + legMin(cursor, cand));
+    }
+
+    if (!lunchDone) takeLunch(acc);
+
+    if (dinner) {
+      const at = Math.max(acc + legMin(cursor, dinner), DINNER_FROM);
+      if (at + mealDuration <= endMin) place(dinner, true, mealDuration, at);
+    }
+
+    let prev: LatLng = center;
+    let dayKm = 0;
+    const scenes: RouteScene[] = seq.map((it, i) => {
+      const km = round2(haversineKm(prev.lat, prev.lng, it.p.lat, it.p.lng));
+      const { mode, calc } = pickTransitMode(
+        km,
+        transport === "private_driver_guide",
+      );
+      // ⚠️ 2026-07-04 사장님 SSOT = center(도시중심)를 넘겨 DRIVE 모드 도심/외곽 속도 분기(30/70km/h) 적용.
+      const tr = calcTransitHaversine(
+        prev,
+        { lat: it.p.lat, lng: it.p.lng },
+        calc,
+        companionCount,
+        center,
+      );
+      prev = { lat: it.p.lat, lng: it.p.lng };
+      dayKm += km;
+      grandSec += slotDurations[i] * 60;
+      const scene: RouteScene = {
+        slot: i + 1,
+        time: minutesToTime(slotStartMins[i]),
+        type: it.rest ? "restaurant" : "activity",
+        place_id: it.p.id,
+        name_en: it.p.name || "",
+        name_ko: it.p.nameKo || "",
+        name_local: it.p.nameLocal || it.p.name || "",
+        address: it.p.address || "",
+        lat: it.p.lat,
+        lng: it.p.lng,
+        distance_from_prev_km: km,
+        transit_mode: mode,
+        transit_min: tr.duration,
+        slot_min: slotDurations[i],
+      };
+      if (it.rest && it.p.estimatedPriceEur != null)
+        scene.price_eur = it.p.estimatedPriceEur;
+      if (it.p.summaryKo) scene.selection_reason_ko = it.p.summaryKo;
+      if (it.p.editorialSummary) scene.shortform_ko = it.p.editorialSummary;
+      if (it.p.image) scene.image = it.p.image; // ⚠️ 2026-06-12 = PSR image_url 전달 (= 식당풀 픽 이미지 단절 해소)
+      return scene;
+    });
+
+    days.push({ day: dc.day, total_distance_km: round2(dayKm), scenes });
+    grandKm += dayKm;
+  }
+
+  const response: RouteResponse = {
+    total_duration_sec: grandSec,
+    total_distance_km: round2(grandKm),
+    days,
+  };
+  return {
+    ok: days.length > 0,
+    response,
+    raw: "",
+    finishReason: "local-nn-haversine-v2",
+    elapsedMs: Date.now() - t0,
+  };
+}

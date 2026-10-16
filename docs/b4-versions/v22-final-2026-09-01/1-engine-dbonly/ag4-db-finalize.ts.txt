@@ -1,0 +1,492 @@
+// ⚠️ 수정금지(승인필요) 2026-05-26 = 사용자 SSOT = DB-only 전용 AG4 = scene 직접 사용
+
+import { db } from "../../db";
+import { eq, sql } from "drizzle-orm";
+import { getEurToKrwRate } from "../exchange-rate";
+import type {
+  PlaceResult,
+  TripFormData,
+  DaySlotConfig,
+  TravelPace,
+  AG1Output,
+} from "./types";
+import { MEAL_BUDGET } from "./types";
+// ⚠️ 수정금지(승인필요) 2026-08-18 사장님 승인(비판검증 확정결함 수정) = ag2 와 동일한 정규화 필수(§16 1벌).
+import { normalizeTravelStyle, sanitizePriceEur } from "./pipeline-v3-types";
+// best_rank 언어코드 정렬 1벌(§16, 2026-08-27 사장님 확정). ag4 는 요청 언어를 모름 = 언어 무관 정렬.
+import { bestRankOrderSql } from "../shared/best-rank";
+// ⚠️ 2026-07-06 사장님 SSOT = 대중교통 구간당 균일 예상가 = 단일 SSOT(§16) = transit-haversine 로 이동(옛 ag4 로컬정의 삭제) = MIX·DB-only 공통.
+import {
+  estimateTransitCost,
+  haversineKm,
+  pickTransitMode,
+} from "./transit-haversine";
+// ⚠️ 수정금지(승인필요) 2026-06-06 = DB-only 동선 = 로컬 NN+Haversine (= Stage C) 단일 SSOT
+import { buildRouteLocal } from "../route/route-local";
+import { cityHourlyRate } from "../shared/slot-duration";
+import { cityMealTiers } from "../shared/meal-budget-tiers";
+import { backfillFromRoute } from "../route/route-backfill";
+// ⚠️ 2026-07-06 사장님 SSOT = 가이드 하루요금 = guideCostForDay 공용 SSOT(옛 로컬 guideCostPerPersonPerDay 승격, 3경로 공유 §16).
+import {
+  shouldApplyGuidePrice,
+  guideCostForDay,
+} from "../transport-pricing-service";
+// ⚠️ 2026-07-17 사장님 확정 = 식당풀 = (city_id=요청도시) ∪ (중심 100km) 합집합 = shared/pool-radius 단일 SSOT(§16)
+import { getPoolContext, servingGateSql } from "../shared/pool-radius";
+// ⚠️ 수정금지(승인필요) 2026-08-18 사장님 승인(비판검증 확정결함 수정) = 식당풀·BTS공연장 카드도 사진 단일 진입점
+import { pickPlaceImage, loadImagePidMap } from "../shared/place-image";
+
+function addMinutes(time: string, minutes: number): string {
+  const [h, m] = time.split(":").map(Number);
+  const total = h * 60 + m + minutes;
+  const hh = Math.floor(total / 60) % 24;
+  const mm = total % 60;
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+}
+
+export interface AG4DbInput {
+  daySlotsConfig: DaySlotConfig[];
+  travelPace: TravelPace;
+  formData: TripFormData;
+  companionCount: number;
+  dayCount: number;
+  cityId?: number | null;
+  cityCoords?: { lat: number; lng: number };
+  skeleton: AG1Output;
+  inputPlaces: PlaceResult[];
+}
+
+export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
+  const _t0 = Date.now();
+  const {
+    daySlotsConfig,
+    travelPace,
+    formData,
+    companionCount,
+    dayCount,
+    cityId,
+    cityCoords,
+    skeleton,
+    inputPlaces,
+  } = input;
+
+  const eurToKrw = await getEurToKrwRate("[AG4-DB]");
+
+  // ⚠️ 수정금지(승인필요) 2026-06-13 사용자 SSOT = DB-only 식당풀 = 가격대 구간별 RC TOP 만 (= eco20/reason40/premium20, zone 구분 없이 도시 전체)
+  let restaurantPool: PlaceResult[] = [];
+  let imagePidMap: Map<string, string> = new Map();
+  if (cityId && db) {
+    // ⚠️ 2026-07-17 사장님 확정 = 풀 = (city_id=요청도시) ∪ (좌표 유효 100km 이내) 합집합(§16 pool-radius)
+    const { where: poolWhere } = await getPoolContext(cityId, cityCoords); // 2026-07-17 = 기점 = 동적 출발점(cityCoords = 숙소>도심, day-builder 우선순위 반영값)
+    // ⚠️ 2026-07-31 사장님 승인(BTS D단계 BE-3) = 핀 식당 = **같은 쿼리 1벌 안에서** 무조건 포함(§16).
+    const pinIdsForMeals = (formData.pinnedPlaceIds ?? []).filter((n: number) =>
+      Number.isFinite(n),
+    );
+    const pinCond = pinIdsForMeals.length
+      ? sql.raw(`id IN (${pinIdsForMeals.join(",")})`) // 숫자만 통과한 값 = 안전
+      : sql.raw("FALSE");
+    // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 확정 = 식당 풀 = 가격대 쿼터 없이 손님상 가능한 전체 (정본 B4)
+    //   = 손님상 기준 = 구글이미지 + PID(돈이 들어간 결손 없음). 옛 10/30/20=60 쿼터는 시드 발굴 기준이라 폐기 §19.
+    //   = 몇 곳을 캘까(발굴)와 있는 걸 어떻게 보여줄까(서빙)는 다른 문제. 좁히기는 여정엔진이 거리·베스트·RC·예산으로 한다.
+    const rows = (await db!.execute(sql`
+      SELECT id, city_id AS "cityId", name_en AS "nameEn", name_ko AS "nameKo", name_local AS "nameLocal", address,
+             latitude, longitude, price_eur AS "priceEur", summary_ko AS "summaryKo",
+             editorial_summary AS "editorialSummary", image_url AS "imageUrl",
+             google_place_id AS "googlePlaceId",
+             google_review_count AS "googleReviewCount",
+             best_rank AS "bestRank",
+             (${pinCond}) AS pinned
+      FROM place_seed_raw
+      WHERE (${poolWhere}) AND seed_category = 'restaurant' AND (${servingGateSql()})
+        AND (google_place_id IS NOT NULL OR (${pinCond}))
+        AND (price_eur IS NOT NULL OR (${pinCond}))
+        AND ((image_url IS NOT NULL AND image_url <> '') OR (${pinCond}))
+      ORDER BY ${sql.raw(bestRankOrderSql())}, "googleReviewCount" DESC NULLS LAST
+    `)) as unknown as { rows: Record<string, any>[] };
+    imagePidMap = await loadImagePidMap([
+      cityId,
+      ...(rows.rows || []).map((r) => r.cityId),
+    ]);
+    restaurantPool = (rows.rows || [])
+      .filter((r) => r.latitude != null && Number(r.latitude) !== 0)
+      .map((r) => ({
+        id: `db-${r.id}`,
+        name: r.nameEn || "",
+        lat: Number(r.latitude),
+        lng: Number(r.longitude),
+        nameKo: r.nameKo,
+        nameLocal: r.nameLocal,
+        address: r.address,
+        estimatedPriceEur: r.priceEur != null ? Number(r.priceEur) : undefined,
+        summaryKo: r.summaryKo,
+        editorialSummary: r.editorialSummary,
+        image: pickPlaceImage(r, imagePidMap),
+        seedCategory: "restaurant",
+        userRatingCount: r.googleReviewCount || 0,
+        bestRank: r.bestRank ?? null,
+      })) as unknown as PlaceResult[];
+    console.log(
+      `[AG4-DB] 🍽️ 식당풀 DB 조회 = ${restaurantPool.length}곳 (= 손님상 가능 전체 = 구글이미지+PID+가격, 쿼터 없음)`,
+    );
+  }
+
+  // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 결정 = 도시 시간당요금 런타임 산출(정본 B4)
+  const hourlyRate = cityId ? await cityHourlyRate(cityId) : null;
+  // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 확정 = 도시별 예산 경계선 런타임 산출 (정본 B4)
+  const mealTiers = cityId ? await cityMealTiers(cityId) : null;
+  const routeResult = buildRouteLocal(
+    skeleton,
+    inputPlaces,
+    cityCoords,
+    restaurantPool,
+    hourlyRate,
+    mealTiers,
+  );
+  console.log(
+    `[AG4-DB] ✅ 동선 = 로컬 NN+Haversine (${routeResult.elapsedMs}ms, Gemini 0)`,
+  );
+
+  if (!routeResult.ok || !routeResult.response) {
+    throw new Error(
+      `[AG4-DB] 로컬 동선 생성 실패 (days=0) = daySlotsConfig 비정상 = 뼈대 점검 필요 (elapsedMs=${routeResult.elapsedMs})`,
+    );
+  }
+
+  const routeResponse = routeResult.response;
+
+  if (cityId) {
+    backfillFromRoute(routeResponse, cityId, inputPlaces).catch((e: any) =>
+      console.warn(`[Route-Backfill] ❌ background error:`, e?.message || e),
+    );
+  }
+
+  // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 확정 = 식당풀도 조회 대상 = 식당 베스트 표식이 응답에서 빠지지 않게 (정본 B4)
+  const inputById = new Map(
+    [...inputPlaces, ...(restaurantPool ?? [])].map((p) => [p.id, p]),
+  );
+  const slotDuration = skeleton.paceConfig.slotDurationMinutes;
+  const mealDuration = skeleton.paceConfig.mealDurationMinutes; // 식사 슬롯 종료시각용(활동보다 짧음, 2026-07-21 §16 route-local 정합)
+  const mealBudget = MEAL_BUDGET[normalizeTravelStyle(formData.travelStyle)];
+
+  const globalPlaceIdCounts = new Map<string, number>();
+  for (const rd of routeResponse.days || []) {
+    for (const sc of rd.scenes || []) {
+      if (sc.place_id && !sc.place_id.startsWith("auto-")) {
+        globalPlaceIdCounts.set(
+          sc.place_id,
+          (globalPlaceIdCounts.get(sc.place_id) || 0) + 1,
+        );
+      }
+    }
+  }
+  const dupIds = [...globalPlaceIdCounts.entries()].filter(([, c]) => c > 1);
+  if (dupIds.length > 0) {
+    dupIds.forEach(([id, c]) =>
+      console.warn(`[AG4-DB] ⚠️ place_id 중복 (${c}회 사용): ${id}`),
+    );
+  }
+
+  const days: any[] = [];
+  let totalPerPersonEur = 0;
+
+  for (let d = 1; d <= dayCount; d++) {
+    const dayConfig = daySlotsConfig.find((c) => c.day === d)!;
+    const routeDay = routeResponse.days?.find((rd) => rd.day === d);
+    const scenes = routeDay?.scenes || [];
+
+    const lastScene = scenes[scenes.length - 1];
+    if (lastScene && lastScene.type !== "restaurant") {
+      console.warn(
+        `[AG4-DB] ⚠️ Day ${d} 마지막 슬롯 = activity (= 저녁 식당 강제 위반): ${lastScene.name_local || lastScene.name_en || "(name null)"}`,
+      );
+    }
+    const nameless = scenes.filter(
+      (s) => !s.name_local && !s.name_en && !inputById.get(s.place_id),
+    );
+    if (nameless.length > 0) {
+      nameless.forEach((s) =>
+        console.warn(
+          `[AG4-DB] ⚠️ Day ${d} scene 표시 이름 없음: slot=${s.slot} type=${s.type} place_id=${s.place_id}`,
+        ),
+      );
+    }
+
+    const lastMealIdx = scenes.reduce(
+      (acc, s, i) => (s.type === "restaurant" ? i : acc),
+      -1,
+    );
+    const dayPlaces = scenes.map((scene, sceneIdx) => {
+      const isAuto = scene.place_id?.startsWith("auto-");
+      const inputPlace = !isAuto ? inputById.get(scene.place_id) : undefined;
+      const isMeal = scene.type === "restaurant";
+      const mealType: "lunch" | "dinner" | undefined = isMeal
+        ? sceneIdx === lastMealIdx
+          ? "dinner"
+          : "lunch"
+        : undefined;
+
+      if (isMeal && scene.price_eur == null) {
+        console.warn(
+          `[AG4-DB] ⚠️ meal price 매트릭스 폴백 발생 = ${scene.name_local || scene.name_en || scene.place_id} (= PSR price_eur NULL = 식당풀 게이트 누수 점검)`,
+        );
+      }
+      const mealPrice = isMeal
+        ? (scene.price_eur ??
+          (mealType === "lunch" ? mealBudget.lunch : mealBudget.dinner))
+        : undefined;
+      const mealPriceLabel = isMeal
+        ? scene.price_eur
+          ? `€${scene.price_eur}`
+          : mealType === "lunch"
+            ? mealBudget.lunchLabel
+            : mealBudget.dinnerLabel
+        : undefined;
+
+      const displayName = scene.name_en || scene.name_local;
+      return {
+        id: scene.place_id,
+        name: displayName,
+        nameEn: displayName,
+        nameKo: scene.name_ko,
+        nameLocal: scene.name_local,
+        address: scene.address,
+        lat: scene.lat,
+        lng: scene.lng,
+        type: scene.type,
+        isMealSlot: isMeal,
+        mealType,
+        seedCategory:
+          inputPlace?.seedCategory || (isMeal ? "restaurant" : "attraction"),
+        startTime: scene.time,
+        endTime: addMinutes(
+          scene.time,
+          scene.slot_min ?? (isMeal ? mealDuration : slotDuration),
+        ),
+        estimatedPriceEur: isMeal
+          ? scene.price_eur
+          : (inputPlace?.estimatedPriceEur ?? 0),
+        mealPrice,
+        mealPriceLabel,
+        image: inputPlace?.image || (scene as any).image || null,
+        userRatingCount: inputPlace?.userRatingCount,
+        // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 결정 = 베스트 언어코드를 화면·검수에 그대로 내려보냄 (정본 B4)
+        bestRank: inputPlace?.bestRank ?? null,
+        selectionReasons: inputPlace?.selectionReasons || [],
+        confidenceLevel: inputPlace?.confidenceLevel || "minimal",
+        // ⚠️ 수정금지(승인필요) 2026-06-24 사용자 SSOT = 슬롯 한줄요약 = editorial_summary 단일 (모든 경로 통일).
+        editorialSummary: scene.shortform_ko || null,
+        // 🎬 2026-07-23 사장님 SSOT = 여정 미리보기 영상 글라스 카드 요약 = summary_ko → DB-only 슬롯에도 탑재(MIX 경로와 정합, 폐기된 제외정책 갱신 = 2026-07-23 §19)
+        summaryKo:
+          (scene as any).selection_reason_ko || inputPlace?.summaryKo || null,
+        distance_from_prev_km: scene.distance_from_prev_km,
+        transit_mode: scene.transit_mode,
+        transit_min: scene.transit_min,
+      };
+    });
+
+    // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = FE 카드(PlaceSlotCard.tsx) 와 동일한 500유로 오염값
+    const mealCostEur = dayPlaces.reduce(
+      (sum, p) => sum + (p.isMealSlot ? sanitizePriceEur(p.mealPrice) : 0),
+      0,
+    );
+    const entranceFeesEur = dayPlaces.reduce(
+      (sum, p) =>
+        sum + (!p.isMealSlot ? sanitizePriceEur(p.estimatedPriceEur) : 0),
+      0,
+    );
+
+    // ⚠️ 2026-07-04 사장님 SSOT = 드라이빙 가이드는 구간별 계산 금지(반일요금 개념 없어 비현실적으로 쌈, §0 옛것 완전삭제).
+    const isGuideDay = shouldApplyGuidePrice(
+      formData.mobilityStyle,
+      formData.travelStyle,
+    );
+    const transits = scenes.slice(1).map((scene, i) => {
+      const cost = isGuideDay ? 0 : estimateTransitCost(scene.transit_mode); // 가이드 = 구간 표시 FE 숨김, 일 총합에만 반영
+      return {
+        from: scenes[i].name_en,
+        to: scene.name_en,
+        distance: Math.round((scene.distance_from_prev_km || 0) * 1000), // ⚠️ 2026-06-06 = km→m (= FE ÷1000·MIX 미터 표준 정합 = "0.0km" 버그 수정)
+        duration: scene.transit_min,
+        mode: scene.transit_mode,
+        cost,
+        costTotal: cost,
+      };
+    });
+    const transportCostEur = isGuideDay
+      ? await guideCostForDay({
+          dayConfig,
+          companionType: formData.companionType as any,
+          companionCount,
+          mobilityStyle: formData.mobilityStyle,
+          travelStyle: formData.travelStyle,
+          dayCount,
+        })
+      : transits.reduce((s, t) => s + (t.cost || 0), 0);
+
+    const dailyPerPersonEur =
+      Math.round((mealCostEur + entranceFeesEur + transportCostEur) * 100) /
+      100;
+    const dailyGroupEur =
+      Math.round(dailyPerPersonEur * companionCount * 100) / 100;
+    const dailyPerPersonKrw = Math.round(dailyPerPersonEur * eurToKrw);
+    const dailyGroupKrw = Math.round(dailyGroupEur * eurToKrw);
+    totalPerPersonEur += dailyPerPersonEur;
+
+    days.push({
+      day: d,
+      places: dayPlaces,
+      city: formData.destination,
+      summary: `${formData.destination} 하루`,
+      startTime: dayConfig.startTime,
+      endTime: dayConfig.endTime,
+      // ⚠️ 수정금지(승인필요) 2026-08-13 = 출발 깃발용 좌표만. name 금지(한국어 고정문자열이 다국어 화면·딥링크로 샘).
+      accommodation: cityCoords ? { day: d, coords: cityCoords } : undefined,
+      transit: {
+        transits,
+        totalDuration: transits.reduce((s, t) => s + t.duration, 0),
+        totalCost: transits.reduce((s, t) => s + t.costTotal, 0),
+        totalDistanceKm: routeDay?.total_distance_km || 0,
+      },
+      dailyCost: {
+        breakdown: {
+          mealEur: mealCostEur,
+          entranceEur: entranceFeesEur,
+          transportEur: transportCostEur,
+        },
+        mealEur: mealCostEur,
+        entranceEur: entranceFeesEur,
+        transportEur: transportCostEur,
+        totalEur: dailyPerPersonEur,
+        totalKrw: dailyGroupKrw,
+        perPersonEur: dailyPerPersonEur,
+        perPersonKrw: dailyPerPersonKrw,
+        groupEur: dailyGroupEur,
+        groupKrw: dailyGroupKrw,
+      },
+    });
+  }
+
+  // ⚠️ 2026-07-31 사장님 지시(BTS 문제점4) = **마지막 슬롯 = 공연장 카드**(공연 시작 시각).
+  if (formData.finalPlaceId && db && days.length) {
+    const fRes = (await db.execute(sql`
+      SELECT id, name_en AS "nameEn", name_ko AS "nameKo", name_local AS "nameLocal", address,
+             latitude, longitude, seed_category AS "seedCategory", image_url AS "imageUrl",
+             google_place_id AS "googlePlaceId",
+             google_review_count AS "googleReviewCount", summary_ko AS "summaryKo",
+             editorial_summary AS "editorialSummary"
+      FROM place_seed_raw WHERE id = ${formData.finalPlaceId}
+    `)) as unknown as { rows: Record<string, any>[] };
+    const f = fRes.rows?.[0];
+    if (f && f.latitude != null && Number(f.latitude) !== 0) {
+      const lastDay = days[days.length - 1];
+      const prev = lastDay.places[lastDay.places.length - 1];
+      const lat = Number(f.latitude);
+      const lng = Number(f.longitude);
+      const km = prev ? haversineKm(prev.lat, prev.lng, lat, lng) : 0;
+      const picked = pickTransitMode(km, false);
+      const finalTime = formData.finalPlaceTime || "19:00";
+      const displayName = f.nameEn || f.nameLocal;
+      lastDay.places.push({
+        id: `db-${f.id}`,
+        name: displayName,
+        nameEn: displayName,
+        nameKo: f.nameKo,
+        nameLocal: f.nameLocal,
+        address: f.address,
+        lat,
+        lng,
+        type: "activity",
+        isMealSlot: false,
+        mealType: undefined,
+        seedCategory: f.seedCategory,
+        startTime: finalTime,
+        endTime: addMinutes(finalTime, 180), // 공연 관람 표준 ~3시간
+        estimatedPriceEur: null,
+        mealPrice: undefined,
+        mealPriceLabel: undefined,
+        image: pickPlaceImage(f, imagePidMap) || null,
+        userRatingCount: f.googleReviewCount || 0,
+        summaryKo: f.summaryKo,
+        editorialSummary: f.editorialSummary,
+        distance_from_prev_km: Math.round(km * 10) / 10,
+        transit_mode: picked.mode,
+        transit_min: prev
+          ? Math.max(
+              1,
+              Math.round((km / (picked.calc === "WALK" ? 4 : 25)) * 60),
+            )
+          : 0,
+      });
+      console.log(
+        `[AG4-DB] 🎤 마지막 슬롯 = 공연장 카드 부착: ${displayName} @ ${finalTime}`,
+      );
+    }
+  }
+
+  const totalGroupEur =
+    Math.round(totalPerPersonEur * companionCount * 100) / 100;
+  const totalPerPersonKrw = Math.round(totalPerPersonEur * eurToKrw);
+  const totalGroupKrw = Math.round(totalGroupEur * eurToKrw);
+  const totalPlaces = days.reduce((s, d) => s + d.places.length, 0);
+
+  console.log(
+    `[AG4-DB] ✅ 실시간 완성 (${Date.now() - _t0}ms): ${days.length}일, ${totalPlaces}곳 = scene 직접`,
+  );
+  console.log(
+    `[AG4-DB] 💰 인당: €${totalPerPersonEur.toFixed(2)} / ₩${totalPerPersonKrw.toLocaleString()}`,
+  );
+  console.log(
+    `[AG4-DB] 💰 그룹 ${companionCount}인: €${totalGroupEur.toFixed(2)} / ₩${totalGroupKrw.toLocaleString()}`,
+  );
+  console.log(
+    `[AG4-DB] 🛣️ route Gemini (${routeResult.elapsedMs}ms): ${routeResponse.days?.length || 0}일 동선 = scene 직접 사용`,
+  );
+  console.log(`[AG4-DB] 🍽️ route 백필 (= background = FE 응답 후 비동기 진행)`);
+
+  return {
+    title: `${formData.destination} ${dayCount}일 여행`,
+    destination: formData.destination,
+    startDate: formData.startDate,
+    endDate: formData.endDate,
+    startTime: formData.startTime || "09:00",
+    endTime: formData.endTime || "21:00",
+    days,
+    // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = AG1(skeleton)이 이미 계산해 여기까지 파라미터로 들어와 있던
+    vibeWeights: skeleton.vibeWeights,
+    companionType: formData.companionType,
+    companionCount,
+    travelStyle: formData.travelStyle,
+    mobilityStyle: formData.mobilityStyle,
+    totalCost: {
+      perPersonEur: totalPerPersonEur,
+      perPersonKrw: totalPerPersonKrw,
+      groupEur: totalGroupEur,
+      groupKrw: totalGroupKrw,
+      eurToKrwRate: eurToKrw,
+      currency: "EUR",
+    },
+    metadata: {
+      travelStyle: formData.travelStyle,
+      travelPace,
+      totalPlaces,
+      companionType: formData.companionType,
+      companionCount,
+      curationFocus: formData.curationFocus,
+      // ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 확정 교통수단 = MIX(pipeline-v3:1157)와 동형 방출(§20 전수).
+      transportCategory: shouldApplyGuidePrice(
+        formData.mobilityStyle,
+        formData.travelStyle,
+      )
+        ? "guide"
+        : "transit",
+      generatedAt: new Date().toISOString(),
+      pipelineVersion: "db-only-v2-scene-direct",
+      route: {
+        elapsedMs: routeResult.elapsedMs,
+        totalDistanceKm: routeResponse.total_distance_km,
+        totalDurationSec: routeResponse.total_duration_sec,
+        backfill: "background fire-and-forget",
+      },
+    },
+  };
+}

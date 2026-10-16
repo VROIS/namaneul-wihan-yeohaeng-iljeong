@@ -1,0 +1,147 @@
+════════ 제미니(MIX) 응답 원문 ════════
+프롬프트 변경 = TASK 줄에 "REALISTIC, ACTUALLY-DOABLE (이동시간을 고려한 실현 가능한 여정)" 추가 1줄뿐
+
+══════ Day 1  「파리의 클래식: 랜드마크와 예술의 조화」 ══════
+        트로카데로 광장                      heritage     €    0  중심   4.8km  이동  4.81km
+        에펠탑                           heritage     € 29.4  중심   4.2km  이동  0.74km
+        오르세 미술관                       heritage     € 17.5  중심   1.9km  이동  2.35km
+  🍽점심  레 코코트 투르 에펠                   restaurant   €   40  중심   3.7km  이동  1.79km
+        생트 샤펠                         heritage     €   22  중심   0.5km  이동  3.15km
+        노트르담 대성당                      heritage     €    0  중심   0.4km  이동  0.45km
+        셰익스피어 앤 컴퍼니                   heritage     €    0  중심   0.6km  이동  0.21km
+        바토 무슈                         heritage     €   20  중심   3.5km  이동  3.32km
+  🍽저녁  르 를레 드 랑트르코트                  restaurant   €   60  중심   3.9km  이동  0.50km
+  → 슬롯 9개  하루이동 17.3km
+
+══════ Day 2  「역사와 쇼핑: 화려한 파리의 낮과 밤」 ══════
+        루브르 박물관                       heritage     €   22  중심   1.2km  이동  1.15km
+        튈르리 정원                        heritage     €    0  중심   2.0km  이동  0.81km
+        콩코르드 광장                       heritage     €    0  중심   2.5km  이동  0.52km
+  🍽점심  안젤리나 파리                       restaurant   €   40  중심   2.0km  이동  0.54km
+        팔레 가르니에                       heritage     €   15  중심   2.3km  이동  0.80km
+        갤러리 라파예트                      heritage     €    0  중심   2.5km  이동  0.19km
+        에투알 개선문                       heritage     €   22  중심   4.6km  이동  2.55km
+        샹젤리제 거리                       heritage     €    0  중심   3.5km  이동  1.05km
+  🍽저녁  르 그랑 콜베르                      restaurant   €   60  중심   1.4km  이동  2.34km
+  → 슬롯 9개  하루이동 10.0km
+
+══════ Day 3  「파리 근교 여행: 베르사유의 영광」 ══════
+        베르사유 궁전                       heritage     €   35  중심  17.9km  이동 17.92km
+        베르사유 정원                       heritage     €   10  중심  18.9km  이동  1.19km
+        트리아농 별궁                       heritage     €    0  중심  18.5km  이동  0.83km
+  🍽점심  오레 - 알랭 뒤카스                   restaurant   €   40  중심  17.9km  이동  1.47km
+        사크레쾨르 대성당                     heritage     €    0  중심   3.4km  이동 18.63km
+        테르트르 광장                       heritage     €    0  중심   3.4km  이동  0.17km
+        사랑해 벽                         heritage     €    0  중심   3.3km  이동  0.25km
+        물랑 루즈                         heritage     €    0  중심   3.4km  이동  0.47km
+  🍽저녁  핑크 마마                         restaurant   €   60  중심   3.2km  이동  0.22km
+  → 슬롯 9개  하루이동 41.2km
+
+
+
+════════ MIX(제미니) vs DB-only 비교 ════════
+조건 = 파리 3일 · Normal · Culture 100% · Family 4인 · 09:00~21:00 (동일)
+
+【식사 = 직전 슬롯에서 얼마나 가까운가】
+
+  ── MIX(제미니) ──
+   Day1 점심 레 코코트 투르 에펠              €  40  오르세 미술관          → 1.79km
+   Day1 저녁 르 를레 드 랑트르코트             €  60  바토 무슈            → 0.50km
+   Day2 점심 안젤리나 파리                  €  40  콩코르드 광장          → 0.54km
+   Day2 저녁 르 그랑 콜베르                 €  60  샹젤리제 거리          → 2.34km
+   Day3 점심 오레 - 알랭 뒤카스              €  40  트리아농 별궁          → 1.47km
+   Day3 저녁 핑크 마마                    €  60  물랑 루즈            → 0.22km
+
+  ── DB-only(우리 엔진) ──
+   Day1 점심 아줄리                      €  19  베르사유 궁전          → 0.28km
+   Day1 저녁 부이용 피갈                   €  22  루브르 박물관          → 2.45km
+   Day2 점심 가스트 베이커스 하우스             €  10  앵발리드             → 0.32km
+   Day2 저녁 라스 뒤 팔라펠                 €  13  페르 라셰즈 묘지        → 2.55km
+   Day3 점심 데메 이탈리안 레스토랑             €  25  퐁텐블로 궁전          → 0.24km
+   Day3 저녁 오 뒤 파리 다르콜               €  25  노트르담 대성당         → 0.15km
+
+【하루 이동거리】
+           MIX      DB-only
+   Day1     17.3km    39.1km
+   Day2     10.0km    14.5km
+   Day3     41.2km   114.5km
+   합계    68.4km   168.1km
+
+【슬롯 수】  MIX = 9/9/9   DB-only = 6/7/6
+
+
+════════ 제미니 2차 응답 (프롬프트 수정 후) ════════
+
+══════ Day 1  「파리의 클래식: 랜드마크와 예술의 조화」 ══════
+        트로카데로 광장                      heritage     €    0  중심   4.8km  이동  4.81km
+        에펠탑                           heritage     € 29.4  중심   4.2km  이동  0.74km
+        오르세 미술관                       heritage     € 17.5  중심   1.9km  이동  2.35km
+  🍽점심  레 코코트 투르 에펠                   restaurant   €   40  중심   3.7km  이동  1.79km
+        생트 샤펠                         heritage     €   22  중심   0.5km  이동  3.15km
+        노트르담 대성당                      heritage     €    0  중심   0.4km  이동  0.45km
+        셰익스피어 앤 컴퍼니                   heritage     €    0  중심   0.6km  이동  0.21km
+        바토 무슈                         heritage     €   20  중심   3.5km  이동  3.32km
+  🍽저녁  르 를레 드 랑트르코트                  restaurant   €   60  중심   3.9km  이동  0.50km
+  → 슬롯 9개  하루이동 17.3km
+
+══════ Day 2  「역사와 쇼핑: 화려한 파리의 낮과 밤」 ══════
+        루브르 박물관                       heritage     €   22  중심   1.2km  이동  1.15km
+        튈르리 정원                        heritage     €    0  중심   2.0km  이동  0.81km
+        콩코르드 광장                       heritage     €    0  중심   2.5km  이동  0.52km
+  🍽점심  안젤리나 파리                       restaurant   €   40  중심   2.0km  이동  0.54km
+        팔레 가르니에                       heritage     €   15  중심   2.3km  이동  0.80km
+        갤러리 라파예트                      heritage     €    0  중심   2.5km  이동  0.19km
+        에투알 개선문                       heritage     €   22  중심   4.6km  이동  2.55km
+        샹젤리제 거리                       heritage     €    0  중심   3.5km  이동  1.05km
+  🍽저녁  르 그랑 콜베르                      restaurant   €   60  중심   1.4km  이동  2.34km
+  → 슬롯 9개  하루이동 10.0km
+
+══════ Day 3  「파리 근교 여행: 베르사유의 영광」 ══════
+        베르사유 궁전                       heritage     €   35  중심  17.9km  이동 17.92km
+        베르사유 정원                       heritage     €   10  중심  18.9km  이동  1.19km
+        트리아농 별궁                       heritage     €    0  중심  18.5km  이동  0.83km
+  🍽점심  오레 - 알랭 뒤카스                   restaurant   €   40  중심  17.9km  이동  1.47km
+        사크레쾨르 대성당                     heritage     €    0  중심   3.4km  이동 18.63km
+        테르트르 광장                       heritage     €    0  중심   3.4km  이동  0.17km
+        사랑해 벽                         heritage     €    0  중심   3.3km  이동  0.25km
+        물랑 루즈                         heritage     €    0  중심   3.4km  이동  0.47km
+  🍽저녁  핑크 마마                         restaurant   €   60  중심   3.2km  이동  0.22km
+  → 슬롯 9개  하루이동 41.2km
+
+
+
+════════ 제미니 2차 응답 (프롬프트 수정 후) ════════
+수정 = ① TASK 를 "실현 가능"이 먼저 오게 뒤집음 + 슬롯은 목표치(비워도 됨) + 실제 소요시간 계산 명시
+       ② CATEGORY MATRIX "반드시 이 비율" → "목표로 하되 시간 부족하면 곳수 줄인다"
+
+══════ Day 1  「파리 클래식 문화 산책」 ══════
+        루브르 박물관                       heritage     €   22  중심   1.2km  이동  1.15km
+        튈르리 정원                        heritage     €    0  중심   2.0km  이동  0.81km
+  🍽점심  안젤리나 파리                       restaurant   €   40  중심   2.0km  이동  0.18km
+        콩코르드 광장                       heritage     €    0  중심   2.5km  이동  0.53km
+        쁘띠 팔레                         heritage     €    0  중심   2.9km  이동  0.48km
+        알렉상드르 3세 다리                   heritage     €    0  중심   2.9km  이동  0.25km
+        바토 파리지앵                       heritage     €   18  중심   4.3km  이동  1.57km
+  🍽저녁  레 코코트                         restaurant   €   60  중심   3.7km  이동  0.65km
+  → 슬롯 8개  하루이동 5.6km
+
+══════ Day 2  「베르사유 궁전과 에펠탑 야경」 ══════
+        베르사유 궁전                       heritage     €   21  중심  17.9km  이동 17.92km
+        베르사유 정원                       heritage     €   10  중심  18.9km  이동  1.20km
+  🍽점심  라 플로티유                        restaurant   €   35  중심  18.3km  이동  0.61km
+        트로카데로 광장                      heritage     €    0  중심   4.8km  이동 14.12km
+        개선문                           heritage     €   16  중심   4.6km  이동  1.33km
+        샹젤리제 거리                       heritage     €    0  중심   3.5km  이동  1.05km
+  🍽저녁  르 를레 드 랑트르코트                  restaurant   €   45  중심   3.9km  이동  0.45km
+  → 슬롯 7개  하루이동 36.7km
+
+══════ Day 3  「몽마르트르와 예술가의 숨결」 ══════
+        사크레쾨르 대성당                     heritage     €    0  중심   3.4km  이동  3.41km
+        테르트르 광장                       heritage     €    0  중심   3.4km  이동  0.17km
+  🍽점심  르 콩슐라                         restaurant   €   35  중심   3.4km  이동  0.04km
+        사랑해 벽                         heritage     €    0  중심   3.3km  이동  0.22km
+        팔레 가르니에                       heritage     €   15  중심   2.3km  이동  1.51km
+        갤러리 라파예트                      heritage     €    0  중심   2.4km  이동  0.15km
+  🍽저녁  부용 샤르티에                       restaurant   €   30  중심   1.9km  이동  0.74km
+  → 슬롯 7개  하루이동 6.2km
+

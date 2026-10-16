@@ -1,0 +1,118 @@
+// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 제미니 보강 입력에 우리 시드 분류(seed_category) 1칸을 같이 보낸다 = 제미니가 장소 종류를 상상하지 않게 (정본 §)
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import { geminiJson } from "./geminiClient";
+
+const ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../../..",
+);
+const PROMPT_PATH = path.join(
+  ROOT,
+  "fillcity/prompts/03-enrich-after-google/prompt.txt",
+);
+
+export interface GeminiCurateInput {
+  id: number;
+  nameEn: string;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  googleCid?: string | null;
+  seedCategory?: string | null;
+}
+export interface GeminiCurateOutput {
+  id: number;
+  nameLocal: string | null;
+  nameEn: string | null;
+  nameKo: string | null;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  summaryKo: string | null;
+  editorialSummary: string | null;
+  priceEur: number | null;
+  distanceKmFromCenter: number | null;
+}
+
+function parsePlaces(t: string): any[] {
+  const start = t.indexOf("{");
+  if (start < 0) return [];
+  try {
+    const j = JSON.parse(t.slice(start, t.lastIndexOf("}") + 1));
+    if (j?.places) return j.places;
+  } catch {}
+  for (let e = t.length - 1; e > start; e--) {
+    if (t[e] !== "}") continue;
+    for (const suf of ["]}}", "]}", "}"]) {
+      try {
+        const j = JSON.parse(t.slice(start, e + 1) + suf);
+        if (j?.places) return j.places;
+      } catch {}
+    }
+  }
+  return [];
+}
+
+export async function geminiCurate(
+  cityName: string,
+  cityId: number,
+  rows: GeminiCurateInput[],
+  opts?: { year?: string; apiKey?: string; rawTag?: string },
+): Promise<GeminiCurateOutput[]> {
+  const valid = rows.filter((r) => r.id && r.nameEn);
+  if (!valid.length) return [];
+  const body = fs.readFileSync(PROMPT_PATH, "utf-8").split(/═{30,}/)[2] || "";
+  const year = opts?.year || String(new Date().getFullYear());
+  const month = String(new Date().getMonth() + 1);
+  const out: GeminiCurateOutput[] = [];
+
+  // 한 번에 전부 = 몫(일꾼) 하나가 한 번 부른다 · 줄여 다시 묻기(60·40·20·10)·쪼개기 없음
+  const input = valid.map((r) => ({
+    id: r.id,
+    name_en: r.nameEn,
+    address: r.address ?? null,
+    latitude: r.latitude ?? null,
+    longitude: r.longitude ?? null,
+    google_cid: r.googleCid ?? null,
+    seed_category: r.seedCategory ?? null,
+  }));
+  const apiPass = `[API-PASS] 도시=${cityName}(${cityId}) / 행=있음(채움) / 날짜=${new Date().toISOString().slice(0, 10)}`;
+  const prompt = body
+    .replace(/\$\{CITY_NAME\}/g, cityName)
+    .replace(/\[CITY_NAME\]/g, cityName)
+    .replace(/\$\{CITY_ID\}/g, String(cityId))
+    .replace(/\$\{YEAR\}/g, year)
+    .replace(/\$\{MONTH\}/g, month)
+    .replace(/\$\{API_PASS\}/g, apiPass)
+    .replace(/\$\{BATCH_LEN\}/g, String(valid.length))
+    .replace(/\$\{JSON_INPUT\}/g, JSON.stringify(input));
+
+  const r = await geminiJson(prompt, {
+    googleSearch: true,
+    contextId: cityId,
+    rawTag: opts?.rawTag ?? "enrich-curate",
+    apiKey: opts?.apiKey,
+  });
+  const places =
+    r.data?.places && Array.isArray(r.data.places)
+      ? r.data.places
+      : parsePlaces(r.raw);
+  for (const p of places) {
+    out.push({
+      id: p.id,
+      nameLocal: p.name_local || null,
+      nameEn: p.name_en || null,
+      nameKo: p.name_ko || null,
+      address: p.address || null,
+      latitude: p.latitude ?? null,
+      longitude: p.longitude ?? null,
+      summaryKo: p.summary_ko || null,
+      editorialSummary: p.editorial_summary || null,
+      priceEur: p.price_eur ?? null,
+      distanceKmFromCenter: p.distance_km_from_center ?? null,
+    });
+  }
+  return out;
+}

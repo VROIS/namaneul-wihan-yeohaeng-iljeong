@@ -1,0 +1,686 @@
+// ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 모든 기준 = PID. B1 = 창고에 이미 있나만 거르는 0원 문지기(트리거 드라이런). A등급 직행 merge·자체 등급조정(regrade R1~R6) 삭제 §19 = 기존 행에 걸리면 전부 confirm(B2 TS→PID 판정), 아니면 new.
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+// ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = 산출표 저장(mkdir+versionedName+쓰기) 1벌 = saveVersionedReport()
+import {
+  rawDate,
+  saveVersionedReport,
+} from "../../worker/lib/services/shared/raw-filename";
+// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 7개 언어 목록·순서 1벌 = worker/lib 판(§16)
+import { LANGS } from "../../worker/lib/services/shared/language-instruction";
+import {
+  recognizePlace,
+  RECOGNIZE_ROWS_SQL,
+  type RecognizeRow,
+} from "../../worker/lib/services/shared/recognize-place";
+
+import {
+  avg,
+  isMixedGroup,
+  majorityCat,
+  mid,
+  refineGroups,
+} from "./discovery-refine";
+export type Bucket = "confirm" | "new";
+export interface PsrRow {
+  id: number;
+  name_en: string | null;
+  name_local: string | null;
+  name_ko: string | null;
+  seed_category: string;
+  status: string;
+  merged_into: number | null;
+  city_id: number;
+  lat: number | null;
+  lng: number | null;
+  pid: boolean;
+  category_tags: string[] | null;
+}
+export const PSR_COLS = `id, name_en, name_local, name_ko, seed_category, status, merged_into, city_id, latitude::float AS lat, longitude::float AS lng, google_place_id IS NOT NULL AS pid, category_tags`;
+interface Staged {
+  g: Group;
+  name: string | null | undefined;
+  nameLocal: string | null;
+  nameKo: string | null;
+  lat: number | null;
+  lng: number | null;
+  orig: Bucket;
+  bucket: Bucket;
+  psr: PsrRow | null;
+  by: string;
+}
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(__dirname, "../..");
+process.chdir(ROOT);
+
+const envRaw = fs.readFileSync(".env", "utf-8").replace(/^﻿/, "");
+for (const line of envRaw.split(/\r?\n/)) {
+  const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
+  if (m && !process.env[m[1]]) {
+    let v = m[2].trim();
+    if (/^['"]/.test(v)) v = v.slice(1, -1);
+    process.env[m[1]] = v;
+  }
+}
+
+const argv = Object.fromEntries(
+  process.argv
+    .slice(2)
+    .map((a) => a.replace(/^--/, "").split("="))
+    .map(([k, v]) => [k, v ?? "true"]),
+);
+const cityId = Number(argv["city-id"] || 0);
+if (!cityId) {
+  console.error(
+    "Usage: npx tsx fillcity/steps/discovery-merge-diff.ts --city-id=<N> [--from-extracted=<path>] [--restaurant-min-langs=N] [--landmark-min-langs=N]   (DRY 전용, DB 쓰기 0)",
+  );
+  process.exit(1);
+}
+// ⚠️ 수정금지(승인필요) 2026-08-30 사장님 지시 = 언어별 원본 대조 결과(선별표)를 파일로 저장해두고,
+const fromExtractedPath = argv["from-extracted"]
+  ? path.resolve(String(argv["from-extracted"]))
+  : null;
+
+// ⚠️ 수정금지(승인필요) 2026-09-08 사장님 승인 = 동의 문턱을 밖에서 정한다(안 주면 지금과 동일 = 기존 동작 무변경).
+const RESTAURANT_MIN_LANGS = Number(argv["restaurant-min-langs"] ?? 4); // 사장님 확정 2026-08-26 = 7개국어 중 과반(4+)
+const LANDMARK_MIN_LANGS = Number(argv["landmark-min-langs"] ?? 1); // 1 = 제한없음
+// ⚠️ 수정금지(승인필요) 2026-08-30 재확인(원결정 2026-08-28 = 180→240 상향, 브뤼셀 560항목 컷오프 실측)
+const MAX_TX_SECONDS = 240;
+
+interface RawPlace {
+  type: "landmarks" | "restaurants";
+  lang: string;
+  name_en?: string;
+  name_local?: string;
+  name_ko?: string;
+  lat?: number;
+  lng?: number;
+  c?: string;
+  price_eur?: number;
+  address?: string;
+  rank?: number; // 그 언어 응답 안에서의 순위(1-20) = 리포트 참고값(best_rank 원천 아님 — 2026-08-27 사장님 확정 = best_rank 는 언어코드)
+  summary?: string; // 원어 요약(그 언어) = B2 place_translations 선충전 원천
+  editorial?: string; // 원어 후킹카피(그 언어)
+}
+
+// ⚠️ 수정금지(승인필요) 2026-08-27 사장님 지시 = 그룹 감사 = 병합된 raw 항목 1건의 원본 필드(raw 필드명 그대로) + 문지기 판정 tier.
+interface GroupMember {
+  lang: string;
+  type: "landmarks" | "restaurants";
+  name_en?: string;
+  name_local?: string;
+  name_ko?: string;
+  lat?: number;
+  lng?: number;
+  address?: string;
+  raw?: RawPlace;
+  tier: string; // 불변3 | 불변5 | 불변6 | 의심(영어명/한국어명) | 의심(영어명·유니크색인) | new
+}
+
+export interface Group {
+  anchor: { kind: "psr" | "tmp"; id: number };
+  type: "landmarks" | "restaurants";
+  anchorCat: string;
+  by: string; // 이 그룹이 만들어진 판정 tier(첫 합류 항목의 tier)
+  langs: Set<string>;
+  names: Set<string>;
+  locals: Set<string>;
+  kos: Set<string>;
+  lats: number[];
+  lngs: number[];
+  cats: string[];
+  prices: number[];
+  addresses: Set<string>;
+  ranks: number[];
+  copies: { lang: string; summary?: string; editorial?: string }[];
+  members: GroupMember[];
+}
+
+// ⚠️ 수정금지(승인필요) 2026-08-30 사장님 지시 = 선별표 저장/재사용 1벌 = Set 필드(langs/names/locals/kos/addresses)를
+function serializeGroup(g: Group): any {
+  return {
+    ...g,
+    langs: [...g.langs],
+    names: [...g.names],
+    locals: [...g.locals],
+    kos: [...g.kos],
+    addresses: [...g.addresses],
+  };
+}
+function deserializeGroup(g: any): Group {
+  return {
+    ...g,
+    langs: new Set(g.langs),
+    names: new Set(g.names),
+    locals: new Set(g.locals),
+    kos: new Set(g.kos),
+    addresses: new Set(g.addresses),
+  };
+}
+
+(async () => {
+  const today = rawDate();
+  const outDir = path.join(ROOT, "docs", "b1-reports", String(cityId));
+
+  const pg = await import("pg");
+  const c = new (pg as any).default.Client({
+    connectionString: process.env.SUPA_URL || process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+  });
+  await c.connect();
+
+  let staged: Staged[];
+  let cityRows: PsrRow[];
+  let countBefore: number;
+  let countAfter: number;
+  let tierHistogram: Record<string, number>;
+  let errors: { lang: string; type: string; name_en?: string; error: string }[];
+  let elapsed: number;
+  let groupCount: { landmarks: number; restaurants: number };
+
+  if (fromExtractedPath) {
+    console.log(
+      `═══ B1 등급조정 재실행 — city ${cityId} — 저장된 선별표 재사용(원본 재열람 0, 창고 대조 생략) ═══`,
+    );
+    const saved = JSON.parse(fs.readFileSync(fromExtractedPath, "utf-8"));
+    staged = saved.staged.map((s: any) => ({
+      ...s,
+      g: deserializeGroup(s.g),
+      bucket: s.orig === "new" ? "new" : "confirm",
+    }));
+    cityRows = saved.cityRows;
+    countBefore = saved.countBefore;
+    countAfter = saved.countAfter;
+    tierHistogram = saved.tierHistogram;
+    errors = saved.errors;
+    groupCount = saved.groupCount;
+    elapsed = 0;
+    console.log(
+      `불러온 선별표 = ${fromExtractedPath} (${saved.generatedAt}) · 선별 대상 ${staged.length}건`,
+    );
+  } else {
+    const dir = path.join(ROOT, "docs", "raw", String(cityId));
+    if (!fs.existsSync(dir)) {
+      console.error(`✗ docs/raw/${cityId} 없음 = 02-discover 선행 필요`);
+      process.exit(1);
+    }
+    const files = fs
+      .readdirSync(dir)
+      .filter((f) => f.includes("best20perlang"));
+    const byLang = new Map<string, string>();
+    for (const f of files.sort().reverse()) {
+      const m = f.match(/best20perlang-([a-z]{2})/);
+      if (m && LANGS.includes(m[1] as any) && !byLang.has(m[1]))
+        byLang.set(m[1], f);
+    }
+    console.log(
+      `═══ B1 선처리(①②③) — city ${cityId} — 판정기 = DB 문지기 place_seed_raw_prevent_dup 1벌(트랜잭션 ROLLBACK) ═══`,
+    );
+    console.log(`언어별 채택 파일 (${byLang.size}/${LANGS.length}):`);
+    for (const [lang, f] of byLang) console.log(`  [${lang}] ${f}`);
+    if (byLang.size < LANGS.length)
+      console.warn(
+        `⚠️ ${LANGS.filter((l) => !byLang.has(l)).join(",")} 언어 raw 없음 = 부분 실행`,
+      );
+
+    const all: RawPlace[] = [];
+    for (const lang of LANGS) {
+      const f = byLang.get(lang);
+      if (!f) continue;
+      const j = JSON.parse(fs.readFileSync(path.join(dir, f), "utf-8"));
+      const res = j.raw?.parsed?.results || j.parsed?.results;
+      for (const type of ["landmarks", "restaurants"] as const) {
+        for (const p of res?.[type] || []) {
+          all.push({
+            type,
+            lang,
+            name_en: p.name_en,
+            name_local: p.name_local,
+            name_ko: p.name_ko,
+            lat: p.lat,
+            lng: p.lng,
+            c: p.c,
+            price_eur: p.price_eur,
+            address: p.address,
+            rank: p.rank,
+            summary: p.summary,
+            editorial: p.editorial,
+          });
+        }
+      }
+    }
+    console.log(`raw 항목 ${all.length}건(언어 ${byLang.size}개)`);
+
+    const countQ = `SELECT count(*)::int AS n FROM place_seed_raw WHERE city_id = $1`;
+    countBefore = (await c.query(countQ, [cityId])).rows[0].n;
+    const maxIdBefore: number = (
+      await c.query(`SELECT max(id)::int AS m FROM place_seed_raw`)
+    ).rows[0].m;
+
+    const groups = new Map<string, Group>();
+    const tempGroupOf = new Map<number, string>(); // 임시행 id → 그룹 key
+    errors = [];
+    tierHistogram = {};
+    const bump = (tier: string) =>
+      (tierHistogram[tier] = (tierHistogram[tier] || 0) + 1);
+
+    function newGroup(
+      key: string,
+      anchor: Group["anchor"],
+      p: RawPlace,
+      tier: string,
+    ) {
+      groups.set(key, {
+        anchor,
+        type: p.type,
+        anchorCat: p.c || "",
+        by: tier,
+        langs: new Set(),
+        names: new Set(),
+        locals: new Set(),
+        kos: new Set(),
+        lats: [],
+        lngs: [],
+        cats: [],
+        prices: [],
+        addresses: new Set(),
+        ranks: [],
+        copies: [],
+        members: [],
+      });
+      return groups.get(key)!;
+    }
+    function addMember(g: Group, p: RawPlace, tier: string) {
+      g.members.push(
+        Object.defineProperty(
+          {
+            lang: p.lang,
+            type: p.type,
+            name_en: p.name_en,
+            name_local: p.name_local,
+            name_ko: p.name_ko,
+            lat: p.lat,
+            lng: p.lng,
+            address: p.address,
+            tier,
+          },
+          "raw",
+          { value: p },
+        ),
+      );
+      g.langs.add(p.lang);
+      g.names.add(p.name_en || "");
+      if (p.name_local) g.locals.add(p.name_local);
+      if (p.name_ko) g.kos.add(p.name_ko);
+      if (typeof p.lat === "number" && typeof p.lng === "number") {
+        g.lats.push(p.lat);
+        g.lngs.push(p.lng);
+      }
+      if (p.c) g.cats.push(p.c);
+      if (typeof p.price_eur === "number") g.prices.push(p.price_eur);
+      if (p.address) g.addresses.add(p.address);
+      if (typeof p.rank === "number") g.ranks.push(p.rank);
+      if (p.summary || p.editorial)
+        g.copies.push({
+          lang: p.lang,
+          summary: p.summary,
+          editorial: p.editorial,
+        });
+      bump(tier);
+    }
+    // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 창고 행에 붙는 묶음은 랜드마크·식당 응답을 따로 묶는다(한 행에 식당 응답이 섞여 다수결이 식당이 되면 엇갈림으로 거부되던 것) (정본 §)
+    function joinTarget(targetId: number, p: RawPlace, tier: string) {
+      const tmpKey = tempGroupOf.get(targetId);
+      const key = tmpKey ?? `psr:${targetId}:${p.type}`;
+      const g =
+        groups.get(key) ??
+        newGroup(key, { kind: "psr", id: targetId }, p, tier);
+      addMember(g, p, tier);
+    }
+
+    const t0 = Date.now();
+    const elapsedSec = () => (Date.now() - t0) / 1000;
+    let abortedAt = -1;
+
+    // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 알아보는 문 = 워커판 1등 판정식(주소·도시이름 포함)을 문지기 드라이런 앞에 세운다 = MIX 와 필시티가 같은 1벌 (정본 §)
+    const recogRows: RecognizeRow[] = (
+      await c.query(RECOGNIZE_ROWS_SQL, [cityId])
+    ).rows;
+    await c.query("BEGIN");
+    await c.query(`SET LOCAL statement_timeout = '60s'`);
+    try {
+      for (let i = 0; i < all.length; i++) {
+        const p = all[i];
+        if (elapsedSec() > MAX_TX_SECONDS) {
+          abortedAt = i;
+          break;
+        }
+        if (!p.name_en || !p.c) {
+          errors.push({
+            lang: p.lang,
+            type: p.type,
+            name_en: p.name_en,
+            error: "name_en/c 없음",
+          });
+          continue;
+        }
+        const door = recognizePlace(
+          {
+            name: p.name_en,
+            nameLocal: p.name_local,
+            nameKo: p.name_ko,
+            address: p.address ?? null,
+            lat: p.lat,
+            lng: p.lng,
+            isRestaurant: p.c === "restaurant",
+          },
+          recogRows,
+        );
+        if (door) {
+          joinTarget(door.row.id, p, `문:${door.why}`);
+          continue;
+        }
+        await c.query("SAVEPOINT s");
+        try {
+          const r = await c.query(
+            `INSERT INTO place_seed_raw (city_id, seed_category, name_en, name_local, name_ko, address, status)
+             VALUES ($1, $2, $3, $4, $5, $6, 'active') RETURNING id, phase_tags`,
+            [
+              cityId,
+              p.c,
+              p.name_en,
+              p.name_local || null,
+              p.name_ko || null,
+              p.address || null,
+            ],
+          );
+          const id: number = r.rows[0].id;
+          const tags: string[] = r.rows[0].phase_tags || [];
+          const suspect = tags.find((t) => t.startsWith("의심대상-"));
+          if (!suspect) {
+            await c.query("RELEASE SAVEPOINT s");
+            const key = `tmp:${id}`;
+            tempGroupOf.set(id, key);
+            addMember(newGroup(key, { kind: "tmp", id }, p, "new"), p, "new");
+            continue;
+          }
+          const n = Number(suspect.slice("의심대상-".length));
+          const tmpKey = tempGroupOf.get(n);
+          const joinable = !tmpKey || groups.get(tmpKey)!.anchorCat === p.c;
+          if (joinable) {
+            await c.query("ROLLBACK TO SAVEPOINT s");
+            joinTarget(n, p, "의심(영어명/한국어명)");
+          } else {
+            await c.query("RELEASE SAVEPOINT s");
+            const key = `tmp:${id}`;
+            tempGroupOf.set(id, key);
+            addMember(newGroup(key, { kind: "tmp", id }, p, "new"), p, "new");
+          }
+        } catch (e: any) {
+          await c.query("ROLLBACK TO SAVEPOINT s");
+          const m = String(e.message).match(
+            /\[중복차단\] (불변\d)[^]*?id=(\d+)/,
+          );
+          if (m) {
+            joinTarget(Number(m[2]), p, m[1]);
+          } else if (
+            e.code === "23505" &&
+            e.constraint === "uniq_psr_global_city_name"
+          ) {
+            const hit = (
+              await c.query(
+                `SELECT id FROM place_seed_raw WHERE city_id = $1 AND lower(trim(name_en)) = lower(trim($2)) LIMIT 1`,
+                [cityId, p.name_en],
+              )
+            ).rows[0];
+            if (hit) joinTarget(hit.id, p, "의심(영어명·유니크색인)");
+            else
+              errors.push({
+                lang: p.lang,
+                type: p.type,
+                name_en: p.name_en,
+                error: e.message,
+              });
+          } else {
+            errors.push({
+              lang: p.lang,
+              type: p.type,
+              name_en: p.name_en,
+              error: `${e.code || ""} ${e.message}`.trim(),
+            });
+          }
+        }
+      }
+    } finally {
+      await c.query("ROLLBACK");
+    }
+    elapsed = elapsedSec();
+    countAfter = (await c.query(countQ, [cityId])).rows[0].n;
+    console.log(
+      `\n트랜잭션 ROLLBACK 완료 = ${elapsed.toFixed(1)}s · city ${cityId} 행수 시작 ${countBefore} / 종료 ${countAfter}`,
+    );
+    if (countBefore !== countAfter) {
+      await c.end();
+      throw new Error(
+        `❌ PSR 행수 불일치(${countBefore}→${countAfter}) = DB 쓰기 0 보장 위반`,
+      );
+    }
+    if (abortedAt >= 0) {
+      await c.end();
+      console.error(
+        `❌ ${MAX_TX_SECONDS}s 초과 = ${abortedAt}/${all.length} 항목에서 중단(재시도 없음). 선별표 미저장.`,
+      );
+      process.exit(2);
+    }
+
+    const psrIds = [...groups.values()]
+      .filter((g) => g.anchor.kind === "psr")
+      .map((g) => g.anchor.id);
+    const psrInfo = new Map<number, PsrRow>();
+    if (psrIds.length) {
+      const rows: PsrRow[] = (
+        await c.query(
+          `SELECT ${PSR_COLS} FROM place_seed_raw WHERE id = ANY($1::int[])`,
+          [psrIds],
+        )
+      ).rows;
+      for (const r of rows) psrInfo.set(r.id, r);
+    }
+    cityRows = (
+      await c.query(
+        `SELECT ${PSR_COLS} FROM place_seed_raw WHERE city_id = $1 AND latitude IS NOT NULL AND longitude IS NOT NULL`,
+        [cityId],
+      )
+    ).rows;
+
+    const hist = { ...tierHistogram };
+    refineGroups(groups, psrInfo, all, newGroup, addMember);
+    tierHistogram = hist;
+    staged = [];
+    for (const g of groups.values()) {
+      if (g.type === "restaurants" && g.langs.size < RESTAURANT_MIN_LANGS)
+        continue;
+      if (g.type === "landmarks" && g.langs.size < LANDMARK_MIN_LANGS) continue;
+      const side = {
+        g,
+        name: [...g.names][0],
+        nameLocal: [...g.locals][0] || null,
+        nameKo: [...g.kos][0] || null,
+        lat: mid(g.lats),
+        lng: mid(g.lngs),
+      };
+      if (g.anchor.kind === "psr") {
+        const r = psrInfo.get(g.anchor.id);
+        if (!r) {
+          errors.push({
+            lang: "-",
+            type: g.type,
+            name_en: side.name,
+            error: `대상 PSR id=${g.anchor.id} 조회 실패(시작 전 max(id)=${maxIdBefore})`,
+          });
+          continue;
+        }
+        const tiers = [...new Set(g.members.map((m) => m.tier))];
+        staged.push({
+          ...side,
+          orig: "confirm",
+          bucket: "confirm",
+          psr: r,
+          by: tiers.join("+"),
+        });
+      } else {
+        staged.push({
+          ...side,
+          orig: "new",
+          bucket: "new",
+          psr: null,
+          by: g.by,
+        });
+      }
+    }
+
+    groupCount = {
+      landmarks: [...groups.values()].filter((g) => g.type === "landmarks")
+        .length,
+      restaurants: [...groups.values()].filter((g) => g.type === "restaurants")
+        .length,
+    };
+
+    // ⚠️ 수정금지(승인필요) 2026-08-30 사장님 지시 = 선별표(등급조정 전) 저장 = 다음부터는
+    const extractedPayload = {
+      cityId,
+      generatedAt: today,
+      restaurantMinLangs: RESTAURANT_MIN_LANGS,
+      landmarkMinLangs: LANDMARK_MIN_LANGS,
+      countBefore,
+      countAfter,
+      tierHistogram,
+      errors,
+      groupCount,
+      cityRows,
+      staged: staged.map((s) => ({ ...s, g: serializeGroup(s.g) })),
+    };
+    const extractedPath = saveVersionedReport(
+      outDir,
+      "b1-extracted.json",
+      extractedPayload,
+    );
+    console.log(
+      `\n✓ 선별표 저장(원본 재열람 0·창고 재대조 0으로 재사용 가능) = ${extractedPath}`,
+    );
+  }
+
+  const emptySection = () => ({
+    confirm: [] as any[],
+    new: [] as any[],
+  });
+  const report = { landmarks: emptySection(), restaurants: emptySection() };
+  for (const s of staged) {
+    const g = s.g;
+    const base = {
+      name: [...g.names][0],
+      langs: g.langs.size,
+      cat: majorityCat(g.cats),
+      avgPrice: g.prices.length ? Math.round(avg(g.prices)!) : null,
+      // 언어별 원 순위 평균 = 리포트 참고값(best_rank 원천 아님 — 2026-08-27 사장님 확정 = best_rank 는 언어코드)
+      avgRank: g.ranks.length ? Math.round(avg(g.ranks)!) : null,
+      copies: g.copies, // 원어 카피(B2 = place_translations 선충전 원천, 외부호출 0)
+      mixed: isMixedGroup(g.members),
+      members: g.members,
+    };
+    const newShape = {
+      ...base,
+      nameLocal: [...g.locals][0] || null,
+      nameKo: [...g.kos][0] || null,
+      lat: mid(g.lats),
+      lng: mid(g.lngs),
+      address: [...g.addresses][0] || null,
+      aliases: [...g.names, ...g.locals],
+      by: s.by,
+    };
+    if (s.bucket === "confirm") {
+      const r = s.psr!;
+      report[g.type].confirm.push({
+        ...newShape,
+        psrHint: {
+          psrId: r.id,
+          psrName: r.name_en,
+          psrCat: r.seed_category,
+          psrTags: r.category_tags,
+          by: s.by,
+        },
+      });
+    } else {
+      report[g.type].new.push(newShape);
+    }
+  }
+  await c.end();
+
+  const sizeOf = (o: ReturnType<typeof emptySection>) =>
+    o.confirm.length + o.new.length;
+  console.log(
+    `\n① 선병합: 그룹 ${groupCount.landmarks + groupCount.restaurants} = 랜드마크 ${groupCount.landmarks}(합집합 채택) / 식당 ${groupCount.restaurants} 중 ${RESTAURANT_MIN_LANGS}개국어+ = ${sizeOf(report.restaurants)} 채택 · 오류 ${errors.length}`,
+  );
+  console.log(`tier 히스토그램(항목 단위): ${JSON.stringify(tierHistogram)}`);
+
+  console.log(
+    `\n② 기존 PSR 대조 결과(문지기 판정 그대로 → 기존 행에 걸림=confirm / 없음=new):`,
+  );
+  for (const label of ["landmarks", "restaurants"] as const) {
+    const o = report[label];
+    console.log(
+      `\n[${label}] 총 ${sizeOf(o)}곳 = confirm ${o.confirm.length} / new ${o.new.length}`,
+    );
+    console.log(
+      `  --- confirm(기존 행에 걸림 = 후보일 뿐, B2 = TS 1콜 → PID 로 진짜 행 판정) ---`,
+    );
+    for (const x of o.confirm)
+      console.log(
+        `  [${x.langs}] ${x.name} (${x.cat}) → 후보 PSR#${x.psrHint.psrId} ${x.psrHint.psrName}(${x.psrHint.psrCat}) [${x.psrHint.by}]${x.mixed ? " ⚠mixed" : ""}`,
+      );
+    console.log(
+      `  --- ③ new(정말 신규, TS 검증 후 입력 대상, B2 = 별도 🔴 승인) ---`,
+    );
+    for (const n of o.new)
+      console.log(
+        `  [${n.langs}] ${n.name} (${n.cat}, avg€${n.avgPrice ?? "-"})${n.mixed ? " ⚠mixed" : ""}`,
+      );
+  }
+  if (errors.length) {
+    console.log(`\n오류 ${errors.length}건:`);
+    for (const e of errors)
+      console.log(`  [${e.lang}/${e.type}] ${e.name_en} = ${e.error}`);
+  }
+
+  const totalNew = report.landmarks.new.length + report.restaurants.new.length;
+  const totalConfirm =
+    report.landmarks.confirm.length + report.restaurants.confirm.length;
+  const allItems = (["landmarks", "restaurants"] as const).flatMap((k) => [
+    ...report[k].confirm,
+    ...report[k].new,
+  ]);
+  const mixedCount = allItems.filter((x) => x.mixed).length;
+  console.log(
+    `
+═══ 요약: ${elapsed.toFixed(1)}s · 총 ${totalConfirm + totalNew}곳 = 있음 ${totalConfirm}(창고에 이미 있음) / 신규 ${totalNew}(구글맵으로 만들 곳) · mixed ${mixedCount} · 오류 ${errors.length} ═══`,
+  );
+
+  const payload = {
+    cityId,
+    generatedAt: today,
+    dupFilter:
+      "place_seed_raw_prevent_dup (transaction ROLLBACK, coords/PID/URI NULL)",
+    restaurantMinLangs: RESTAURANT_MIN_LANGS,
+    landmarkMinLangs: LANDMARK_MIN_LANGS,
+    psrCountBefore: countBefore,
+    psrCountAfter: countAfter,
+    tierHistogram,
+    errors,
+    report,
+  };
+  const stemFile = "b1-discovery-diff.json";
+  const outPath = saveVersionedReport(outDir, stemFile, payload);
+  console.log(`\n✓ 산출표 저장 = ${outPath} (DB 쓰기 0)`);
+})();

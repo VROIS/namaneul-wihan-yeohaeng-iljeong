@@ -1,0 +1,76 @@
+// ⚠️ 수정금지(승인필요) — 여정 캘린더 저장 = OS 분기 (2026-07-22 사장님 확정 = 딥리서치 후 expo-calendar 도입)
+import { Linking, Platform } from "react-native";
+import type { Itinerary } from "@/types/trip";
+
+function slotDate(startDate: string, day: number, time: string): Date {
+  const [y, m, d] = startDate.split("-").map(Number);
+  const [hh, mm] = (time || "09:00").split(":").map(Number);
+  const base = new Date(y, (m || 1) - 1, d || 1, hh || 0, mm || 0, 0);
+  base.setDate(base.getDate() + (day - 1));
+  return base;
+}
+
+async function saveToAndroidCalendar(itinerary: Itinerary): Promise<void> {
+  const Calendar = await import("expo-calendar");
+  const perm = await Calendar.requestCalendarPermissionsAsync();
+  if (perm.status !== "granted") {
+    throw new Error("캘린더 쓰기 권한 거부");
+  }
+  let calendarId: string | null = null;
+  try {
+    const def = await Calendar.getDefaultCalendarAsync();
+    if (def?.allowsModifications) calendarId = def.id;
+  } catch {}
+  if (!calendarId) {
+    const cals = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
+    const writable = cals.find((c) => c.allowsModifications);
+    if (!writable) throw new Error("쓰기 가능한 캘린더 없음");
+    calendarId = writable.id;
+  }
+
+  for (const dayPlan of itinerary.days) {
+    for (const place of dayPlan.places) {
+      const start = slotDate(itinerary.startDate, dayPlan.day, place.startTime);
+      const end = slotDate(itinerary.startDate, dayPlan.day, place.endTime);
+      const notes = [place.editorialSummary, place.googleMapsUrl]
+        .filter(Boolean)
+        .join("\n");
+      await Calendar.createEventAsync(calendarId, {
+        title: place.name,
+        startDate: start,
+        endDate: end.getTime() > start.getTime() ? end : start,
+        notes: notes || undefined,
+        location: itinerary.destination || undefined,
+      });
+    }
+  }
+
+  // 삽입 완료 후 캘린더 앱을 여행 시작일로 자동 열기 = 삼성폰 "저장됐는지 안 보임" 해소 (2026-07-22 사장님 실기기 피드백).
+  try {
+    const firstStart = slotDate(
+      itinerary.startDate,
+      1,
+      itinerary.days[0]?.places[0]?.startTime || "09:00",
+    );
+    await Linking.openURL(
+      `content://com.android.calendar/time/${firstStart.getTime()}`,
+    );
+  } catch {}
+}
+
+export async function openCalendar(
+  itinerary: Itinerary,
+  icsUrl: string | null,
+): Promise<void> {
+  if (Platform.OS === "android") {
+    await saveToAndroidCalendar(itinerary);
+    return;
+  }
+  if (!icsUrl) throw new Error("캘린더 = 서버 .ics URL 필수");
+  if (Platform.OS === "web") {
+    if (typeof window !== "undefined")
+      window.open(icsUrl, "_blank", "noopener");
+    return;
+  }
+  await Linking.openURL(icsUrl); // iOS = Safari 네이티브 "일정 추가"
+}

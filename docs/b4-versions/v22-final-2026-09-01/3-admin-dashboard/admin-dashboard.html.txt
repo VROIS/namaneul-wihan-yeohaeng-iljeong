@@ -1,0 +1,1899 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tripis 관리자 대시보드</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #fff;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container { max-width: 1400px; margin: 0 auto; }
+    
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      padding: 20px 24px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 16px;
+      backdrop-filter: blur(10px);
+    }
+    .logo { display: flex; align-items: center; gap: 12px; }
+    .logo h1 { font-size: 24px; font-weight: 700; }
+    .logo span { color: #a78bfa; }
+    .status-badge {
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .status-ok { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+    .status-warn { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+    .status-error { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+    
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    
+    .card {
+      background: rgba(255,255,255,0.05);
+      border-radius: 16px;
+      padding: 24px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .card h2 {
+      font-size: 16px;
+      color: #a78bfa;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card h2::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      background: #a78bfa;
+      border-radius: 50%;
+    }
+    
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+    .stat-item {
+      text-align: center;
+      padding: 16px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 12px;
+    }
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .stat-label {
+      font-size: 12px;
+      color: #9ca3af;
+      margin-top: 4px;
+    }
+    
+    .service-list { display: flex; flex-direction: column; gap: 12px; }
+    .service-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 10px;
+    }
+    .service-name { font-size: 14px; }
+    .service-status {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+    .service-status.active { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+    .service-status.inactive { background: #ef4444; }
+    .service-status.pending { background: #f59e0b; }
+    .service-status.unconfigured { background: #6b7280; }
+    
+    .freshness-bar {
+      display: flex;
+      height: 24px;
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    .freshness-segment { transition: width 0.3s ease; }
+    .freshness-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 12px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+    
+    .channel-list { display: flex; flex-direction: column; gap: 10px; max-height: 300px; overflow-y: auto; }
+    .channel-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 8px;
+    }
+    .channel-info { display: flex; align-items: center; gap: 10px; }
+    .channel-thumb {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      border: 2px solid rgba(255,255,255,0.1);
+    }
+    .channel-thumb.sync-active {
+      background: #10b981;
+      border-color: rgba(16,185,129,0.3);
+      box-shadow: 0 0 8px rgba(16,185,129,0.5);
+    }
+    .channel-thumb.sync-stale {
+      background: #f59e0b;
+      border-color: rgba(245,158,11,0.3);
+      box-shadow: 0 0 8px rgba(245,158,11,0.5);
+    }
+    .channel-thumb.sync-none {
+      background: rgba(107,114,128,0.5);
+      border-color: rgba(107,114,128,0.3);
+    }
+    .channel-name { font-size: 14px; }
+    .channel-category {
+      font-size: 11px;
+      color: #9ca3af;
+      background: rgba(255,255,255,0.05);
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .trust-weight {
+      font-size: 12px;
+      padding: 4px 10px;
+      background: linear-gradient(135deg, #6366f1, #a78bfa);
+      border-radius: 12px;
+    }
+    
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1, #a78bfa);
+      color: #fff;
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3); }
+    .btn-secondary {
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+    }
+    .btn-sm { padding: 6px 12px; font-size: 12px; }
+    
+    .add-form {
+      display: none;
+      padding: 16px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 12px;
+      margin-bottom: 16px;
+    }
+    .add-form.active { display: block; }
+    .add-form input, .add-form select {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      color: #fff;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+    .add-form input::placeholder { color: #6b7280; }
+    
+    .sync-logs { max-height: 200px; overflow-y: auto; }
+    .log-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      font-size: 13px;
+    }
+    .log-time { color: #6b7280; }
+    .log-status { padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+    .log-status.success { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+    .log-status.error { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+    .log-status.pending { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+    
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: #6b7280;
+    }
+    
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .tab {
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.05);
+      border: none;
+      border-radius: 8px;
+      color: #9ca3af;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .tab.active {
+      background: linear-gradient(135deg, #6366f1, #a78bfa);
+      color: #fff;
+    }
+    
+    .loading { text-align: center; padding: 40px; color: #6b7280; }
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: #a78bfa;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    
+    /* 📱 반응형 스타일 */
+    @media (max-width: 768px) {
+      body { padding: 10px; }
+      .container { max-width: 100%; }
+      
+      header {
+        flex-direction: column;
+        gap: 12px;
+        padding: 16px;
+        text-align: center;
+      }
+      .logo h1 { font-size: 20px; }
+      
+      .tabs {
+        justify-content: center;
+        gap: 6px;
+      }
+      .tab {
+        padding: 6px 10px;
+        font-size: 11px;
+      }
+      
+      .grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+      
+      .card {
+        padding: 16px;
+      }
+      .card h2 {
+        font-size: 14px;
+      }
+      
+      .stat-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+      }
+      .stat-value {
+        font-size: 24px;
+      }
+      .stat-label {
+        font-size: 10px;
+      }
+      
+      .btn {
+        padding: 8px 12px;
+        font-size: 12px;
+      }
+      
+      .service-item {
+        flex-direction: column;
+        gap: 8px;
+        text-align: center;
+      }
+      
+      .form-input, select {
+        width: 100%;
+        min-width: unset !important;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .tabs {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .tab {
+        text-align: center;
+        padding: 10px;
+      }
+      
+      .stat-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- ⚠️ 2026-08-25 사장님 확정 = 헤더 고정 순서(불변요소 우선, 가변길이 요소는 맨 끝):
+         로고 > 시각(라벨 없이 숫자만) > TS·PM 한도경고 > API키 확인필요 배지(마지막, 이름 늘어나면 줄바꿈만 되고
+         앞 3개 자리는 안 밀림 = flex-wrap + 앞 3개 flex-shrink:0, system-status만 줄바꿈 허용). -->
+    <header>
+      <div class="logo" style="flex-shrink: 0;">
+        <h1>Trip<span>is</span></h1>
+      </div>
+      <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap; justify-content: flex-end; row-gap: 8px;">
+        <span id="last-update" style="font-size: 12px; color: #6b7280; flex-shrink: 0;"></span>
+        <div id="quota-warning-badge" class="status-badge status-warn" style="display: none; flex-shrink: 0;"></div>
+        <div id="system-status" class="status-badge status-ok">시스템 정상</div>
+      </div>
+    </header>
+    
+    <div class="tabs">
+      <button class="tab active" data-tab="overview">현황</button>
+      <button class="tab" data-tab="api">API 상태</button>
+      <button class="tab" data-tab="guide-prices">콘텐츠관리</button>
+    </div>
+    <!-- 검증요청 탭 = 앱 내 전문가 답변함(client/screens/expert/)으로 대체 = 삭제 2026-07-16 §19 -->
+    
+    <div id="tab-overview" class="tab-content">
+      <!-- 🎯 활동 지표 = "+" 신규(외부호출분만) 배지 공통규칙 4종(2026-08-25 사장님 확정 스펙 v2).
+           BE 배선 완료 = GET /api/admin/activity-summary(server/admin/dashboard-routes.ts) 재사용, 새로 만들지 말 것(§16). -->
+      <div id="activity-kpi" class="card" style="margin-bottom: 20px; background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(167,139,250,0.1)); border: 1px solid rgba(167,139,250,0.3);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <h2 style="color: #a78bfa; margin: 0;">🎯 활동 지표</h2>
+          <span id="activity-kpi-time" style="font-size: 12px; color: #6b7280;">업데이트: -</span>
+        </div>
+        <div class="stat-grid" style="grid-template-columns: repeat(4, 1fr);">
+          <div class="stat-item">
+            <div class="stat-value" id="stat-users">-</div>
+            <div class="stat-label">가입자 <span id="stat-users-delta" class="status-badge status-ok" style="padding: 2px 8px; font-size: 11px;">-</span></div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="stat-routes">-</div>
+            <div class="stat-label">여정건수 <span id="stat-routes-delta" class="status-badge status-ok" style="padding: 2px 8px; font-size: 11px;">-</span></div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="stat-ai-opinion">-</div>
+            <div class="stat-label">AI 의견 <span id="stat-ai-opinion-delta" class="status-badge status-ok" style="padding: 2px 8px; font-size: 11px;">-</span></div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="stat-expert-verify">-</div>
+            <div class="stat-label">전문가검증 <span id="stat-expert-verify-delta" class="status-badge status-ok" style="padding: 2px 8px; font-size: 11px;">-</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <h2>데이터 현황</h2>
+          <div class="stat-grid">
+            <div class="stat-item">
+              <div class="stat-value" id="stat-cities">-</div>
+              <div class="stat-label">도시</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="stat-places">-</div>
+              <div class="stat-label">장소</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="stat-guides">-</div>
+              <div class="stat-label">Audioguide <span id="stat-guides-delta" class="status-badge status-ok" style="padding: 1px 6px; font-size: 10px;">-</span></div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="stat-videos">-</div>
+              <div class="stat-label">영상 <span id="stat-videos-delta" class="status-badge status-ok" style="padding: 1px 6px; font-size: 10px;">-</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>로그인 방식별 사용자</h2>
+          <div id="login-method-breakdown" class="service-list">
+            <div class="loading"><div class="spinner"></div>로딩 중...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 💳 수익 = 레거시 '내손앱' [수익] 탭 흡수(2026-08-25 확정, 신규 독립 구역) -->
+      <div class="card" style="margin-top: 16px;">
+        <h2>💳 수익</h2>
+        <div class="stat-grid">
+          <div class="stat-item">
+            <div class="stat-value" id="stat-revenue-total">-</div>
+            <div class="stat-label">총수입</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="stat-revenue-ai-cost">-</div>
+            <div class="stat-label">AI 비용(추정)</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="stat-revenue-arpu">-</div>
+            <div class="stat-label">1인당 평균매출</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="stat-revenue-net">-</div>
+            <div class="stat-label">순수익</div>
+          </div>
+        </div>
+        <!-- ⚠️ 2026-08-25 사장님 지시로 수정 = 충전(+)만 반쪽 목록 → 전체사용자 카드내역서(엑셀표, +/- 전부) -->
+        <div style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+          <h2 style="font-size: 13px; margin: 0;">전체 사용자 크레딧 내역</h2>
+          <div style="font-size: 13px; color: #a78bfa; font-weight: 600;">현재 전체 보유크레딧: <span id="stat-total-credits-held">-</span> C</div>
+        </div>
+        <div id="recent-payments" style="overflow-x: auto; margin-top: 8px;">
+          <div class="loading"><div class="spinner"></div>로딩 중...</div>
+        </div>
+      </div>
+
+      <!-- 🎬 여정 미리보기 영상 생성 방식 A/B 전환 (2026-07-23 사장님 SSOT = 현황 밑 신규. 정본 = docs/여정 미리보기 영상 구현.md) -->
+      <div class="card" style="margin-top: 16px;">
+        <h2>여정 미리보기 영상 생성 방식</h2>
+        <div style="display: flex; align-items: center; gap: 16px; padding: 12px 0;">
+          <div style="font-size: 15px;">현재: <span id="video-mode-label" style="font-weight: 700; color: #a78bfa;">-</span></div>
+          <button class="btn btn-primary btn-sm" onclick="toggleVideoMode()">전환</button>
+        </div>
+        <div style="font-size: 12px; color: #9ca3af;">
+          A = 지브리풍 애니 (Omni, 씬당 $0.61) · B = 실사 포토무비 (나노바나나+Veo Lite, 씬당 $0.35)<br />
+          디폴트 = B (원가 절감, 2026-07-23 사장님 확정) · 서버 재배포 시 B로 초기화됩니다.
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-api" class="tab-content" style="display: none;">
+      <!-- API 키 관리 섹션 (새로 추가) -->
+      <div class="card" style="margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <div>
+            <h2 style="margin-bottom: 4px;">🔑 API 키 관리</h2>
+            <p style="color: #9ca3af; font-size: 14px;">API 키를 입력하면 즉시 반영됩니다. 서버 재시작 없이 바로 사용 가능합니다.</p>
+          </div>
+          <button class="btn btn-primary" onclick="openAddApiKeyModal()">+ 새 API 키 추가</button>
+        </div>
+        <div id="api-keys-list" style="display: flex; flex-direction: column; gap: 12px;">
+          <div class="loading"><div class="spinner"></div>로딩 중...</div>
+        </div>
+      </div>
+      
+      <!-- 새 API 키 추가 모달 -->
+      <div id="add-api-key-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
+        <div class="card" style="width: 90%; max-width: 500px; margin: auto;">
+          <h2>새 API 키 추가</h2>
+          <form id="add-api-key-form" style="display: flex; flex-direction: column; gap: 16px;">
+            <div>
+              <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">키 이름 (영문, 대문자)</label>
+              <input type="text" id="new-key-name" class="form-input" placeholder="예: CUSTOM_API_KEY" required pattern="[A-Z_]+" style="text-transform: uppercase;">
+            </div>
+            <div>
+              <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">표시 이름</label>
+              <input type="text" id="new-key-display-name" class="form-input" placeholder="예: Custom API" required>
+            </div>
+            <div>
+              <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">설명 (선택)</label>
+              <input type="text" id="new-key-description" class="form-input" placeholder="예: 어디서 발급받는지 등">
+            </div>
+            <div>
+              <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">API 키 값</label>
+              <input type="password" id="new-key-value" class="form-input" placeholder="API 키 입력" required>
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px;">
+              <button type="button" class="btn btn-secondary" onclick="closeAddApiKeyModal()">취소</button>
+              <button type="submit" class="btn btn-primary">추가</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- 📶 무료잔량 계기판 = TS·PM 무료한도 1,000/월(§15), Veo·나노·제미니는 무료한도 없음(기록만).
+           external-call-log.ts monthlyUsage() 재사용, BE 신규 없음(연결만, 2026-08-25 확정 스펙 v2). -->
+      <div class="card" style="margin-bottom: 20px;">
+        <h2>📶 무료잔량 계기판</h2>
+        <div id="quota-gauges" class="service-list">
+          <div class="loading"><div class="spinner"></div>로딩 중...</div>
+        </div>
+      </div>
+
+      <!-- ⚡ AI 성능 = 레거시 '내손앱' [통계] 탭 흡수(2026-08-25 확정), external_calls 계측 배선 완료 -->
+      <div class="card">
+        <h2>⚡ AI 성능 <span style="font-size: 12px; font-weight: 400; color: #9ca3af;">(최근 <span id="stat-ai-sample-size">-</span>건 기준)</span></h2>
+        <div class="stat-grid">
+          <div class="stat-item">
+            <div class="stat-value" id="stat-ai-avg-latency">-</div>
+            <div class="stat-label">평균 응답시간</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="stat-ai-success-rate">-</div>
+            <div class="stat-label">성공률</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="stat-ai-error-rate">-</div>
+            <div class="stat-label">에러율</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div id="tab-guide-prices" class="tab-content" style="display: none;">
+      <!-- 🖼️ 콘텐츠별 미리보기 + ID 선별입력 (2026-08-25 확정 스펙 v2, 사장님 정정)
+           = 도시카드 프레임은 자동채움(대표사진·하이라이트3곳=PSR랭킹, 영상=itinerary랭킹, city-place-routes.ts:69-267).
+           관리자만 원하는 슬롯을 그 콘텐츠 자신의 id로 수동교체·저장하면 즉시 반영 — 영상 슬롯도 itinerary.id 경유 아니라
+           saved_videos.id(영상 자신의 id, shared/schema/itineraries.ts:102-122) 직접 지정 = 여정과 무관.
+           UI 패턴 = client/screens/guide/screens/MainCameraScreen.js "장소번호" 입력 흐름 재사용(신규 UI 발명 아님, §16).
+           BE 배선 완료 = 조회 GET .../representative(overrides 칸), 저장 POST /api/admin/cities/:id/content-override
+           (둘 다 city-place-routes.ts) 재사용, 새로 만들지 말 것(§16). -->
+      <div class="card" style="margin-bottom: 20px;">
+        <h2>🖼️ 콘텐츠별 미리보기 + ID 선별입력</h2>
+        <p style="color: #9ca3af; font-size: 14px; margin-bottom: 16px;">평소엔 전부 자동 채움. 원하는 슬롯만 그 콘텐츠 자신의 id(장소id/영상id)로 교체해 저장하면 그 도시카드에 즉시 반영됩니다.</p>
+
+        <div style="margin-bottom: 16px;">
+          <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">도시 선택</label>
+          <select id="content-city-select" class="form-input" style="max-width: 320px;" onchange="loadContentPreview(this.value)">
+            <option value="">도시를 선택하세요</option>
+          </select>
+        </div>
+
+        <div id="content-preview-frame" style="display: grid; grid-template-columns: 220px 1fr; gap: 20px;">
+          <div id="content-preview-image" style="background: rgba(255,255,255,0.05); border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); aspect-ratio: 1/1; display: flex; align-items: center; justify-content: center; color: #6b7280; font-size: 13px; background-size: cover; background-position: center;">
+            대표사진 미리보기
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="font-weight: 600;" id="content-preview-name">도시를 선택하세요</div>
+            <div style="font-size: 13px; color: #9ca3af;" id="content-preview-tagline">-</div>
+            <div style="display: flex; gap: 8px; margin-top: 4px;">
+              <span class="status-badge status-warn" id="content-preview-badge-video">▶ Video</span>
+              <span class="status-badge status-warn" id="content-preview-badge-guide">📖 Guide</span>
+              <span class="status-badge status-warn" id="content-preview-badge-route">🗺️ Route</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+          <div>
+            <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">대표사진 장소번호</label>
+            <input type="number" id="override-hero-place-id" class="form-input" placeholder="place_seed_raw.id">
+          </div>
+          <div>
+            <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">하이라이트1 장소번호</label>
+            <input type="number" id="override-highlight-1" class="form-input" placeholder="place_seed_raw.id">
+          </div>
+          <div>
+            <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">하이라이트2 장소번호</label>
+            <input type="number" id="override-highlight-2" class="form-input" placeholder="place_seed_raw.id">
+          </div>
+          <div>
+            <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">하이라이트3 장소번호</label>
+            <input type="number" id="override-highlight-3" class="form-input" placeholder="place_seed_raw.id">
+          </div>
+          <div>
+            <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">영상 번호</label>
+            <input type="number" id="override-video-id" class="form-input" placeholder="saved_videos.id">
+          </div>
+        </div>
+        <div style="margin-top: 16px;">
+          <button class="btn btn-primary" id="content-apply-override-btn" onclick="applyContentOverride()">적용</button>
+        </div>
+      </div>
+
+      <!-- 💰 시간당 가격 계산기 (핵심 마케팅 도구) -->
+      <div class="card" style="background: linear-gradient(135deg, rgba(59,130,246,0.1) 0%, rgba(16,185,129,0.1) 100%); border: 1px solid rgba(59,130,246,0.3);">
+        <h2 style="margin-bottom: 4px;">💰 시간당 가격 계산기</h2>
+        <p style="color: #9ca3af; font-size: 14px; margin-bottom: 20px;">고객 일정에 자동 적용되는 가격 수식 (4시간 최소 ~ 10시간)</p>
+        
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+          <!-- 세단 (1-4인) -->
+          <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 16px; border: 1px solid rgba(255,255,255,0.1);">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+              <span style="font-size: 24px;">🚗</span>
+              <div>
+                <div style="font-weight: 600;">세단 (1-4인)</div>
+                <div style="font-size: 12px; color: #9ca3af;">E-Class / 비즈니스 세단</div>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">기본요금 (4h)</label>
+                <div style="position: relative;">
+                  <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #9ca3af;">€</span>
+                  <input type="number" id="sedan-base-price" class="form-input" style="padding-left: 28px;" value="240" onchange="updatePriceFormula()">
+                </div>
+              </div>
+              <div>
+                <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">시간당 추가</label>
+                <div style="position: relative;">
+                  <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #9ca3af;">€</span>
+                  <input type="number" id="sedan-hourly-price" class="form-input" style="padding-left: 28px;" value="60" onchange="updatePriceFormula()">
+                </div>
+              </div>
+            </div>
+            <div style="margin-top: 12px; padding: 8px; background: rgba(59,130,246,0.1); border-radius: 8px; font-size: 13px;">
+              <span style="color: #60a5fa;">8시간 전일:</span> 
+              <span id="sedan-8h-total" style="font-weight: 700; color: #fff;">€480</span>
+            </div>
+          </div>
+          
+          <!-- 밴 (5-7인) -->
+          <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 16px; border: 1px solid rgba(255,255,255,0.1);">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+              <span style="font-size: 24px;">🚐</span>
+              <div>
+                <div style="font-weight: 600;">밴 (5-7인)</div>
+                <div style="font-size: 12px; color: #9ca3af;">V-Class / 럭셔리 밴</div>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">기본요금 (4h)</label>
+                <div style="position: relative;">
+                  <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #9ca3af;">€</span>
+                  <input type="number" id="van-base-price" class="form-input" style="padding-left: 28px;" value="320" onchange="updatePriceFormula()">
+                </div>
+              </div>
+              <div>
+                <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">시간당 추가</label>
+                <div style="position: relative;">
+                  <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #9ca3af;">€</span>
+                  <input type="number" id="van-hourly-price" class="form-input" style="padding-left: 28px;" value="80" onchange="updatePriceFormula()">
+                </div>
+              </div>
+            </div>
+            <div style="margin-top: 12px; padding: 8px; background: rgba(59,130,246,0.1); border-radius: 8px; font-size: 13px;">
+              <span style="color: #60a5fa;">8시간 전일:</span> 
+              <span id="van-8h-total" style="font-weight: 700; color: #fff;">€640</span>
+            </div>
+          </div>
+          
+          <!-- 미니버스 (8인+) -->
+          <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 16px; border: 1px solid rgba(255,255,255,0.1);">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+              <span style="font-size: 24px;">🚌</span>
+              <div>
+                <div style="font-weight: 600;">미니버스 (8인+)</div>
+                <div style="font-size: 12px; color: #9ca3af;">16-19인 미니버스</div>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">기본요금 (4h)</label>
+                <div style="position: relative;">
+                  <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #9ca3af;">€</span>
+                  <input type="number" id="minibus-base-price" class="form-input" style="padding-left: 28px;" value="400" onchange="updatePriceFormula()">
+                </div>
+              </div>
+              <div>
+                <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">시간당 추가</label>
+                <div style="position: relative;">
+                  <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #9ca3af;">€</span>
+                  <input type="number" id="minibus-hourly-price" class="form-input" style="padding-left: 28px;" value="100" onchange="updatePriceFormula()">
+                </div>
+              </div>
+            </div>
+            <div style="margin-top: 12px; padding: 8px; background: rgba(59,130,246,0.1); border-radius: 8px; font-size: 13px;">
+              <span style="color: #60a5fa;">8시간 전일:</span> 
+              <span id="minibus-8h-total" style="font-weight: 700; color: #fff;">€800</span>
+            </div>
+          </div>
+          
+          <!-- 가이드 온리 -->
+          <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 16px; border: 1px solid rgba(255,255,255,0.1);">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+              <span style="font-size: 24px;">👤</span>
+              <div>
+                <div style="font-weight: 600;">가이드 온리</div>
+                <div style="font-size: 12px; color: #9ca3af;">차량 없이 가이드만</div>
+              </div>
+            </div>
+            <div>
+              <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">시간당</label>
+              <div style="position: relative;">
+                <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #9ca3af;">€</span>
+                <input type="number" id="guide-only-hourly" class="form-input" style="padding-left: 28px;" value="50" onchange="updatePriceFormula()">
+              </div>
+            </div>
+            <div style="margin-top: 12px; padding: 8px; background: rgba(16,185,129,0.1); border-radius: 8px; font-size: 13px;">
+              <span style="color: #34d399;">8시간 전일:</span> 
+              <span id="guide-only-8h-total" style="font-weight: 700; color: #fff;">€400</span>
+            </div>
+          </div>
+        </div>
+        
+        <div style="margin-top: 20px; display: flex; gap: 12px;">
+          <button class="btn btn-primary" onclick="saveHourlyPrices()">💾 가격 저장</button>
+          <button class="btn btn-secondary" onclick="loadHourlyPrices()">🔄 DB에서 불러오기</button>
+        </div>
+      </div>
+      
+      <!-- 🆚 우버/택시 비교표 (고객 설득용) -->
+      <div class="card" style="margin-top: 20px;">
+        <h2 style="margin-bottom: 4px;">🆚 경쟁사 비교표 (8시간 전일 기준)</h2>
+        <p style="color: #9ca3af; font-size: 14px; margin-bottom: 20px;">고객 일정표에 자동으로 비교되어 표시됩니다</p>
+        
+        <div style="overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <thead>
+              <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                <th style="text-align: left; padding: 12px 8px; color: #9ca3af;">서비스</th>
+                <th style="text-align: right; padding: 12px 8px; color: #9ca3af;">세단 (1-4인)</th>
+                <th style="text-align: right; padding: 12px 8px; color: #9ca3af;">밴 (5-7인)</th>
+                <th style="text-align: left; padding: 12px 8px; color: #9ca3af;">비고</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); background: rgba(16,185,129,0.1);">
+                <td style="padding: 12px 8px;"><strong>✅ 가이드 서비스</strong></td>
+                <td style="text-align: right; padding: 12px 8px;"><strong id="compare-sedan">€480</strong></td>
+                <td style="text-align: right; padding: 12px 8px;"><strong id="compare-van">€640</strong></td>
+                <td style="padding: 12px 8px; font-size: 12px; color: #34d399;">가이드 포함, 전일 대기, 주차비 포함</td>
+              </tr>
+              <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <td style="padding: 12px 8px;">🚕 우버 블랙</td>
+                <td style="text-align: right; padding: 12px 8px;">
+                  <input type="text" id="uber-black-sedan" class="form-input" style="width: 100px; text-align: right;" value="€450~550" onchange="updateComparisonNote()">
+                </td>
+                <td style="text-align: right; padding: 12px 8px;">
+                  <input type="text" id="uber-black-van" class="form-input" style="width: 100px; text-align: right;" value="€600~750" onchange="updateComparisonNote()">
+                </td>
+                <td style="padding: 12px 8px; font-size: 12px; color: #f59e0b;">호출마다 대기, 가이드 없음, 서지 변동</td>
+              </tr>
+              <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <td style="padding: 12px 8px;">🚕 우버 X</td>
+                <td style="text-align: right; padding: 12px 8px;">
+                  <input type="text" id="uber-x-sedan" class="form-input" style="width: 100px; text-align: right;" value="€280~350" onchange="updateComparisonNote()">
+                </td>
+                <td style="text-align: right; padding: 12px 8px; color: #6b7280;">해당 없음</td>
+                <td style="padding: 12px 8px; font-size: 12px; color: #ef4444;">경유지 추가시 급증, 가이드 없음</td>
+              </tr>
+              <tr>
+                <td style="padding: 12px 8px;">🚖 G7 택시</td>
+                <td style="text-align: right; padding: 12px 8px;">
+                  <input type="text" id="taxi-sedan" class="form-input" style="width: 100px; text-align: right;" value="€320~400" onchange="updateComparisonNote()">
+                </td>
+                <td style="text-align: right; padding: 12px 8px;">
+                  <input type="text" id="taxi-van" class="form-input" style="width: 100px; text-align: right;" value="€450~550" onchange="updateComparisonNote()">
+                </td>
+                <td style="padding: 12px 8px; font-size: 12px; color: #60a5fa;">버스 전용차로 이용 가능</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <div style="margin-top: 16px; padding: 12px; background: rgba(16,185,129,0.1); border-radius: 8px; border-left: 4px solid #10b981;">
+          <div style="font-weight: 600; color: #34d399; margin-bottom: 4px;">💡 고객에게 보여줄 메시지</div>
+          <textarea id="comparison-marketing-note" class="form-input" style="width: 100%; min-height: 60px; resize: vertical;" 
+            placeholder="예: 가이드 서비스가 우버 대비 최대 €170 절약! + 전문 가이드 동행으로 시간 효율 2배 ↑">가이드 서비스가 우버 블랙 대비 최대 €170 절약! 전문 가이드 동행으로 시간 효율 2배 ↑ 전일 대기로 호출 스트레스 없음</textarea>
+        </div>
+        
+        <div style="margin-top: 16px;">
+          <button class="btn btn-primary" onclick="saveComparisonPrices()">💾 비교표 저장</button>
+        </div>
+      </div>
+      
+      <!-- 기존 가이드 가격 리스트 -->
+      <div class="card" style="margin-top: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <div>
+            <h2 style="margin-bottom: 4px;">📋 전체 가격표</h2>
+            <p style="color: #9ca3af; font-size: 14px;">35년차 파리 가이드 현장 데이터 기반 (2026년)</p>
+          </div>
+          <button class="btn btn-primary" onclick="openAddModal()">+ 새 서비스 추가</button>
+        </div>
+        <div id="guide-prices-list" style="display: flex; flex-direction: column; gap: 12px;">
+          <div class="loading"><div class="spinner"></div>로딩 중...</div>
+        </div>
+      </div>
+      
+      <!-- 수정 모달 -->
+      <div id="guide-price-edit-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
+        <div class="card" style="width: 90%; max-width: 500px; margin: auto;">
+          <h2>가격 수정</h2>
+          <form id="guide-price-form" style="display: flex; flex-direction: column; gap: 16px;">
+            <input type="hidden" id="edit-price-id">
+            <div>
+              <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">서비스명</label>
+              <div id="edit-service-name" style="font-size: 16px; font-weight: 600;"></div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+              <div>
+                <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">기본 가격</label>
+                <input type="number" id="edit-price-per-day" class="form-input" placeholder="€">
+              </div>
+              <div>
+                <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">최저가</label>
+                <input type="number" id="edit-price-low" class="form-input" placeholder="€">
+              </div>
+              <div>
+                <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">최고가</label>
+                <input type="number" id="edit-price-high" class="form-input" placeholder="€">
+              </div>
+            </div>
+            <div>
+              <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">설명</label>
+              <input type="text" id="edit-description" class="form-input" placeholder="서비스 설명">
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px;">
+              <button type="button" class="btn btn-secondary" onclick="closeEditModal()">취소</button>
+              <button type="submit" class="btn btn-primary">저장</button>
+            </div>
+          </form>
+        </div>
+      </div>
+      
+      <!-- 추가 모달 -->
+      <div id="guide-price-add-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
+        <div class="card" style="width: 90%; max-width: 500px; margin: auto;">
+          <h2>새 서비스 추가</h2>
+          <form id="guide-price-add-form" style="display: flex; flex-direction: column; gap: 16px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">서비스 유형 (영문)</label>
+                <input type="text" id="add-service-type" class="form-input" placeholder="예: night_tour" required>
+              </div>
+              <div>
+                <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">서비스명 (표시용)</label>
+                <input type="text" id="add-service-name" class="form-input" placeholder="예: 야간 투어" required>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+              <div>
+                <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">기본 가격 (€)</label>
+                <input type="number" id="add-price-per-day" class="form-input" placeholder="일당/회당">
+              </div>
+              <div>
+                <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">최저가 (€)</label>
+                <input type="number" id="add-price-low" class="form-input" placeholder="범위 최저">
+              </div>
+              <div>
+                <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">최고가 (€)</label>
+                <input type="number" id="add-price-high" class="form-input" placeholder="범위 최고">
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">단위</label>
+                <select id="add-unit" class="form-input">
+                  <option value="day">일당 (/일)</option>
+                  <option value="trip">회당 (/회)</option>
+                  <option value="hour">시간당 (/시간)</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">설명</label>
+                <input type="text" id="add-description" class="form-input" placeholder="간단한 설명">
+              </div>
+            </div>
+            <div>
+              <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">특징 (쉼표로 구분)</label>
+              <input type="text" id="add-features" class="form-input" placeholder="예: 픽업 포함, 입장권 포함, 식사 포함">
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px;">
+              <button type="button" class="btn btn-secondary" onclick="closeAddModal()">취소</button>
+              <button type="submit" class="btn btn-primary">추가</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  
+  <script>
+    const API_BASE = '/api/admin';
+    
+    const STATUS_MAP = {
+      'success': '성공',
+      'partial': '부분성공',
+      'failed': '실패',
+      'error': '오류',
+      'pending': '진행중'
+    };
+    
+    const SERVICE_MAP = {
+      'Google Places API': 'Google Places API',
+      'Google Maps API': 'Google Maps API',
+      'OpenWeather API': 'OpenWeather API',
+      'YouTube Data API': 'YouTube Data API',
+      'Exchange Rate API': '환율 API',
+      'Gemini AI': 'Gemini AI'
+    };
+    
+    // 상대 시간 포맷 함수
+    function formatRelativeTime(date) {
+      const now = new Date();
+      const diff = now - new Date(date);
+      const minutes = Math.floor(diff / (1000 * 60));
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      
+      if (minutes < 60) return `${minutes}분 전`;
+      if (hours < 24) return `${hours}시간 전`;
+      if (days < 7) return `${days}일 전`;
+      if (days < 30) return `${Math.floor(days / 7)}주 전`;
+      return `${Math.floor(days / 30)}개월 전`;
+    }
+    
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+        tab.classList.add('active');
+        document.getElementById(`tab-${tab.dataset.tab}`).style.display = 'block';
+        loadTabData(tab.dataset.tab);
+      });
+    });
+    
+    async function loadTabData(tab) {
+      switch(tab) {
+        case 'overview': loadDashboard(); break;
+        case 'api': loadApiKeys(); break;
+        case 'guide-prices': loadGuidePrices(); break;
+      }
+    }
+
+    // ⚠️ 2026-07-16 = data-freshness/collection-stats/data-quality/celebrity-evidence/api-services-health/scheduler/itinerary-stats/route-cache/popularity/korean-sentiment
+    //   완전삭제(§19) = 서버에 없는 옛 크롤러 대시보드 엔드포인트(admin-routes 2026-05-23 재작성으로 이미 폐기됨). dashboard 엔드포인트만 사용.
+    //   ⚠️ 2026-08-25 확정 스펙 v2 = 죽은 4필드(오늘동기화·성공률·API연결·캐시데이터, BE가 안 주던 값) 카드 완전삭제 §19 = control-tower/summary 호출 제거.
+    // 🎬 여정 미리보기 영상 A/B 전환 (2026-07-23) = GET/POST /api/admin/video-config
+    let currentVideoMode = 'optionA';
+    async function loadVideoMode() {
+      try {
+        const r = await fetch(`${API_BASE}/video-config`);
+        const d = await r.json();
+        currentVideoMode = d.currentOptionMode || 'optionA';
+        const label = document.getElementById('video-mode-label');
+        if (label) label.textContent = currentVideoMode === 'optionB' ? 'B · 실사 포토무비' : 'A · 지브리풍 애니';
+      } catch (e) { console.error('video-config 조회 실패', e); }
+    }
+    async function toggleVideoMode() {
+      const next = currentVideoMode === 'optionB' ? 'optionA' : 'optionB';
+      try {
+        await fetch(`${API_BASE}/video-config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ optionMode: next })
+        });
+      } catch (e) { console.error('video-config 전환 실패', e); }
+      loadVideoMode();
+    }
+
+    // ⚠️ 2026-08-25 확정 스펙 v2 = 활동지표(가입자·여정건수·AI의견·전문가검증)·Audioguide·영상·수익·로그인방식별·AI 성능 전부 배선.
+    //   서버 = GET /api/admin/activity-summary(server/admin/dashboard-routes.ts) 1콜로 전부 조립해서 줌.
+    //   AI 성능 = external_calls 계측 3컬럼(response_time_ms·success·error_message, 2026-08-25 추가) 기준
+    //   최근 gemini 호출 100건 실시간 집계(geminiPerformance(), external-call-log.ts). 계측 이전 옛 행은 자동 제외.
+    function fmtNum(n) { return typeof n === 'number' ? n.toLocaleString('ko-KR') : '-'; }
+    // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 확정 = 최근 30초 증감을 항상 숫자로 표시(변화 0 이면 0) (정본 B4)
+    function deltaBadge(el, n, cls) {
+      if (!el) return;
+      if (typeof n !== 'number') { el.textContent = '-'; el.className = 'status-badge status-ok'; return; }
+      el.textContent = n > 0 ? '+' + n : String(n);
+      el.className = 'status-badge ' + (cls || (n < 0 ? 'status-error' : 'status-ok'));
+    }
+    // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 확정 = 증감 기준 = 서버가 30초마다 R2 에 남기는 기록 (정본 B4)
+    async function loadActivitySummary() {
+      try {
+        const r = await fetch(`${API_BASE}/activity-summary`);
+        const d = await r.json();
+        if (!d.activity) return;
+
+        document.getElementById('stat-users').textContent = fmtNum(d.activity.users.total);
+        deltaBadge(document.getElementById('stat-users-delta'),
+          d.activity.users.new, 'status-ok');
+        if (d.activity.users.withdrawn) {
+          const el = document.getElementById('stat-users-delta');
+          el.textContent += ` / -${d.activity.users.withdrawn}`;
+        }
+
+        document.getElementById('stat-routes').textContent = fmtNum(d.activity.routes.total);
+        deltaBadge(document.getElementById('stat-routes-delta'), d.activity.routes.new);
+
+        document.getElementById('stat-ai-opinion').textContent = fmtNum(d.activity.aiOpinion.total);
+        deltaBadge(document.getElementById('stat-ai-opinion-delta'), d.activity.aiOpinion.new);
+
+        document.getElementById('stat-expert-verify').textContent = fmtNum(d.activity.expertVerify.total);
+        deltaBadge(document.getElementById('stat-expert-verify-delta'), d.activity.expertVerify.new);
+
+        document.getElementById('stat-guides').textContent = fmtNum(d.activity.guides.total);
+        deltaBadge(document.getElementById('stat-guides-delta'), d.activity.guides.new);
+
+        document.getElementById('stat-videos').textContent = fmtNum(d.activity.videos.total);
+        deltaBadge(document.getElementById('stat-videos-delta'), d.activity.videos.new);
+
+        document.getElementById('activity-kpi-time').textContent = '업데이트: ' + new Date(d.updatedAt).toLocaleTimeString('ko-KR');
+
+        const loginEl = document.getElementById('login-method-breakdown');
+        const PROVIDER_LABEL = { google: 'Google', kakao: 'Kakao', whatsapp: 'WhatsApp', email: 'Email', apple: 'Apple', unknown: '미확인' };
+        loginEl.innerHTML = (d.loginBreakdown || []).map(r => `
+          <div class="service-item">
+            <span class="service-name">${PROVIDER_LABEL[r.provider] || r.provider}</span>
+            <span>${fmtNum(r.count)}명</span>
+          </div>
+        `).join('') || '<div class="empty-state">데이터 없음</div>';
+
+        document.getElementById('stat-revenue-total').textContent = `€${fmtNum(d.revenue.totalEur)}`;
+        document.getElementById('stat-revenue-ai-cost').textContent = `€${fmtNum(d.revenue.aiCostEur)}`;
+        document.getElementById('stat-revenue-arpu').textContent = `€${fmtNum(d.revenue.arpuEur)}`;
+        document.getElementById('stat-revenue-net').textContent = `€${fmtNum(d.revenue.netEur)}`;
+
+        // ⚠️ 2026-08-25 사장님 승인 = AI 성능(관제탑) 카드 실배선 = external_calls 계측 3컬럼(geminiClient.ts) 집계.
+        const perf = d.aiPerformance || {};
+        document.getElementById('stat-ai-sample-size').textContent = fmtNum(perf.sampleSize || 0);
+        document.getElementById('stat-ai-avg-latency').textContent =
+          perf.avgResponseTimeMs != null ? `${(perf.avgResponseTimeMs / 1000).toFixed(1)}초` : '-';
+        document.getElementById('stat-ai-success-rate').textContent =
+          perf.successRate != null ? `${perf.successRate}%` : '-';
+        document.getElementById('stat-ai-error-rate').textContent =
+          perf.errorRate != null ? `${perf.errorRate}%` : '-';
+
+        document.getElementById('stat-total-credits-held').textContent = fmtNum(d.totalCreditsHeld);
+
+        // ⚠️ 2026-08-25 사장님 지시 = 전체사용자 카드내역서(엑셀표) 구조 = 날짜|사용자|구분|금액, +/- 전부.
+        const TX_TYPE_LABEL = { purchase: '충전', signup_bonus: '가입보너스', referral_bonus: '추천보너스', admin_grant: '관리자지급' };
+        const txCategoryLabel = (t) => t.type === 'usage' ? (t.description || '사용') : (TX_TYPE_LABEL[t.type] || t.type);
+
+        const payEl = document.getElementById('recent-payments');
+        const rows = d.recentTransactions || [];
+        payEl.innerHTML = rows.length ? `
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead>
+              <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); text-align: left; color: #9ca3af;">
+                <th style="padding: 8px; font-weight: 500;">날짜</th>
+                <th style="padding: 8px; font-weight: 500;">사용자</th>
+                <th style="padding: 8px; font-weight: 500;">구분</th>
+                <th style="padding: 8px; font-weight: 500; text-align: right;">금액</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map((t) => `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                  <td style="padding: 8px; color: #9ca3af; white-space: nowrap;">${new Date(t.createdAt).toLocaleString('ko-KR')}</td>
+                  <td style="padding: 8px;">${t.user}</td>
+                  <td style="padding: 8px;">${txCategoryLabel(t)}</td>
+                  <td style="padding: 8px; text-align: right; color: ${t.amount >= 0 ? '#22c55e' : '#ef4444'}; font-family: monospace;">${t.amount >= 0 ? '+' : ''}${t.amount} C</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        ` : '<div class="empty-state">거래 내역이 없습니다</div>';
+      } catch (err) {
+        console.error('activity-summary 로드 오류:', err);
+      }
+    }
+
+    // 📶 무료잔량 계기판 = API 상태 탭 + 헤더 한도경고배지가 같은 데이터를 공유(중복호출 없이 1콜로 양쪽 갱신).
+    const QUOTA_LABEL = { ts: 'TS(장소검색)', pm: 'PM(사진)', veo: 'Veo(영상)', omni: 'Omni(영상)', nano: 'Nano(이미지)', gemini: 'Gemini(텍스트)' };
+    async function loadQuotaGauges() {
+      try {
+        const r = await fetch(`${API_BASE}/external-calls/summary`);
+        const d = await r.json();
+        const rows = d.providers || [];
+
+        const el = document.getElementById('quota-gauges');
+        if (el) {
+          el.innerHTML = rows.map(p => {
+            const near = p.cap != null && p.remaining != null && p.remaining <= p.cap * 0.1;
+            const over = p.cap != null && p.remaining === 0;
+            const statusClass = over ? 'error' : (near ? 'pending' : 'active');
+            const capText = p.cap == null ? `${fmtNum(p.count)}건(무료한도 없음)` : `${fmtNum(p.count)}/${fmtNum(p.cap)}`;
+            return `
+              <div class="service-item">
+                <span class="service-name">${QUOTA_LABEL[p.provider] || p.provider}</span>
+                <span style="display:flex; align-items:center; gap:8px;">
+                  <span class="service-status ${statusClass}"></span>
+                  <span>${capText}</span>
+                </span>
+              </div>`;
+          }).join('') || '<div class="empty-state">데이터 없음</div>';
+        }
+
+        const warnRows = rows.filter(p => p.cap != null && p.remaining != null && p.remaining <= p.cap * 0.1);
+        const badge = document.getElementById('quota-warning-badge');
+        if (badge) {
+          if (warnRows.length) {
+            badge.style.display = '';
+            badge.textContent = '⚠ ' + warnRows.map(p => QUOTA_LABEL[p.provider] || p.provider).join('·') + ' 한도 임박';
+          } else {
+            badge.style.display = 'none';
+          }
+        }
+      } catch (err) {
+        console.error('quota-gauges 로드 오류:', err);
+      }
+    }
+
+    async function loadDashboard() {
+      loadVideoMode();
+      loadActivitySummary();
+      loadQuotaGauges();
+      loadSystemStatus();
+      try {
+        const dashRes = await fetch(`${API_BASE}/dashboard`);
+        const dash = await dashRes.json();
+
+        document.getElementById('stat-cities').textContent = dash.overview.cities;
+        document.getElementById('stat-places').textContent = dash.overview.places;
+
+      } catch (err) {
+        console.error('대시보드 로드 오류:', err);
+        updateSystemStatus(null);
+      }
+    }
+
+    // ⚠️ 2026-08-25 사장님 지적으로 정정 = "시스템 정상"의 진짜 기준 = 외부호출(API 키 관리 목록)이
+    //   전부 정상일 때만. 옛 코드는 DB에 있지도 않은 apiServiceStatus.healthStatus 필드를 보는 죽은
+    //   함수였고 실제로는 한 번도 실데이터로 안 불림(§19 완전삭제, getServiceStatusClass·getStatusLabel 도
+    //   같은 죽은 필드만 보던 미사용 함수라 함께 삭제) — api_keys.hasValue/lastTestResult(진짜 테스트 결과,
+    //   API 상태 탭 "✓ 테스트 통과"와 같은 소스, api-keys-routes.ts) 로 교체.
+    function updateSystemStatus(keys) {
+      const statusEl = document.getElementById('system-status');
+      if (!keys) {
+        statusEl.textContent = '연결 오류';
+        statusEl.className = 'status-badge status-error';
+        return;
+      }
+      // 값을 넣어둔(=실제로 쓰는) 키만 판정 대상 = 미설정 키(Naver 등, 아직 안 쓰는 선택 항목)는 제외.
+      const configured = keys.filter((k) => k.hasValue);
+      // ⚠️ 2026-08-25 사장님 지시로 수정 = "확인 필요"/"오류 발생"만 뜨면 어떤 키인지 알 수가 없다.
+      //   구체적으로 어느 키인지 이름을 배지에 그대로 적는다(displayName, 무료잔량배지와 같은 방식 §16).
+      //   ⚠️ 개수 많으면 배지가 무한정 길어져 헤더 고정요소(로고·시각·한도경고)를 밀어낼 수 있어 앞 3개 +
+      //   "외 N건"으로 축약(이 배지는 헤더 맨 끝에 배치돼 줄바꿈만 되고 앞 요소는 안 밀림, 위 header 참조).
+      const namesWithOverflow = (list) => {
+        const names = list.map((k) => k.displayName);
+        return names.length > 3
+          ? names.slice(0, 3).join(', ') + ` 외 ${names.length - 3}건`
+          : names.join(', ');
+      };
+      const failed = configured.filter((k) => k.lastTestResult === 'failed');
+      const untested = configured.filter((k) => !k.lastTestResult);
+      if (failed.length) {
+        statusEl.textContent = '오류: ' + namesWithOverflow(failed);
+        statusEl.className = 'status-badge status-error';
+      } else if (untested.length) {
+        statusEl.textContent = '확인 필요: ' + namesWithOverflow(untested);
+        statusEl.className = 'status-badge status-warn';
+      } else {
+        statusEl.textContent = '시스템 정상';
+        statusEl.className = 'status-badge status-ok';
+      }
+    }
+
+    // 헤더 배지 = 초기 진입 탭(현황)에서도 바로 반영되도록 별도 경량 호출(API 상태 탭은 loadApiKeys 안에서 재사용).
+    async function loadSystemStatus() {
+      try {
+        const res = await fetch(`${API_BASE}/api-keys`);
+        updateSystemStatus(await res.json());
+      } catch (err) {
+        console.error('시스템 상태 로드 오류:', err);
+        updateSystemStatus(null);
+      }
+    }
+
+    loadDashboard();
+    
+    // ========================================
+    // API 키 관리 함수
+    // ========================================
+    
+    async function loadApiKeys() {
+      loadQuotaGauges(); // 📶 이 탭 열 때도 최신값(헤더 배지와 같은 소스, §16 재사용)
+      const container = document.getElementById('api-keys-list');
+      try {
+        const res = await fetch(`${API_BASE}/api-keys`);
+        const keys = await res.json();
+        updateSystemStatus(keys); // 🩺 이 탭 열 때도 헤더 배지 최신화(같은 데이터, 재요청 없음 §16)
+
+        container.innerHTML = keys.map(key => `
+          <div class="service-item" style="flex-direction: column; align-items: stretch;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <div>
+                <strong style="font-size: 14px;">${key.displayName}</strong>
+                <span style="font-size: 12px; color: #9ca3af; margin-left: 8px;">${key.keyName}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                ${key.hasValue 
+                  ? `<span class="status-badge status-ok" style="font-size: 11px;">설정됨</span>` 
+                  : `<span class="status-badge status-warn" style="font-size: 11px;">미설정</span>`
+                }
+                ${key.lastTestResult === 'success' 
+                  ? `<span style="color: #22c55e; font-size: 11px;">✓ 테스트 통과</span>` 
+                  : key.lastTestResult === 'failed' 
+                    ? `<span style="color: #ef4444; font-size: 11px;">✗ 테스트 실패</span>`
+                    : ''
+                }
+              </div>
+            </div>
+            <div style="font-size: 12px; color: #6b7280; margin-bottom: 8px;">${key.description || ''}</div>
+            <div style="display: flex; gap: 8px;">
+              <input type="password" id="key-input-${key.keyName}" class="form-input" 
+                     style="flex: 1; font-size: 13px;" 
+                     placeholder="${key.hasValue ? key.keyValue : 'API 키를 입력하세요...'}"
+                     value="">
+              <button class="btn btn-primary" style="font-size: 12px; padding: 6px 12px;"
+                      onclick="saveApiKey('${key.keyName}')">저장</button>
+              <button class="btn btn-secondary" style="font-size: 12px; padding: 6px 12px;"
+                      onclick="testApiKey('${key.keyName}')">테스트</button>
+              <button class="btn btn-secondary" style="font-size: 12px; padding: 6px 12px; color: #ef4444;"
+                      onclick="deleteApiKey('${key.keyName}', '${key.displayName}')">삭제</button>
+            </div>
+            <div id="key-result-${key.keyName}" style="margin-top: 8px; padding: 8px 12px; border-radius: 6px; font-size: 12px; min-height: 20px; background: rgba(255,255,255,0.03);"></div>
+          </div>
+        `).join('');
+      } catch (err) {
+        container.innerHTML = '<div style="color: #ef4444;">API 키 목록을 불러올 수 없습니다</div>';
+      }
+    }
+    
+    async function saveApiKey(keyName) {
+      const input = document.getElementById(`key-input-${keyName}`);
+      const resultEl = document.getElementById(`key-result-${keyName}`);
+      const keyValue = input.value.trim();
+      
+      if (!keyValue) {
+        resultEl.innerHTML = '<span style="color: #f59e0b;">⚠️ API 키를 입력해주세요</span>';
+        resultEl.style.background = 'rgba(245, 158, 11, 0.1)';
+        return;
+      }
+      
+      resultEl.innerHTML = '<span style="color: #f59e0b;">⏳ 저장 중...</span>';
+      resultEl.style.background = 'rgba(245, 158, 11, 0.1)';
+      
+      try {
+        const res = await fetch(`${API_BASE}/api-keys/${keyName}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ keyValue })
+        });
+        const data = await res.json();
+        
+        if (res.ok) {
+          resultEl.innerHTML = '<span style="color: #22c55e; font-weight: 600;">✅ 저장 완료! 즉시 반영되었습니다.</span>';
+          resultEl.style.background = 'rgba(34, 197, 94, 0.15)';
+          input.value = '';
+          setTimeout(() => {
+            loadApiKeys();
+          }, 1000);
+        } else {
+          resultEl.innerHTML = `<span style="color: #ef4444;">❌ 오류: ${data.error}</span>`;
+          resultEl.style.background = 'rgba(239, 68, 68, 0.1)';
+        }
+      } catch (err) {
+        resultEl.innerHTML = '<span style="color: #ef4444;">❌ 저장에 실패했습니다</span>';
+        resultEl.style.background = 'rgba(239, 68, 68, 0.1)';
+      }
+    }
+    
+    async function testApiKey(keyName) {
+      const resultEl = document.getElementById(`key-result-${keyName}`);
+      
+      // 키가 저장되어 있는지 확인
+      const input = document.getElementById(`key-input-${keyName}`);
+      const hasValue = input.value.trim() || input.placeholder.includes('...');
+      
+      if (!hasValue) {
+        resultEl.innerHTML = '<span style="color: #f59e0b;">⚠️ 먼저 API 키를 저장해주세요</span>';
+        resultEl.style.background = 'rgba(245, 158, 11, 0.1)';
+        return;
+      }
+      
+      resultEl.innerHTML = '<span style="color: #f59e0b;">⏳ API 연결 테스트 중...</span>';
+      resultEl.style.background = 'rgba(245, 158, 11, 0.1)';
+      
+      try {
+        const res = await fetch(`${API_BASE}/api-keys/${keyName}/test`, {
+          method: 'POST'
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+          resultEl.innerHTML = `<span style="color: #22c55e; font-weight: 600;">✅ 테스트 성공! ${data.message}</span>`;
+          resultEl.style.background = 'rgba(34, 197, 94, 0.15)';
+        } else {
+          resultEl.innerHTML = `<span style="color: #ef4444;">❌ 테스트 실패: ${data.message}</span>`;
+          resultEl.style.background = 'rgba(239, 68, 68, 0.1)';
+        }
+        
+        setTimeout(loadApiKeys, 1500);
+      } catch (err) {
+        resultEl.innerHTML = '<span style="color: #ef4444;">❌ 테스트 중 오류가 발생했습니다</span>';
+        resultEl.style.background = 'rgba(239, 68, 68, 0.1)';
+      }
+    }
+
+    // ⚠️ 2026-08-25 사장님 지시로 추가 = 이미 있던 서버 DELETE /api/admin/api-keys/:keyName(soft-delete,
+    //   api-keys-routes.ts:124-147)를 부를 화면 버튼이 지금까지 아예 없었다(§16, 새 라우트 안 만듦, 재사용만).
+    //   삭제는 즉시 그 키를 쓰는 기능을 멈출 수 있어(사장님 지적) 다른 삭제(deleteGuidePrice)보다 강한 확인 문구.
+    async function deleteApiKey(keyName, displayName) {
+      if (!confirm(`"${displayName}"(${keyName})를 삭제하시겠습니까?\n이 키를 쓰는 기능이 즉시 멈출 수 있습니다.`)) return;
+      try {
+        const res = await fetch(`${API_BASE}/api-keys/${keyName}`, { method: 'DELETE' });
+        if (res.ok) {
+          loadApiKeys();
+        } else {
+          const data = await res.json().catch(() => ({}));
+          alert('삭제 실패: ' + (data.error || res.statusText));
+        }
+      } catch (err) {
+        alert('삭제 중 오류: ' + err.message);
+      }
+    }
+
+    function openAddApiKeyModal() {
+      document.getElementById('add-api-key-modal').style.display = 'flex';
+      document.getElementById('new-key-name').value = '';
+      document.getElementById('new-key-display-name').value = '';
+      document.getElementById('new-key-description').value = '';
+      document.getElementById('new-key-value').value = '';
+    }
+    
+    function closeAddApiKeyModal() {
+      document.getElementById('add-api-key-modal').style.display = 'none';
+    }
+    
+    // 새 API 키 추가 폼 제출
+    document.addEventListener('DOMContentLoaded', () => {
+      const form = document.getElementById('add-api-key-form');
+      if (form) {
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const keyName = document.getElementById('new-key-name').value.trim().toUpperCase();
+          const displayName = document.getElementById('new-key-display-name').value.trim();
+          const description = document.getElementById('new-key-description').value.trim();
+          const keyValue = document.getElementById('new-key-value').value.trim();
+          
+          if (!keyName || !displayName || !keyValue) {
+            alert('필수 항목을 모두 입력해주세요');
+            return;
+          }
+          
+          try {
+            // DB에 새 키 추가
+            const res = await fetch(`${API_BASE}/api-keys`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ keyName, displayName, description, keyValue })
+            });
+            
+            const data = await res.json();
+            
+            if (res.ok) {
+              alert('✅ API 키가 추가되었습니다!');
+              closeAddApiKeyModal();
+              loadApiKeys();
+            } else {
+              alert(data.error || 'API 키 추가에 실패했습니다');
+            }
+          } catch (err) {
+            alert('API 키 추가 중 오류가 발생했습니다');
+            console.error(err);
+          }
+        });
+      }
+    });
+    
+    // 가이드 가격 관련 함수
+    // 🖼️ 도시카드 선별입력 — 도시목록(기존 GET /api/cities 재사용, §16) → 미리보기(기존 대표카드 API 재사용) → 적용(신규 저장 관문 1개).
+    async function loadContentOverrideCities() {
+      const sel = document.getElementById('content-city-select');
+      if (!sel || sel.dataset.loaded) return;
+      try {
+        const res = await fetch('/api/cities');
+        const list = await res.json();
+        list.sort((a, b) => (a.nameEn || a.name || '').localeCompare(b.nameEn || b.name || ''));
+        sel.innerHTML = '<option value="">도시를 선택하세요</option>' +
+          list.map(c => `<option value="${c.id}">${c.nameEn || c.name}</option>`).join('');
+        sel.dataset.loaded = '1';
+      } catch (err) {
+        console.error('도시 목록 로드 오류:', err);
+      }
+    }
+
+    // ⚠️ 2026-08-25 판단3종 지적으로 수정 = 도시 전환 시 5개 입력창(대표사진·하이라이트3·영상)을 안 비우면
+    //   이전 도시에 입력하던 값이 남아 있다가 다음 도시에 [적용]을 누를 때 같이 저장돼 엉뚱한 override 가 생김.
+    //   도시가 바뀔 때는 무조건 5칸부터 전부 비운다(저장된 값 유무와 무관, 입력 중이던 것도 함께 삭제).
+    function clearOverrideInputs() {
+      ['override-hero-place-id', 'override-highlight-1', 'override-highlight-2', 'override-highlight-3', 'override-video-id']
+        .forEach((id) => { document.getElementById(id).value = ''; });
+    }
+
+    async function loadContentPreview(cityId) {
+      const nameEl = document.getElementById('content-preview-name');
+      const taglineEl = document.getElementById('content-preview-tagline');
+      const imgEl = document.getElementById('content-preview-image');
+      const btn = document.getElementById('content-apply-override-btn');
+      clearOverrideInputs();
+      if (!cityId) {
+        nameEl.textContent = '도시를 선택하세요';
+        taglineEl.textContent = '-';
+        btn.dataset.cityId = '';
+        return;
+      }
+      try {
+        const res = await fetch(`/api/cities/${cityId}/representative?lang=ko`);
+        const card = await res.json();
+        nameEl.textContent = `${card.nameKo || card.nameEn || ''} (${card.country || '-'})`;
+        taglineEl.textContent = card.tagline || '(태그라인 없음)';
+        if (card.imageUrl) {
+          imgEl.style.backgroundImage = `url(${card.imageUrl})`;
+          imgEl.textContent = '';
+        } else {
+          imgEl.style.backgroundImage = '';
+          imgEl.textContent = '대표사진 없음';
+        }
+        document.getElementById('content-preview-badge-video').className =
+          'status-badge ' + (card.hasVideo ? 'status-ok' : 'status-warn');
+        document.getElementById('content-preview-badge-guide').className =
+          'status-badge ' + (card.hasGuide ? 'status-ok' : 'status-warn');
+        // 🗺️ Route = 실제 클라이언트와 같은 기준(CityCardScreen.tsx visible={rep.itineraryId!==null}) 재사용.
+        document.getElementById('content-preview-badge-route').className =
+          'status-badge ' + (card.itineraryId !== null ? 'status-ok' : 'status-warn');
+
+        // ⚠️ 2026-08-25 판단3종 지적으로 추가 = 지금 이 도시에 저장된 override 를 폼에 채워서 보여준다.
+        //   안 채우면 슬롯 하나만 고치려 해도 나머지 저장값이 빈칸으로 보여, [적용] 시 그 5칸을 그대로 전송하는
+        //   서버(전체 UPDATE)가 나머지 저장값을 조용히 지운다(§14 새것우선과 달리 이건 부분수정 파괴 버그였음).
+        const ov = card.overrides || {};
+        document.getElementById('override-hero-place-id').value = ov.heroPlaceId ?? '';
+        const highlights = ov.highlightPlaceIds || [];
+        document.getElementById('override-highlight-1').value = highlights[0] ?? '';
+        document.getElementById('override-highlight-2').value = highlights[1] ?? '';
+        document.getElementById('override-highlight-3').value = highlights[2] ?? '';
+        document.getElementById('override-video-id').value = ov.videoId ?? '';
+
+        btn.dataset.cityId = cityId;
+      } catch (err) {
+        console.error('콘텐츠 미리보기 로드 오류:', err);
+      }
+    }
+
+    async function applyContentOverride() {
+      const btn = document.getElementById('content-apply-override-btn');
+      const cityId = btn.dataset.cityId;
+      if (!cityId) { alert('도시를 먼저 선택하세요'); return; }
+      const val = (id) => {
+        const v = document.getElementById(id).value.trim();
+        return v ? Number(v) : null;
+      };
+      const body = {
+        heroPlaceId: val('override-hero-place-id'),
+        highlightPlaceIds: [
+          val('override-highlight-1'), val('override-highlight-2'), val('override-highlight-3'),
+        ].filter((v) => v != null),
+        videoId: val('override-video-id'),
+      };
+      try {
+        const res = await fetch(`${API_BASE}/cities/${cityId}/content-override`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+        await loadContentPreview(cityId);
+        alert('적용 완료 — 도시카드에 즉시 반영됩니다.');
+      } catch (err) {
+        console.error('선별입력 저장 오류:', err);
+        alert('저장 실패: ' + err.message);
+      }
+    }
+
+    async function loadGuidePrices() {
+      loadContentOverrideCities(); // 🖼️ 콘텐츠관리 탭 열 때 도시목록도 같이 채움(§16)
+      const container = document.getElementById('guide-prices-list');
+      try {
+        const res = await fetch(`${API_BASE}/guide-prices?t=${Date.now()}`, {
+          cache: 'no-store'
+        });
+        const prices = await res.json();
+        prices.sort((a, b) => a.id - b.id);
+        
+        if (prices.length === 0) {
+          container.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #6b7280;">
+              <p>가격 데이터가 없습니다</p>
+              <button class="btn btn-primary" onclick="seedGuidePrices()" style="margin-top: 16px;">기본 가격 입력</button>
+            </div>`;
+          return;
+        }
+        
+        const unitLabels = { day: '/일', trip: '/회', hour: '/시간' };
+        container.innerHTML = prices.map(p => `
+          <div class="service-item" style="display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 12px;">
+            <div>
+              <div style="font-weight: 600; font-size: 15px;">${p.serviceName}</div>
+              <div style="font-size: 11px; color: #6b7280;">${p.serviceType}</div>
+              <div style="font-size: 12px; color: #9ca3af; margin-top: 2px;">${p.description || ''}</div>
+              <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">
+                ${p.features ? p.features.map(f => `<span style="background: rgba(255,255,255,0.05); padding: 2px 8px; border-radius: 4px; margin-right: 4px;">${f}</span>`).join('') : ''}
+              </div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: 20px; font-weight: 700; color: #a78bfa;">
+                ${p.pricePerDay ? `€${p.pricePerDay}` : `€${p.priceLow}~${p.priceHigh}`}
+              </div>
+              <div style="font-size: 11px; color: #6b7280;">${unitLabels[p.unit] || p.unit}</div>
+            </div>
+            <button class="btn btn-secondary" onclick='openEditModal(${JSON.stringify(p)})' style="padding: 8px 16px;">수정</button>
+            <button class="btn" style="padding: 8px 12px; background: rgba(239,68,68,0.2); color: #ef4444;" onclick="deleteGuidePrice(${p.id}, '${p.serviceName.replace(/'/g, "\\'")}')">삭제</button>
+          </div>
+        `).join('');
+      } catch (err) {
+        container.innerHTML = `<div style="color: #ef4444;">가격 로딩 실패: ${err.message}</div>`;
+      }
+    }
+    
+    function openEditModal(price) {
+      document.getElementById('edit-price-id').value = price.id;
+      document.getElementById('edit-service-name').textContent = price.serviceName;
+      document.getElementById('edit-price-per-day').value = price.pricePerDay || '';
+      document.getElementById('edit-price-low').value = price.priceLow || '';
+      document.getElementById('edit-price-high').value = price.priceHigh || '';
+      document.getElementById('edit-description').value = price.description || '';
+      document.getElementById('guide-price-edit-modal').style.display = 'flex';
+    }
+    
+    function closeEditModal() {
+      document.getElementById('guide-price-edit-modal').style.display = 'none';
+    }
+    
+    document.getElementById('guide-price-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('edit-price-id').value;
+      const data = {
+        pricePerDay: parseFloat(document.getElementById('edit-price-per-day').value) || null,
+        priceLow: parseFloat(document.getElementById('edit-price-low').value) || null,
+        priceHigh: parseFloat(document.getElementById('edit-price-high').value) || null,
+        description: document.getElementById('edit-description').value
+      };
+      
+      try {
+        const res = await fetch(`${API_BASE}/guide-prices/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (res.ok) {
+          closeEditModal();
+          loadGuidePrices();
+        } else {
+          alert('저장에 실패했습니다');
+        }
+      } catch (err) {
+        alert('저장 중 오류: ' + err.message);
+      }
+    });
+    
+    function openAddModal() {
+      document.getElementById('add-service-type').value = '';
+      document.getElementById('add-service-name').value = '';
+      document.getElementById('add-price-per-day').value = '';
+      document.getElementById('add-price-low').value = '';
+      document.getElementById('add-price-high').value = '';
+      document.getElementById('add-unit').value = 'day';
+      document.getElementById('add-description').value = '';
+      document.getElementById('add-features').value = '';
+      document.getElementById('guide-price-add-modal').style.display = 'flex';
+    }
+    
+    function closeAddModal() {
+      document.getElementById('guide-price-add-modal').style.display = 'none';
+    }
+    
+    document.getElementById('guide-price-add-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const featuresStr = document.getElementById('add-features').value;
+      const features = featuresStr ? featuresStr.split(',').map(f => f.trim()).filter(f => f) : [];
+      
+      const data = {
+        serviceType: document.getElementById('add-service-type').value,
+        serviceName: document.getElementById('add-service-name').value,
+        pricePerDay: parseFloat(document.getElementById('add-price-per-day').value) || null,
+        priceLow: parseFloat(document.getElementById('add-price-low').value) || null,
+        priceHigh: parseFloat(document.getElementById('add-price-high').value) || null,
+        unit: document.getElementById('add-unit').value,
+        description: document.getElementById('add-description').value,
+        features
+      };
+      
+      try {
+        const res = await fetch(`${API_BASE}/guide-prices`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (res.ok) {
+          closeAddModal();
+          loadGuidePrices();
+        } else {
+          const err = await res.json();
+          alert(err.error || '추가에 실패했습니다');
+        }
+      } catch (err) {
+        alert('추가 중 오류: ' + err.message);
+      }
+    });
+    
+    async function deleteGuidePrice(id, name) {
+      if (!confirm(`"${name}" 서비스를 삭제하시겠습니까?`)) return;
+      
+      try {
+        const res = await fetch(`${API_BASE}/guide-prices/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          loadGuidePrices();
+        } else {
+          alert('삭제에 실패했습니다');
+        }
+      } catch (err) {
+        alert('삭제 중 오류: ' + err.message);
+      }
+    }
+    
+    async function seedGuidePrices() {
+      try {
+        const res = await fetch(`${API_BASE}/guide-prices/seed`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          alert(`${data.count}개 가격 데이터가 입력되었습니다`);
+          loadGuidePrices();
+        }
+      } catch (err) {
+        alert('시드 데이터 입력 실패');
+      }
+    }
+    
+    // ========================================
+    // 💰 시간당 가격 계산 함수
+    // ========================================
+    
+    function updatePriceFormula() {
+      // 세단 8시간 계산
+      const sedanBase = parseFloat(document.getElementById('sedan-base-price').value) || 240;
+      const sedanHourly = parseFloat(document.getElementById('sedan-hourly-price').value) || 60;
+      const sedan8h = sedanBase + (4 * sedanHourly); // 기본 4h + 추가 4h
+      document.getElementById('sedan-8h-total').textContent = `€${sedan8h}`;
+      document.getElementById('compare-sedan').textContent = `€${sedan8h}`;
+      
+      // 밴 8시간 계산
+      const vanBase = parseFloat(document.getElementById('van-base-price').value) || 320;
+      const vanHourly = parseFloat(document.getElementById('van-hourly-price').value) || 80;
+      const van8h = vanBase + (4 * vanHourly);
+      document.getElementById('van-8h-total').textContent = `€${van8h}`;
+      document.getElementById('compare-van').textContent = `€${van8h}`;
+      
+      // 미니버스 8시간 계산
+      const minibusBase = parseFloat(document.getElementById('minibus-base-price').value) || 400;
+      const minibusHourly = parseFloat(document.getElementById('minibus-hourly-price').value) || 100;
+      const minibus8h = minibusBase + (4 * minibusHourly);
+      document.getElementById('minibus-8h-total').textContent = `€${minibus8h}`;
+      
+      // 가이드 온리 8시간 계산
+      const guideHourly = parseFloat(document.getElementById('guide-only-hourly').value) || 50;
+      const guide8h = guideHourly * 8;
+      document.getElementById('guide-only-8h-total').textContent = `€${guide8h}`;
+      
+      updateComparisonNote();
+    }
+    
+    function updateComparisonNote() {
+      const sedan8h = parseFloat(document.getElementById('compare-sedan').textContent.replace('€', ''));
+      const uberBlackSedan = document.getElementById('uber-black-sedan').value;
+      
+      // 우버 블랙 최고가 추출 (예: "€450~550" → 550)
+      const uberHighMatch = uberBlackSedan.match(/(\d+)$/);
+      const uberHigh = uberHighMatch ? parseInt(uberHighMatch[1]) : 550;
+      
+      const savings = uberHigh - sedan8h;
+      if (savings > 0) {
+        const noteEl = document.getElementById('comparison-marketing-note');
+        if (noteEl && !noteEl.dataset.userEdited) {
+          noteEl.value = `가이드 서비스가 우버 블랙 대비 최대 €${savings} 절약! 전문 가이드 동행으로 시간 효율 2배 ↑ 전일 대기로 호출 스트레스 없음`;
+        }
+      }
+    }
+    
+    async function saveHourlyPrices() {
+      const hourlyPrices = {
+        sedan: {
+          basePrice4h: parseFloat(document.getElementById('sedan-base-price').value) || 240,
+          pricePerHour: parseFloat(document.getElementById('sedan-hourly-price').value) || 60,
+          minPassengers: 1,
+          maxPassengers: 4
+        },
+        van: {
+          basePrice4h: parseFloat(document.getElementById('van-base-price').value) || 320,
+          pricePerHour: parseFloat(document.getElementById('van-hourly-price').value) || 80,
+          minPassengers: 5,
+          maxPassengers: 7
+        },
+        minibus: {
+          basePrice4h: parseFloat(document.getElementById('minibus-base-price').value) || 400,
+          pricePerHour: parseFloat(document.getElementById('minibus-hourly-price').value) || 100,
+          minPassengers: 8,
+          maxPassengers: 20
+        },
+        guide_only: {
+          basePrice4h: 0,
+          pricePerHour: parseFloat(document.getElementById('guide-only-hourly').value) || 50,
+          minPassengers: 1,
+          maxPassengers: 20
+        }
+      };
+      
+      // 비교표 데이터
+      const comparison = {
+        uberBlack: {
+          sedan: document.getElementById('uber-black-sedan').value,
+          van: document.getElementById('uber-black-van').value
+        },
+        uberX: {
+          sedan: document.getElementById('uber-x-sedan').value
+        },
+        taxi: {
+          sedan: document.getElementById('taxi-sedan').value,
+          van: document.getElementById('taxi-van').value
+        },
+        marketingNote: document.getElementById('comparison-marketing-note').value
+      };
+      
+      try {
+        const res = await fetch(`${API_BASE}/guide-prices/hourly`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hourlyPrices, comparison })
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          alert('✅ 시간당 가격이 저장되었습니다!');
+          loadGuidePrices();
+        } else {
+          const err = await res.json();
+          alert('저장 실패: ' + (err.error || '알 수 없는 오류'));
+        }
+      } catch (err) {
+        alert('저장 중 오류: ' + err.message);
+      }
+    }
+    
+    async function loadHourlyPrices() {
+      try {
+        const res = await fetch(`${API_BASE}/guide-prices/hourly`);
+        if (!res.ok) return;
+        
+        const data = await res.json();
+        
+        if (data.sedan) {
+          document.getElementById('sedan-base-price').value = data.sedan.basePrice4h || 240;
+          document.getElementById('sedan-hourly-price').value = data.sedan.pricePerHour || 60;
+        }
+        if (data.van) {
+          document.getElementById('van-base-price').value = data.van.basePrice4h || 320;
+          document.getElementById('van-hourly-price').value = data.van.pricePerHour || 80;
+        }
+        if (data.minibus) {
+          document.getElementById('minibus-base-price').value = data.minibus.basePrice4h || 400;
+          document.getElementById('minibus-hourly-price').value = data.minibus.pricePerHour || 100;
+        }
+        if (data.guide_only) {
+          document.getElementById('guide-only-hourly').value = data.guide_only.pricePerHour || 50;
+        }
+        
+        // 비교표 로드
+        if (data.comparison) {
+          if (data.comparison.uberBlack) {
+            document.getElementById('uber-black-sedan').value = data.comparison.uberBlack.sedan || '€450~550';
+            document.getElementById('uber-black-van').value = data.comparison.uberBlack.van || '€600~750';
+          }
+          if (data.comparison.uberX) {
+            document.getElementById('uber-x-sedan').value = data.comparison.uberX.sedan || '€280~350';
+          }
+          if (data.comparison.taxi) {
+            document.getElementById('taxi-sedan').value = data.comparison.taxi.sedan || '€320~400';
+            document.getElementById('taxi-van').value = data.comparison.taxi.van || '€450~550';
+          }
+          if (data.comparison.marketingNote) {
+            document.getElementById('comparison-marketing-note').value = data.comparison.marketingNote;
+            document.getElementById('comparison-marketing-note').dataset.userEdited = 'true';
+          }
+        }
+        
+        updatePriceFormula();
+      } catch (err) {
+        console.error('시간당 가격 로드 실패:', err);
+      }
+    }
+    
+    async function saveComparisonPrices() {
+      await saveHourlyPrices(); // 같은 API 사용
+    }
+    
+    // 가이드 가격 탭 로드시 시간당 가격도 로드
+    const originalLoadGuidePrices = loadGuidePrices;
+    loadGuidePrices = async function() {
+      await originalLoadGuidePrices();
+      await loadHourlyPrices();
+    };
+    
+    let autoRefreshInterval = null;
+    let lastUpdateTime = new Date();
+    
+    // ⚠️ 2026-08-25 사장님 지시로 수정 = "마지막 업데이트:" 라벨 삭제(관리자는 이미 아는 정보, 불필요한 텍스트
+    //   설명 §0-1 원칙). 시각 숫자만 남김.
+    function updateRefreshTime() {
+      const el = document.getElementById('last-update');
+      if (el) {
+        el.textContent = lastUpdateTime.toLocaleTimeString('ko-KR');
+      }
+    }
+    
+    async function refreshAll() {
+      const activeTab = document.querySelector('.tab.active')?.dataset.tab || 'overview';
+      await loadTabData(activeTab);
+      lastUpdateTime = new Date();
+      updateRefreshTime();
+    }
+    
+    function startAutoRefresh() {
+      if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+      autoRefreshInterval = setInterval(refreshAll, 30000);
+      console.log('자동 새로고침 시작 (30초 간격)');
+    }
+    
+    function stopAutoRefresh() {
+      if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+        console.log('자동 새로고침 중지');
+      }
+    }
+    
+    startAutoRefresh();
+    
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        stopAutoRefresh();
+      } else {
+        refreshAll();
+        startAutoRefresh();
+      }
+    });
+    
+    // ⚠️ 2026-07-16 = 위기 정보 관리(GDELT+Gemini) UI 완전삭제(§19) = /api/admin/crisis-alerts* 서버에 없음(옛 대시보드 잔존, client/bts-app/public 호출자 0).
+  </script>
+</body>
+</html>
