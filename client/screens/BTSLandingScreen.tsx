@@ -29,7 +29,6 @@ import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
-import * as Haptics from "expo-haptics";
 import { socialLoginWithGoogle, calculateAge } from "@/lib/auth";
 import { getIdTokenFromGoogleResponse } from "@/lib/auth-oauth";
 import { useGoogleAuthRequest } from "@/lib/auth-google";
@@ -40,6 +39,8 @@ import {
   type SocialProvider,
 } from "@/lib/auth-social";
 import { getApiUrl } from "@/lib/query-client";
+// ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 정리: 햅틱 함수는 place-cart/utils 한 벌을 부른다 (정본 §정리)
+import { haptic } from "@/screens/bts/place-cart/utils";
 import { LOGIN_ENTRY_BTS } from "@shared/login-entry";
 import { useMapToggle } from "@/contexts/MapToggleContext";
 import {
@@ -57,16 +58,6 @@ const FIT_ONE_LINE = {
   minimumFontSize: 8, // 이보다 작아지지 않는다(가장 작은 글자가 9pt 라 8 이 하한)
   maxFontSizeMultiplier: 1.2,
 } as const;
-
-// ⚠️ 수정금지(승인필요) — Haptics
-const haptic = (t: "light" | "medium" | "success") => {
-  try {
-    if (t === "light") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    else if (t === "medium")
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    else Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  } catch {}
-};
 
 // ⚠️ 수정금지(승인필요) — D-Day 실시간(서버 계산) + 공연 상세 데이터. 대체값 없음 = 못 받으면 빈 칸.
 type ConcertInfo = {

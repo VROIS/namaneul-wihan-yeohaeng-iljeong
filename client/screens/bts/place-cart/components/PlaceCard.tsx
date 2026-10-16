@@ -10,13 +10,11 @@ import Animated, {
 } from "react-native-reanimated";
 
 import type { BTSPlace } from "@/contexts/BTSContext";
-import { resolvePlaceImage, CARD_W, CARD_H } from "../utils";
+import { resolveImageSource } from "@/lib/wikimedia-image";
+import { CARD_W, CARD_H } from "../utils";
 import { styles } from "../styles";
 
-// ⚠️ 수정금지(승인필요) — 장소 글라스 카드 (사진 내장 + 극투명)
-// ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1g: 자해 타임아웃 제거. Glide 가 완성할 때까지 무조건 대기. onLoad → readyIds 부모 통보.
-// ⚠️ 수정금지(승인필요) 2026-08-08 사장님 확정 — 이 화면의 연출 2가지가 여기 산다.
-//      → 살짝 들렸다 놓는 힌트 폐기 = 2026-08-08 §19(움직임만 있고 무슨 뜻인지 안 남음, 사장님 판정).
+// ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 정리: 장소 글라스 카드, 사진 주소는 resolveImageSource 한 벌 (정본 §정리)
 type PlaceCardProps = {
   place: BTSPlace;
   displayName: string;
@@ -75,8 +73,7 @@ const PlaceCard = React.memo(function PlaceCard({
     return () => clearTimeout(t);
   }, [autoPick, fly]);
 
-  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1g: 폴백 스왑 없음. imageUrl 없으면 undefined → 빈 카드 노출.
-  const img = resolvePlaceImage(place);
+  const img = resolveImageSource(place.imageUrl, "card");
 
   return (
     <Animated.View

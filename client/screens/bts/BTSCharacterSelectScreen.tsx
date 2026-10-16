@@ -26,7 +26,6 @@ import Animated, {
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import * as Haptics from "expo-haptics";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
@@ -38,16 +37,8 @@ import {
 import { useBTS } from "@/contexts/BTSContext";
 import type { BTSStackParamList } from "@/navigation/BTSStackNavigator";
 import MainAppBottomTabBar from "@/components/MainAppBottomTabBar";
-
-// ⚠️ 수정금지(승인필요) — Haptics 유틸
-const haptic = (t: "light" | "medium" | "success") => {
-  try {
-    if (t === "light") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    else if (t === "medium")
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    else Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  } catch {}
-};
+// ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 정리: 햅틱 함수는 place-cart/utils 한 벌을 부른다 (정본 §정리)
+import { haptic } from "@/screens/bts/place-cart/utils";
 
 // ⚠️ 수정금지(승인필요) — 레이아웃 상수 (사용자 지시 반영)
 const TITLE_TOP_OFFSET = 56; // status bar로부터 타이틀까지 여백

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, View, Platform } from "react-native";
-import { apiRequest } from "@/lib/query-client";
+import { useGoogleMapsKey } from "@/lib/useGoogleMapsKey";
 import {
   PLACE_AUTOCOMPLETE_HTML,
   type PlaceAutoSelection,
@@ -219,30 +219,7 @@ function PlaceAutocompleteNative({
 }
 
 export default function PlaceAutocompleteWidget(props: Props) {
-  const [apiKey, setApiKey] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const delays = [0, 500, 1000];
-      for (let i = 0; i < delays.length; i++) {
-        if (cancelled) return;
-        if (delays[i] > 0) await new Promise((r) => setTimeout(r, delays[i]));
-        try {
-          const res = await apiRequest("GET", "/api/bts/map-config");
-          const data = await res.json();
-          if (cancelled) return;
-          if (data.googleMapsApiKey) {
-            setApiKey(data.googleMapsApiKey);
-            return;
-          }
-        } catch {}
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const apiKey = useGoogleMapsKey([0, 500, 1000]);
 
   if (!apiKey)
     return (

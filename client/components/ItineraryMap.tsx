@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, View, Platform } from "react-native";
-import { apiRequest } from "@/lib/query-client";
+import { useGoogleMapsKey } from "@/lib/useGoogleMapsKey";
 // ⚠️ 수정금지(승인필요) 2026-08-15 사장님 승인 = 마커 title(호버용) 다국어 = HTML 템플릿과 같은 싱글턴 재사용(§16).
 import i18n from "@/lib/i18n";
 import {
@@ -362,35 +362,7 @@ function ItineraryMapNative({
 }
 
 export default function ItineraryMap(props: Props) {
-  const [apiKey, setApiKey] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const delays = [0, 800, 1600, 3200, 5000]; // 콜드스타트 503은 수 초 내 200 전환
-      for (let i = 0; i < delays.length; i++) {
-        if (cancelled) return;
-        if (delays[i] > 0) await new Promise((r) => setTimeout(r, delays[i]));
-        try {
-          const res = await apiRequest("GET", "/api/bts/map-config");
-          const data = await res.json();
-          if (cancelled) return;
-          if (data.googleMapsApiKey) {
-            setApiKey(data.googleMapsApiKey);
-            return;
-          }
-        } catch (e) {
-          console.warn(
-            `[ItineraryMap] map-config fetch 실패(시도 ${i + 1}/${delays.length}):`,
-            e,
-          );
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const apiKey = useGoogleMapsKey([0, 800, 1600, 3200, 5000]); // 콜드스타트 503은 수 초 내 200 전환
 
   if (!apiKey) {
     return (

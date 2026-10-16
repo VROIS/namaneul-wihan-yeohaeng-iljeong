@@ -39,6 +39,8 @@ import {
   type BTSCity,
 } from "@/contexts/BTSContext";
 import { getApiUrl } from "@/lib/query-client";
+import { resolveImageSource } from "@/lib/wikimedia-image";
+import { useGoogleMapsKey } from "@/lib/useGoogleMapsKey";
 import type { BTSStackParamList } from "@/navigation/BTSStackNavigator";
 import { LiquidButton } from "@/components/ui/LiquidButton";
 import { changeLanguageAndPersist } from "@/lib/i18n";
@@ -49,8 +51,6 @@ import { styles } from "./styles";
 import {
   haptic,
   localizedName,
-  resolvePlaceImage,
-  resolvePlaceImageFull,
   CARD_W,
   CARD_H,
   MAX_PLACES,
@@ -93,22 +93,8 @@ export default function BTSPlaceCartScreen() {
   const gradient = CharacterGradients[selectedCharacter?.id || "collector"];
   const tint = gradient[0];
 
-  // ⚠️ 수정금지(승인필요) — 2026-05-06 Screen 4 카트→지도 = Google Maps API key fetch + ScrollView/카드 ref
-  const [mapApiKey, setMapApiKey] = useState<string | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`${baseUrl}/api/bts/map-config`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then((d) => {
-        if (!cancelled) setMapApiKey(d?.googleMapsApiKey || null);
-      })
-      .catch(() => {
-        if (!cancelled) setMapApiKey(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [baseUrl]);
+  // ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 정리: 지도 열쇠 받기는 useGoogleMapsKey 한 벌 (정본 §정리)
+  const mapApiKey = useGoogleMapsKey();
 
   const scrollRef = useRef<ScrollView>(null);
   const cardRefs = useRef<Record<number, View | null>>({});
@@ -469,8 +455,8 @@ export default function BTSPlaceCartScreen() {
           >
             {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: recyclingKey 로 Samsung A36 5G 메모리 관리. 1280px × 8 = ~39MB 우려 완화. */}
             <Image
-              source={resolvePlaceImageFull(p)}
-              placeholder={resolvePlaceImage(p)}
+              source={resolveImageSource(p.imageUrl, "full")}
+              placeholder={resolveImageSource(p.imageUrl, "card")}
               style={styles.detailImage}
               contentFit="cover"
               transition={200}
