@@ -38,7 +38,8 @@ import {
   loadImagePidMap,
   pickPlaceImage,
 } from "../lib/services/shared/place-image";
-import { addMinutes, guideCostForDay, shouldApplyGuidePrice } from "./pricing";
+import { addMinutes, guideCostForDay } from "./pricing";
+import { shouldApplyGuidePrice } from "../lib/services/transport/guide-pricing";
 import type { Db } from "../db-types";
 
 const { cities, placeSeedRaw } = schema;

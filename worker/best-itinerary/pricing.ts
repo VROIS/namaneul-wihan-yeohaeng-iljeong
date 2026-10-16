@@ -1,7 +1,6 @@
 // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 교통비 = 원본 transport/guide-pricing.ts · day-config.ts
 //   1,777줄 한 덩어리에서 그대로 잘라낸 것(§0) = 계산·규칙 한 글자도 안 바꿈.
 
-import type { Express, Request, Response } from "express";
 import { eq } from "drizzle-orm";
 import * as schema from "../../shared/schema";
 
@@ -9,29 +8,12 @@ import {
   COMPANION_TO_TRANSPORT,
   DEFAULT_PRICES,
   type CompanionType,
-  type MobilityStyle,
   type TransportType,
-  type TravelStyle,
 } from "../lib/services/transport/constants";
+import { round2 } from "../lib/services/transport/guide-pricing";
 import type { Db } from "../db-types";
 
 // ── 교통비 ──
-
-export function round2(num: number): number {
-  return Math.round(num * 100) / 100;
-}
-
-/** shouldApplyGuidePrice — 순수. */
-export function shouldApplyGuidePrice(
-  mobilityStyle: MobilityStyle,
-  travelStyle: TravelStyle,
-): boolean {
-  const ms = (mobilityStyle || "").toLowerCase();
-  const ts = (travelStyle || "").toLowerCase();
-  return (
-    ms === "minimal" || ms === "moderate" || ts === "premium" || ts === "luxury"
-  );
-}
 
 /** 교통수단별 가이드 요금 = DB 값, 없으면 기본표. */
 export async function guidePriceConfig(

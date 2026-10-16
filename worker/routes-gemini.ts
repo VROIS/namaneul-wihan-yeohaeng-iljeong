@@ -32,6 +32,7 @@ import { getFirstAdmin, getUserIdFromReq } from "./auth-user";
 import { computeItineraryFingerprint } from "./itinerary-fingerprint";
 import { chargeOnSuccess, precheckFeature } from "../shared/credits";
 import { readGeminiKey, readMapsKey } from "./keys";
+import { withQuotaRetry } from "./lib/services/shared/retry-429";
 import type { OpenDb } from "./db-types";
 
 const { cities, guides, placeSeedRaw } = schema;
@@ -88,32 +89,6 @@ const MODEL_ID = "gemini-3-flash-preview";
 const AI_OPINION_TEMPERATURE = 0.2;
 const AI_OPINION_MAX_OUTPUT_TOKENS = 50000;
 
-/** withQuotaRetry 와 같은 지연표·판정 = sleep 이 Worker 에서 CPU 를 쓰지 않는 setTimeout 이어야 해서 여기 둔다. */
-const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000];
-
-async function withQuotaRetry<T>(
-  fn: () => Promise<T>,
-  label: string,
-): Promise<T> {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      return await fn();
-    } catch (e) {
-      const err = e as { status?: number; message?: string };
-      const msg = String(err?.message || "");
-      const is429 =
-        err?.status === 429 ||
-        msg.includes('"code":429') ||
-        msg.includes("RESOURCE_EXHAUSTED");
-      if (!is429 || attempt >= RETRY_DELAYS_MS.length) throw e;
-      console.warn(
-        `[retry-429] ${label} 한도 = ${RETRY_DELAYS_MS[attempt] / 1000}초 대기 후 재시도(${attempt + 1}/${RETRY_DELAYS_MS.length})`,
-      );
-      await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
-    }
-  }
-}
-
 interface GeminiPart {
   text?: string;
   inlineData?: { mimeType: string; data: string };
@@ -158,7 +133,7 @@ async function* geminiVisionStream(
             topK: 20,
           },
         }),
-      "gemini-vision:guide-gemini",
+      { label: "gemini-vision:guide-gemini" },
     );
 
     // 청크마다 finishReason 을 갱신하고 텍스트를 누적하며 흘려보낸다.
@@ -221,7 +196,7 @@ async function geminiJson<T>(
             tools: [{ googleSearch: {} }],
           },
         }),
-      "gemini-json:ai-opinion",
+      { label: "gemini-json:ai-opinion" },
     );
   } catch (err) {
     record({

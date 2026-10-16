@@ -630,7 +630,7 @@ app.post("/api/routes/regenerate-day", async (req, res) => {
     console.error("[Regenerate Day] Error:", (error as Error)?.message);
     res.status(500).json({ error: "동선 재최적화 실패" });
   }
-  // 가이드 요금 조회는 정본(transport-pricing-service)이 withEngineDb 안에서 한다.
+  // 가이드 요금 조회는 정본(transport-pricing-service)이 하고, DB 연결은 위 withEngineDb 가 열어 준다.
 });
 
 app.listen(8080);
