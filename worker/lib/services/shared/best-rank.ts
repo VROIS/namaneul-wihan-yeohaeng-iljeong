@@ -1,8 +1,10 @@
-// ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = place_seed_raw.best_rank = 7자리 언어코드(분류번호) = 앱 전체 1벌(§16) · 쓰기 주체 = writeBestRankUnion() 1벌 = worker/lib/services/fill/gmaps-shared.ts(B2) · 쓰기 = 덮어쓰기가 아니라 자리별 합집합(∪) = bestRankUnion() 1벌.
+// ⚠️ 수정금지(승인필요) 2026-10-18 사장님 결정 = place_seed_raw.best_rank = 순위 × 10,000,000 + 7자리 언어코드(앞자리 = 기준 도시 산출표 순위, 없으면 언어코드만) = 앱 전체 1벌(§16) · 쓰기 = 언어코드는 자리별 합집합(∪) · 순위는 작은 쪽 = bestRankUnion() 1벌 (정본 §)
 
 import { sql } from "drizzle-orm";
 import { placeSeedRaw } from "@shared/schema";
 import { LANGS } from "./language-instruction";
+
+export const BEST_RANK_BASE = 10_000_000;
 
 export function bestRankCode(langs: readonly string[]): number | null {
   const digits = LANGS.map((l, i) => (langs.includes(l) ? String(i + 1) : "0"));
@@ -10,17 +12,41 @@ export function bestRankCode(langs: readonly string[]): number | null {
   return code === 0 ? null : code;
 }
 
+export function bestRankLangCode(v: number | null | undefined): number | null {
+  if (v == null) return null;
+  const code = Number(v) % BEST_RANK_BASE;
+  return code === 0 ? null : code;
+}
+
+export function bestRankOrdinal(v: number | null | undefined): number | null {
+  if (v == null) return null;
+  const o = Math.floor(Number(v) / BEST_RANK_BASE);
+  return o > 0 ? o : null;
+}
+
+export function bestRankWithOrdinal(
+  code: number | null,
+  ordinal: number | null,
+): number | null {
+  if (code == null) return null;
+  return (ordinal ?? 0) * BEST_RANK_BASE + code;
+}
+
 export function bestRankUnion(
   a: number | null | undefined,
   b: number | null | undefined,
 ): number | null {
-  const pa = String(a ?? 0).padStart(LANGS.length, "0");
-  const pb = String(b ?? 0).padStart(LANGS.length, "0");
+  const pa = String(bestRankLangCode(a) ?? 0).padStart(LANGS.length, "0");
+  const pb = String(bestRankLangCode(b) ?? 0).padStart(LANGS.length, "0");
   const digits = LANGS.map((_, i) =>
     pa[i] !== "0" || pb[i] !== "0" ? String(i + 1) : "0",
   );
   const code = Number(digits.join(""));
-  return code === 0 ? null : code;
+  if (code === 0) return null;
+  const oa = bestRankOrdinal(a);
+  const ob = bestRankOrdinal(b);
+  const ordinal = oa == null ? ob : ob == null ? oa : Math.min(oa, ob);
+  return bestRankWithOrdinal(code, ordinal);
 }
 
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = best_rank 쓰기 트랜잭션 절차(SELECT..FOR UPDATE → bestRankUnion →
@@ -46,14 +72,16 @@ export async function writeBestRankUnion(
   return { cur, result };
 }
 
-export function bestRankLangCount(code: number | null | undefined): number {
+export function bestRankLangCount(v: number | null | undefined): number {
+  const code = bestRankLangCode(v);
   if (!code) return 0;
   return String(code)
     .split("")
     .filter((c) => c !== "0").length;
 }
 
-const bestRankLangCountSql = "length(replace(best_rank::text, '0', ''))";
+const langCodeSql = `(best_rank % ${BEST_RANK_BASE})`;
+const bestRankLangCountSql = `length(replace(${langCodeSql}::text, '0', ''))`;
 
 function langDigit(lang?: string): number | undefined {
   const i = (LANGS as readonly string[]).indexOf(lang || "");
@@ -63,13 +91,14 @@ function langDigit(lang?: string): number | undefined {
 export function bestRankOrderSql(lang?: string): string {
   const d = langDigit(lang);
   if (d === undefined) return `${bestRankLangCountSql} DESC NULLS LAST`;
-  return `(CASE WHEN position('${d}' in best_rank::text) > 0 THEN ${bestRankLangCountSql} END) DESC NULLS LAST`;
+  return `(CASE WHEN position('${d}' in ${langCodeSql}::text) > 0 THEN ${bestRankLangCountSql} END) DESC NULLS LAST`;
 }
 
 export function bestRankOrder(lang?: string) {
   const col = placeSeedRaw.bestRank;
-  const count = sql`length(replace(${col}::text, '0', ''))`;
+  const code = sql`(${col} % ${sql.raw(String(BEST_RANK_BASE))})`;
+  const count = sql`length(replace(${code}::text, '0', ''))`;
   const d = langDigit(lang);
   if (d === undefined) return sql`${count} DESC NULLS LAST`;
-  return sql`(CASE WHEN position(${sql.raw(`'${d}'`)} in ${col}::text) > 0 THEN ${count} END) DESC NULLS LAST`;
+  return sql`(CASE WHEN position(${sql.raw(`'${d}'`)} in ${code}::text) > 0 THEN ${count} END) DESC NULLS LAST`;
 }

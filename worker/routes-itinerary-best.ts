@@ -18,7 +18,10 @@ import { AG2_SELECT_COLS, dbRowToPlace } from "./best-itinerary/places";
 import { loadImagePidMap } from "./lib/services/shared/place-image";
 import type { CityReadyResult } from "./best-itinerary/city-resolver";
 import { placeSeedRaw } from "../shared/schema";
-import { bestRankLangCount } from "./lib/services/shared/best-rank";
+import {
+  bestRankLangCount,
+  bestRankOrdinal,
+} from "./lib/services/shared/best-rank";
 
 function toMin(t: string): number {
   const [h, m] = String(t).split(":").map(Number);
@@ -32,7 +35,10 @@ const FILL_HEADROOM = 3;
 const agreeOf = (r: { bestRank?: number | null }) =>
   bestRankLangCount(r.bestRank);
 
-// ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 볼거리는 동의 1까지 실제로 있어 버킷으로 내려가고, 식당은 창고에 4동의까지만 있어 그 뒤는 리뷰수 순으로 이어 붙인다(베스트 랜드마크 옆에 딸려 들어온 곳들 = 이미 카테고리 안 RC 순).
+const ordinalOf = (r: { bestRank?: number | null }) =>
+  bestRankOrdinal(r.bestRank) ?? Number.MAX_SAFE_INTEGER;
+
+// ⚠️ 수정금지(승인필요) 2026-10-18 사장님 결정 = 베스트 순서 = 산출표 순위(앞자리) → 동의 수 → 리뷰수 (정본 §)
 async function selectBest(
   db: Db,
   cityId: number,
@@ -56,6 +62,7 @@ async function selectBest(
   for (const r of rows) recalcCrossCityZone(r, cityId, center);
   rows.sort(
     (a, b) =>
+      ordinalOf(a) - ordinalOf(b) ||
       agreeOf(b) - agreeOf(a) ||
       (b.googleReviewCount ?? -1) - (a.googleReviewCount ?? -1),
   );
