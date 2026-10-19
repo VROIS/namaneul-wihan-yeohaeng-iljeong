@@ -4,7 +4,11 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import * as schema from "../../shared/schema";
 
 import { readySql, servingGateSql } from "../lib/services/shared/pool-radius";
-import { findHub, hubReadiness } from "../lib/services/shared/city-hub";
+import {
+  findHub,
+  findHubById,
+  hubReadiness,
+} from "../lib/services/shared/city-hub";
 import type { Db } from "../db-types";
 
 const { cities, placeSeedRaw } = schema;
@@ -36,6 +40,11 @@ export interface CityReadyResult {
   longitude: number | null;
 }
 
+export const cityCoordsOf = (c: CityReadyResult) =>
+  c.latitude != null && c.longitude != null
+    ? { lat: c.latitude, lng: c.longitude }
+    : undefined;
+
 export async function isCityReady(
   db: Db,
   destination: string,
@@ -47,6 +56,23 @@ export async function isCityReady(
     coords: startCoords,
     countryCode,
   });
+  return readyResult(db, hub, destination, startCoords);
+}
+
+// ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 여정 수정 완료 = 그 여정에 이미 정해진 거점(city_id)으로 계산 · 이름으로 다시 찾지 않음 (정본 §)
+export async function cityReadyById(
+  db: Db,
+  cityId: number,
+): Promise<CityReadyResult> {
+  return readyResult(db, await findHubById(db, cityId), String(cityId));
+}
+
+async function readyResult(
+  db: Db,
+  hub: Awaited<ReturnType<typeof findHub>>,
+  destination: string,
+  startCoords?: { lat: number; lng: number } | null,
+): Promise<CityReadyResult> {
   if (!hub) {
     return {
       ready: false,

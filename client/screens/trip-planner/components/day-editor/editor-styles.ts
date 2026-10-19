@@ -5,6 +5,11 @@ export const LEFT_COL = 38;
 export const RULER_W = 56;
 export const TRAY_THUMB = 56;
 export const RED = "#EF4444";
+export const CARD_PAD_V = 10;
+export const NAME_H = 18;
+export const META_H = 15;
+export const SUMMARY_LINE = 14;
+export const SUMMARY_MAX_LINES = 2;
 
 export const noTouchScroll: any =
   Platform.OS === "web" ? { touchAction: "none", userSelect: "none" } : null;
@@ -51,8 +56,12 @@ export const editStyles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   trayLabel: { alignItems: "center", minWidth: 34 },
-  trayLabelText: { fontSize: 11, fontFamily: Fonts.bold },
-  trayCount: { fontSize: 16, fontFamily: Fonts.bold },
+  trayLabelText: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontFamily: Fonts.bold,
+    textAlign: "center",
+  },
   trayItem: {
     width: TRAY_THUMB,
     height: TRAY_THUMB,
@@ -102,9 +111,23 @@ export const editStyles = StyleSheet.create({
     paddingRight: 36,
     overflow: "hidden",
   },
-  textCol: { flex: 1, minHeight: 48, justifyContent: "center" },
-  name: { fontSize: 16, fontFamily: Fonts.bold },
-  meta: { fontSize: 12, fontFamily: Fonts.medium, marginTop: 2 },
+  textCol: { flex: 1, justifyContent: "flex-start" },
+  name: { fontSize: 14, lineHeight: NAME_H, fontFamily: Fonts.bold },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    height: META_H,
+    overflow: "hidden",
+  },
+  meta: {
+    fontSize: 11,
+    lineHeight: META_H,
+    fontFamily: Fonts.medium,
+    flexShrink: 1,
+  },
+  metaTime: { fontSize: 11, lineHeight: META_H, fontFamily: Fonts.medium },
+  summary: { fontSize: 11, lineHeight: SUMMARY_LINE },
   removeBtn: {
     position: "absolute",
     top: 0,

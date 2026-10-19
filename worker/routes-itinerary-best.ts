@@ -1,6 +1,6 @@
-// ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 베스트 여정 v1(오늘 확정본) = DB-only 에서 갈라진 별도 분기(관리자 쇼윈도용).
+// ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 인기 명소 고르기 = 베스트 목록 → 고른 장소로 예상 여정(모든 사용자 · 옛 관리자 전용 베스트 여정 계산 삭제) (정본 §)
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { TripFormData } from "./lib/services/agents/types";
 import { buildSkeleton } from "./lib/services/agents/ag1-skeleton-builder";
 import type { Db } from "./db-types";
@@ -9,28 +9,22 @@ import {
   recalcCrossCityZone,
   servingGateSql,
 } from "./lib/services/shared/pool-radius";
-import {
-  cityHourlyRate,
-  slotMinutesFor,
-} from "./lib/services/shared/slot-duration";
 import { finalizeDbOnlyItinerary } from "./best-itinerary/finalize";
+import type { PickedFinalDay } from "./lib/services/route/route-picked";
 import { AG2_SELECT_COLS, dbRowToPlace } from "./best-itinerary/places";
 import { loadImagePidMap } from "./lib/services/shared/place-image";
-import type { CityReadyResult } from "./best-itinerary/city-resolver";
+import {
+  cityCoordsOf,
+  type CityReadyResult,
+} from "./best-itinerary/city-resolver";
 import { placeSeedRaw } from "../shared/schema";
 import {
   bestRankLangCount,
   bestRankOrdinal,
 } from "./lib/services/shared/best-rank";
 
-function toMin(t: string): number {
-  const [h, m] = String(t).split(":").map(Number);
-  return h * 60 + (m || 0);
-}
-
 // ⚠️ 수정금지(승인필요) 2026-10-14 사장님 결정 = 분류 이름을 포토스팟으로 바꿈 (정본 §2026-10-14)
 const FILL_CATEGORIES = ["heritage", "photospot", "healing", "attraction"];
-const FILL_HEADROOM = 3;
 
 const agreeOf = (r: { bestRank?: number | null }) =>
   bestRankLangCount(r.bestRank);
@@ -38,7 +32,7 @@ const agreeOf = (r: { bestRank?: number | null }) =>
 const ordinalOf = (r: { bestRank?: number | null }) =>
   bestRankOrdinal(r.bestRank) ?? Number.MAX_SAFE_INTEGER;
 
-// ⚠️ 수정금지(승인필요) 2026-10-18 사장님 결정 = 베스트 순서 = 산출표 순위(앞자리) → 동의 수 → 리뷰수 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 베스트 순서 = 산출표 순위(앞자리) → 동의 수 → 리뷰수 · 목록·예상 여정도 이 순서를 쓴다 (정본 §)
 async function selectBest(
   db: Db,
   cityId: number,
@@ -69,105 +63,95 @@ async function selectBest(
   return rows;
 }
 
-function fillBuckets(
-  rows: any[],
-  needMinutes: number,
-  stayOf: (r: any) => number,
-) {
-  // ⚠️ 수정금지(승인필요) 2026-09-10 사장님 확정 = 7동의만 특별대우(카테고리 무관 = 고정 기차역, 전부 간다).
-  const out: any[] = [];
-  let sum = 0;
-  const usedByLevel: number[] = [];
+// ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 베스트 목록 = 베스트(분류 무관) 순위 순 → 유적·포토스팟·힐링·즐길거리 리뷰 순 · 날마다 6곳 · 카드 = 이름 · 순위 · 구글 리뷰 (정본 §)
+const BEST_LIST_PER_DAY = 6;
 
-  for (const r of rows) {
-    if (agreeOf(r) !== 7) continue;
-    out.push(r);
-    sum += stayOf(r);
-  }
-  if (out.length) usedByLevel.push(7);
-
-  const fill = rows
-    .filter(
-      (r) =>
-        agreeOf(r) !== 7 &&
-        FILL_CATEGORIES.includes(String(r.seedCategory ?? "")),
-    )
-    .sort((a, b) => (b.googleReviewCount ?? -1) - (a.googleReviewCount ?? -1));
-  const want = needMinutes * FILL_HEADROOM;
-  let n = 0;
-  for (const r of fill) {
-    if (sum >= want) break;
-    out.push(r);
-    sum += stayOf(r);
-    n++;
-  }
-  if (n) usedByLevel.push(0);
-  return { picked: out, minutes: sum, levels: usedByLevel };
-}
-
-export async function runPipelineBest(
+export async function listBest(
   db: Db,
   formData: TripFormData,
   cityCheck: CityReadyResult,
-): Promise<any> {
-  const _t0 = Date.now();
+) {
   const cityId = cityCheck.cityId!;
-  const cityCoords =
-    cityCheck.latitude != null && cityCheck.longitude != null
-      ? { lat: cityCheck.latitude, lng: cityCheck.longitude }
-      : undefined;
-
-  console.log(
-    `
-[Best] ===== 베스트 여정 city=${cityCheck.cityName} (볼거리 = 7동의 전부 + ${FILL_CATEGORIES.join("·")} 리뷰수 순 / 식당 = 동의 순 뒤 리뷰수 순) =====`,
-  );
-
+  const cityCoords = cityCoordsOf(cityCheck);
   const skeleton = await buildSkeleton(formData);
-
-  const [sightRows, restRows] = await Promise.all([
-    selectBest(db, cityId, cityCoords, false),
-    selectBest(db, cityId, cityCoords, true),
-  ]);
-  // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = PID공유 폴백 목록(사진)
+  const rows = await selectBest(db, cityId, cityCoords, false);
+  const best = rows.filter((r) => r.bestRank != null);
+  const fill = rows
+    .filter(
+      (r) =>
+        r.bestRank == null &&
+        FILL_CATEGORIES.includes(String(r.seedCategory ?? "")),
+    )
+    .sort((a, b) => (b.googleReviewCount ?? -1) - (a.googleReviewCount ?? -1));
+  const picked = [...best, ...fill].slice(
+    0,
+    skeleton.dayCount * BEST_LIST_PER_DAY,
+  );
   const imagePidMap = await loadImagePidMap([
     cityId,
-    ...sightRows.map((r) => r.cityId),
+    ...picked.map((r) => r.cityId),
+  ]);
+  return {
+    cityId,
+    days: skeleton.daySlotsConfig.map((dc, d) => ({
+      day: dc.day,
+      places: picked
+        .slice(d * BEST_LIST_PER_DAY, (d + 1) * BEST_LIST_PER_DAY)
+        .map((r) => {
+          const p: any = dbRowToPlace(r, imagePidMap, formData.destination);
+          return {
+            id: r.id,
+            nameEn: p.name,
+            nameLocal: p.nameLocal,
+            image: p.image,
+            userRatingCount: p.userRatingCount,
+            rank: bestRankOrdinal(r.bestRank),
+          };
+        }),
+    })),
+  };
+}
+
+// ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 예상 여정 = 사용자가 목록에서 날마다 고른 장소를 그 순서 그대로 엔진이 계산 · 최종 완료(finalDays) = 사용자가 남긴 활동·식사 칸 배치와 날마다 시각 그대로 식당만 새로(식당·식사 규칙 = route-picked) (정본 §)
+export async function runPipelinePicked(
+  db: Db,
+  formData: TripFormData & {
+    pickedDays?: number[][];
+    finalDays?: PickedFinalDay[];
+  },
+  cityCheck: CityReadyResult,
+): Promise<any> {
+  const cityId = cityCheck.cityId!;
+  const cityCoords = cityCoordsOf(cityCheck);
+  const skeleton = await buildSkeleton(formData);
+  const finalDays = formData.finalDays;
+  if (finalDays)
+    skeleton.daySlotsConfig.forEach((dc, d) => {
+      if (!finalDays[d]) return;
+      dc.startTime = finalDays[d].startTime;
+      dc.endTime = finalDays[d].endTime;
+    });
+  const pickedIds: string[][] = finalDays
+    ? finalDays.map((d) => d.items.flatMap((x) => ("meal" in x ? [] : [x.id])))
+    : (formData.pickedDays ?? []).map((d) => d.map((id) => `db-${id}`));
+  const ids = pickedIds
+    .flat()
+    .map((id) => Number(id.replace(/^db-/, "")))
+    .filter(Number.isFinite);
+  const [rows, restRows] = await Promise.all([
+    ids.length
+      ? db
+          .select(AG2_SELECT_COLS)
+          .from(placeSeedRaw)
+          .where(inArray(placeSeedRaw.id, ids))
+      : Promise.resolve([] as any[]),
+    selectBest(db, cityId, cityCoords, true),
+  ]);
+  const imagePidMap = await loadImagePidMap([
+    cityId,
+    ...rows.map((r: any) => r.cityId),
     ...restRows.map((r) => r.cityId),
   ]);
-
-  const hourlyRate = await cityHourlyRate(db, cityId);
-  const paceMin = skeleton.paceConfig.slotDurationMinutes;
-  const stayOf = (r: any) =>
-    slotMinutesFor(
-      r.priceEur != null ? Number(r.priceEur) : null,
-      paceMin,
-      hourlyRate,
-      r.seedCategory,
-    );
-
-  const mealMin = skeleton.paceConfig.mealDurationMinutes;
-  const needMinutes = skeleton.daySlotsConfig.reduce(
-    (sum, dc) =>
-      sum + Math.max(0, toMin(dc.endTime) - toMin(dc.startTime) - mealMin * 2),
-    0,
-  );
-  const bucket = fillBuckets(sightRows, needMinutes, stayOf);
-  const sights = bucket.picked.map((r) =>
-    dbRowToPlace(r, imagePidMap, formData.destination),
-  );
-  const restaurants = restRows.map((r) =>
-    dbRowToPlace(r, imagePidMap, formData.destination),
-  );
-
-  const restAgreed = restRows.filter((r) => agreeOf(r) > 0).length;
-  console.log(
-    `[Best] 볼거리 ${sights.length}곳 ${bucket.minutes}분(필요 ${needMinutes}분) = ${bucket.levels.join("·")}동의 사용 / 식당 ${restaurants.length}곳(동의 ${restAgreed} + 리뷰수 ${restaurants.length - restAgreed})`,
-  );
-  if (bucket.minutes < needMinutes)
-    console.log(
-      `[Best] ⚠️ ${needMinutes - bucket.minutes}분은 비운다(언어가 고른 볼거리를 다 썼다)`,
-    );
-
   const result = await finalizeDbOnlyItinerary(db, {
     daySlotsConfig: skeleton.daySlotsConfig,
     travelPace: skeleton.travelPace,
@@ -177,19 +161,21 @@ export async function runPipelineBest(
     cityId,
     cityCoords,
     skeleton,
-    inputPlaces: sights,
-    restaurantPool: restaurants,
-    bestMode: true,
+    inputPlaces: rows.map((r: any) =>
+      dbRowToPlace(r, imagePidMap, formData.destination),
+    ),
+    restaurantPool: restRows.map((r) =>
+      dbRowToPlace(r, imagePidMap, formData.destination),
+    ),
+    picked: {
+      days: pickedIds,
+      layout: finalDays?.map((d) => d.items),
+      anchors: finalDays?.map((d) => d.anchor),
+    },
   });
-
-  const totalMs = Date.now() - _t0;
-  console.log(`[Best] ===== 완료 (${totalMs}ms) =====`);
-
   result.metadata = {
     ...result.metadata,
-    _totalMs: totalMs,
-    // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 오늘 확정본. v2 = 사장님이 장소 id 를 직접 넣어 슬롯을 만드는 판(기계는 시간·동선·식당만 계산).
-    _pipelineVersion: "best-v1-2026-09-08",
+    _pipelineVersion: "best-picked-2026-10-19",
     _sourceMode: "best",
   };
   return result;

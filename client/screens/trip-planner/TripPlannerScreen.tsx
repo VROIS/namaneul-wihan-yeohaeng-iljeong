@@ -5,6 +5,7 @@ import { useTripPlanner } from "./hooks/useTripPlanner";
 import InputStep from "./InputStep";
 import LoadingStep from "./LoadingStep";
 import ResultStep from "./ResultStep";
+import BestListStep from "./BestListStep";
 import type { TripFormData } from "@/types/trip";
 
 // ⚠️ 2026-07-31 사장님 승인(BTS D단계 FE-4) = initialRequest = 폼을 실어 열면 입력화면 건너뛰고 즉시 생성 1회.
@@ -20,6 +21,7 @@ export default function TripPlannerScreen({
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
       {screen === "Input" && <InputStep planner={planner} />}
+      {screen === "BestList" && <BestListStep planner={planner} />}
       {screen === "Loading" && <LoadingStep planner={planner} />}
       {screen === "Result" && <ResultStep planner={planner} />}
     </View>

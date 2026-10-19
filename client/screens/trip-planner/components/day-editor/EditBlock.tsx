@@ -12,19 +12,25 @@ import { Icon } from "@/components/Icon";
 import { haptic } from "@/screens/bts/place-cart/utils";
 import { resultStyles } from "../../styles/result";
 import SlotThumbnail from "../SlotThumbnail";
+import { isMealPlace, slotPriceLabel } from "../slot-price";
 import type { PlannerApi } from "../../hooks/useTripPlanner";
-import { PX_PER_MIN, STEP_MIN, type EditSlot } from "./edit-layout";
+import { cardHeight, PX_PER_MIN, STEP_MIN, type EditSlot } from "./edit-layout";
 import { useDragHandle } from "./useDragHandle";
 import {
   editStyles as es,
+  CARD_PAD_V,
   LEFT_COL,
+  META_H,
+  NAME_H,
+  SUMMARY_LINE,
+  SUMMARY_MAX_LINES,
   RULER_W,
   noSelect,
   noTouch,
   noTouchScroll,
 } from "./editor-styles";
 
-// ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 슬롯 = 폰 앱 아이콘 방식(평소 건드려도 안 바뀜 · 카드 어디나 길게 누르면 전체 편집 모드 · 흔들림 + ✕ · 이동 · 늘리기 · 톡 누르면 끝) (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 슬롯 = 길게 누른 카드 하나만 편집(그 카드만 흔들림 + ✕ · 이동 · 늘리기 · 톡 누르면 끝) · 식사 칸 = ✕ 대신 체크 아이콘 = 편집 해제만(보관함 안 감 · 그 날 안에서만 이동) · 카드 = 요약 슬롯 = 장소 이름 → 시각·체류 · 가격 → 한줄요약 최대 2줄을 시간 비례 높이 안에 위부터(잘려도 됨) (정본 §)
 export default function EditBlock({
   index,
   slot,
@@ -60,7 +66,16 @@ export default function EditBlock({
 }) {
   const place = slot.place;
   const isMealSlot = place.isMealSlot === true;
-  const height = slot.stay * PX_PER_MIN;
+  const height = cardHeight(slot.stay);
+  const mainName = place.nameEn || place.nameLocal || place.name;
+  const priceLabel = slotPriceLabel(place, isMealPlace(place), t);
+  const inner = height - CARD_PAD_V;
+  const summaryLines = place.editorialSummary
+    ? Math.min(
+        SUMMARY_MAX_LINES,
+        Math.max(0, Math.floor((inner - NAME_H - META_H) / SUMMARY_LINE)),
+      )
+    : 0;
   const baseStay = React.useRef(slot.stay);
 
   const wiggle = React.useRef(new Animated.Value(0)).current;
@@ -164,11 +179,32 @@ export default function EditBlock({
               numberOfLines={1}
               ellipsizeMode="tail"
             >
-              {place.nameEn || place.nameLocal || place.name}
+              {mainName}
             </Text>
-            <Text style={[es.meta, { color: theme.textSecondary }]}>
-              {startText} · {t("trip.durationM", { m: slot.stay })}
-            </Text>
+            <View style={es.metaRow}>
+              <Text
+                style={[es.metaTime, { color: theme.textSecondary }]}
+                numberOfLines={1}
+              >
+                {startText} · {t("trip.durationM", { m: slot.stay })}
+              </Text>
+              {priceLabel != null && (
+                <Text
+                  style={[es.meta, { color: Brand.primary }]}
+                  numberOfLines={1}
+                >
+                  {priceLabel}
+                </Text>
+              )}
+            </View>
+            {summaryLines > 0 && (
+              <Text
+                style={[es.summary, { color: theme.textSecondary }]}
+                numberOfLines={summaryLines}
+              >
+                {place.editorialSummary}
+              </Text>
+            )}
           </View>
           {editMode && (
             <>
@@ -180,13 +216,25 @@ export default function EditBlock({
                 style={es.removeBtn}
                 onPress={() => {
                   haptic("light");
-                  onRemove(index);
+                  if (isMealSlot) onExitEdit();
+                  else onRemove(index);
                 }}
                 accessibilityRole="button"
-                accessibilityLabel={t("trip.editRemoved")}
+                accessibilityLabel={t(
+                  isMealSlot ? "trip.editDone" : "trip.editRemoved",
+                )}
               >
-                <View style={es.removeDot}>
-                  <Icon name="x" size={14} color="#FFFFFF" />
+                <View
+                  style={[
+                    es.removeDot,
+                    isMealSlot && { backgroundColor: Brand.primary },
+                  ]}
+                >
+                  <Icon
+                    name={isMealSlot ? "check" : "x"}
+                    size={14}
+                    color="#FFFFFF"
+                  />
                 </View>
               </Pressable>
               <View style={[es.resizeHit, noTouchScroll]} {...resize}>

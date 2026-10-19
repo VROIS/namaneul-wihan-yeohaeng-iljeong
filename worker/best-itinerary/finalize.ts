@@ -33,6 +33,7 @@ import {
 import { bestRankOrderSql } from "../lib/services/shared/best-rank";
 import { type CompanionType } from "../lib/services/transport/constants";
 import { buildRouteLocal } from "../lib/services/route/route-local";
+import type { PickedLayoutItem } from "../lib/services/route/route-picked";
 
 import {
   loadImagePidMap,
@@ -54,9 +55,13 @@ interface AG4DbInput {
   cityCoords?: { lat: number; lng: number };
   skeleton: AG1Output;
   inputPlaces: PlaceResult[];
-  // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 베스트 분기가 식당을 직접 넘길 때만 채워진다. 안 넘기면(기존 여정) 아래에서 지금까지처럼 스스로 뽑는다.
+  // ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 예상 여정(목록에서 고른 장소)이 식당을 직접 넘길 때만 채워진다. 안 넘기면(일반 여정) 아래에서 지금까지처럼 스스로 뽑는다.
   restaurantPool?: PlaceResult[];
-  bestMode?: boolean;
+  picked?: {
+    days: string[][];
+    layout?: PickedLayoutItem[][];
+    anchors?: ({ lat: number; lng: number } | null | undefined)[];
+  };
 }
 
 export async function finalizeDbOnlyItinerary(
@@ -160,7 +165,7 @@ export async function finalizeDbOnlyItinerary(
     restaurantPool,
     hourlyRate,
     mealTiers,
-    input.bestMode,
+    input.picked,
   );
   if (!routeResult.ok || !routeResult.response) {
     throw new Error(

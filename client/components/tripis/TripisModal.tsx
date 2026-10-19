@@ -78,13 +78,23 @@ interface Props {
   visible: boolean;
   params: TripisOpenParams | null;
   onClose(): void;
+  onCreateTrip?(): void;
 }
 
-export default function TripisModal({ visible, params, onClose }: Props) {
+export default function TripisModal({
+  visible,
+  params,
+  onClose,
+  onCreateTrip,
+}: Props) {
   if (!visible || !params) return null;
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <TripisModalInner params={params} onClose={onClose} />
+      <TripisModalInner
+        params={params}
+        onClose={onClose}
+        onCreateTrip={onCreateTrip}
+      />
     </Modal>
   );
 }
@@ -92,9 +102,11 @@ export default function TripisModal({ visible, params, onClose }: Props) {
 function TripisModalInner({
   params,
   onClose,
+  onCreateTrip,
 }: {
   params: TripisOpenParams;
   onClose(): void;
+  onCreateTrip?(): void;
 }) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -263,7 +275,10 @@ function TripisModalInner({
     return (
       <CityCardScreen
         rep={params.rep}
-        onCreateTrip={onClose}
+        onCreateTrip={() => {
+          onCreateTrip?.();
+          onClose();
+        }}
         onVideo={() => {
           if (params.rep.videoItineraryId != null) {
             setItineraryId(params.rep.videoItineraryId);

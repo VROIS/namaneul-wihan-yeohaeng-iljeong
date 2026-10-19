@@ -15,6 +15,7 @@ import { openGuideForPlace } from "@/components/tripis/openGuide";
 import { resultStyles as styles } from "../styles/result";
 import TransitPill from "./TransitPill";
 import SlotThumbnail from "./SlotThumbnail";
+import { isMealPlace, slotPriceLabel } from "./slot-price";
 import type { PlannerApi } from "../hooks/useTripPlanner";
 
 // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = [점심]/[저녁] 텍스트 프리픽스 폐기(식당명 노출공간
@@ -71,37 +72,13 @@ export default function PlaceSlotCard({
 
   const isMealSlot = place.isMealSlot === true;
 
-  const isMeal =
-    isMealSlot ||
-    place.isMeal ||
-    place.name?.includes("점심") ||
-    place.name?.includes("저녁") ||
-    place.name?.includes("아침") ||
-    place.name?.includes("식사") ||
-    place.name?.includes("카페") ||
-    place.name?.includes("레스토랑");
+  const isMeal = isMealPlace(place);
 
   const dayTransits = currentDay?.transit?.transits || [];
   const transitInfo = dayTransits[index]; // index번째 장소에서 다음 장소로의 이동
   const hasTransit = index < places.length - 1;
 
-  // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 가격 글자 1벌 = 식사는 mealPrice(없으면 도시 분포 글자 mealPriceLabel), 명소는 estimatedPriceEur → entranceFee → priceEstimate 글자 · 숫자 0 = 무료, 양수 = 금액, 아무것도 없으면 null = 안 보임 (정본 §)
-  const priceLabel: string | null = (() => {
-    const amount = (v: unknown): string | null =>
-      typeof v === "number" && Number.isFinite(v)
-        ? v > 0
-          ? isMeal
-            ? t("trip.mealPrice", { price: v })
-            : `€${v}`
-          : t("common.free")
-        : null;
-    if (isMeal) return amount(place.mealPrice) ?? place.mealPriceLabel ?? null;
-    return (
-      amount((place as any).estimatedPriceEur) ??
-      amount(place.entranceFee) ??
-      (place.priceEstimate || null)
-    );
-  })();
+  const priceLabel = slotPriceLabel(place, isMeal, t);
   return (
     <View
       onLayout={(e) => {

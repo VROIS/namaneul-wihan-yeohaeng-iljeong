@@ -55,8 +55,9 @@ export function slotMinutesFor(
     return paceSlotMinutes;
   }
   const raw = (priceEur / hourlyRate) * 60;
+  // ⚠️ 수정금지(승인필요) 2026-10-18 사장님 결정 = 체류 = 30분 단위 올림 (정본 §)
   return Math.max(
     SLOT_STEP_MIN,
-    Math.round(raw / SLOT_STEP_MIN) * SLOT_STEP_MIN,
+    Math.ceil(raw / SLOT_STEP_MIN) * SLOT_STEP_MIN,
   );
 }

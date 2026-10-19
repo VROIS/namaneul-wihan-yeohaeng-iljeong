@@ -80,6 +80,7 @@ export const inputStyles = StyleSheet.create({
     overflow: "hidden",
     marginTop: Spacing.lg,
   },
+  generateButtonNext: { marginTop: Spacing.sm },
   generateGradient: {
     flexDirection: "row",
     paddingVertical: Spacing.lg,

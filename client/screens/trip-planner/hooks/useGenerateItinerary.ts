@@ -6,6 +6,10 @@ import { apiRequest } from "@/lib/query-client";
 import { UserData } from "@/lib/auth";
 import { useMapToggle } from "@/contexts/MapToggleContext";
 import { parseCreditShortfall, useCreditShortfall } from "@/lib/creditError";
+import type { ScreenState } from "./useTripPlanner";
+
+// ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 베스트 목록에서 고른 날별 장소(pickedDays)를 같은 생성 요청에 실어 예상 여정을 만든다 (정본 §)
+type GenerateExtra = { pickedDays?: number[][] };
 
 export function useGenerateItinerary({
   formData,
@@ -23,9 +27,7 @@ export function useGenerateItinerary({
 }: {
   formData: TripFormData;
   currentUser: UserData | null;
-  setScreen: React.Dispatch<
-    React.SetStateAction<"Input" | "Loading" | "Result">
-  >;
+  setScreen: React.Dispatch<React.SetStateAction<ScreenState>>;
   setLoadingStep: React.Dispatch<React.SetStateAction<number>>;
   // ⚠️ 수정금지(승인필요) 2026-08-15 사장님 승인 = 로딩화면 기능소개 캐러셀 오픈 게이트(§구현방식-2 참고).
   setCarouselOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -44,7 +46,9 @@ export function useGenerateItinerary({
   const { requestLogin, isAuthed } = useMapToggle();
   const showCreditShortfall = useCreditShortfall();
 
-  const executeGenerate = async () => {
+  const executeGenerate = async (
+    extra: GenerateExtra = {},
+  ): Promise<boolean> => {
     // ⚠️ 2026-07-03 사장님 SSOT = 새로 생성하는 여정은 새 카드(POST). 복원 id 리셋 = 이전 복원 여정 덮어쓰기 방지.
     setCurrentItineraryId(null);
     setScreen("Loading");
@@ -64,6 +68,7 @@ export function useGenerateItinerary({
     try {
       const requestData = {
         ...formData,
+        ...extra,
         userId: currentUser?.id, // DB에서 사용자 정보 조회용
         // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 지시 = 여정 출력 언어 = 화면 언어(i18n) 1벌 = AI의견·Tripis·저장과 동일 기준(§16).
         language: i18n.language || "ko",
@@ -148,6 +153,7 @@ export function useGenerateItinerary({
         accommodationPlaceId: undefined,
       }));
       setScreen("Result");
+      return true;
     } catch (error: any) {
       clearTimers();
       setCarouselOpen(false);
@@ -159,7 +165,7 @@ export function useGenerateItinerary({
       if (shortfall) {
         showCreditShortfall(shortfall);
         setScreen("Input");
-        return;
+        return false;
       }
       const detail = message.includes("일정 검증")
         ? t("trip.validationFailed")
@@ -168,12 +174,14 @@ export function useGenerateItinerary({
         { text: t("common.confirm") },
       ]);
       setScreen("Input");
+      return false;
     }
   };
 
-  const handleGenerate = async () => {
-    if (isAuthed) executeGenerate();
-    else requestLogin();
+  const handleGenerate = async (extra?: GenerateExtra): Promise<boolean> => {
+    if (isAuthed) return executeGenerate(extra);
+    requestLogin();
+    return false;
   };
 
   return { handleGenerate };

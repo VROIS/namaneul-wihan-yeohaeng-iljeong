@@ -97,6 +97,18 @@ async function findHubByName(db: any, input: string): Promise<HubCity | null> {
   return rows[0] ? toHub(rows[0]) : null;
 }
 
+export async function findHubById(
+  db: any,
+  id: number,
+): Promise<HubCity | null> {
+  const rows = await db
+    .select(COLS)
+    .from(cities)
+    .where(sql`${cities.id} = ${id}`)
+    .limit(1);
+  return rows[0] ? toHub(rows[0]) : null;
+}
+
 export async function findHub(
   db: any,
   a: { input: string; coords?: Coords | null; countryCode?: string | null },

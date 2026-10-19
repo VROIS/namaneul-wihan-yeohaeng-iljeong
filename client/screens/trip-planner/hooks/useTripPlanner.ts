@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { ScrollView, useColorScheme, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import type { RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -19,19 +20,27 @@ import { useAiOpinionOverlay } from "./useAiOpinionOverlay";
 import { useSaveItinerary } from "./useSaveItinerary";
 import { useShareCalendar } from "./useShareCalendar";
 import { useGenerateItinerary } from "./useGenerateItinerary";
+import { useBestList } from "./useBestList";
 import { isCityCenterName } from "@/lib/display-city-name";
 import {
   peekItineraryFromUrl,
   clearItineraryFromUrl,
 } from "@/lib/openItineraryFromUrl";
 
-type ScreenState = "Input" | "Loading" | "Result";
+export type ScreenState = "Input" | "BestList" | "Loading" | "Result";
 
 // ⚠️ 2026-07-31 사장님 승인(BTS D단계 FE-4) = initialRequest = BTS 가 조립한 폼(공연도시·핀·공연장 기점).
 export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const insets = useSafeAreaInsets();
+  let tabBarHeight = 0;
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    tabBarHeight = useBottomTabBarHeight();
+  } catch {
+    tabBarHeight = 0; // 창으로 열린 경우 = 아래 탭이 없음
+  }
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   // ⚠️ 수정금지(승인필요) 2026-07-31 = **화면 밖에서 열려도 안 터지게** 한 것.
@@ -89,7 +98,14 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
   const placesListOffsetRef = useRef<Record<number, number>>({});
   const [currentMapDay, setCurrentMapDay] = useState(1);
   const [editingDay, setEditingDay] = useState<number | null>(null);
+  // ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 도시 카드의 "여정 생성"을 눌러야 "인기 명소 고르기"가 나타난다(토글) · 화면을 오가도 유지 · 도시 칩을 새로 누르거나 검색창으로 고르면 사라짐 (정본 §)
+  const [fromCard, setFromCard] = useState(false);
+  // ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 여정 수정은 로그인한 사람만(공유 링크로 연 여정도 = 로그인 창) (정본 §)
   const startDayEdit = (day: number) => {
+    if (!isAuthed) {
+      requestLogin();
+      return;
+    }
     setVideoBtn(false);
     setEditingDay(day);
   };
@@ -171,6 +187,15 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     setDayAccommodations,
     setCurrentItineraryId,
     setFormData,
+    t,
+    i18n,
+  });
+
+  const { bestList, openBestList, bestPicked, setBestPicked } = useBestList({
+    formData,
+    isAuthed,
+    requestLogin,
+    setScreen,
     t,
     i18n,
   });
@@ -381,10 +406,9 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
   };
 
   return {
-    // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 관리자가 만들면 베스트 여정 = 버튼 글자도 함께 바뀐다.
-    isAdmin: authUser?.role === "admin",
     theme,
     insets,
+    tabBarHeight,
     navigation,
     t,
     i18n,
@@ -401,16 +425,23 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     setItinerary,
     editingDay,
     setEditingDay,
+    fromCard,
+    setFromCard,
     startDayEdit,
     formData,
     setFormData,
     toggleVibe,
     restoreItineraryById,
     handleGenerate,
+    bestList,
+    openBestList,
+    bestPicked,
+    setBestPicked,
     isSaving,
     justSaved,
     handleSaveItinerary,
     currentItineraryId, // 🎬 영상 슬롯이 쓰는 여정 id
+    setCurrentItineraryId,
     videoBtn,
     sharingAction, // "share" | "calendar" | null = 눌린 버튼만 선택색+스피너 (2026-07-22 사장님 실기기 피드백)
     handleShareItinerary,

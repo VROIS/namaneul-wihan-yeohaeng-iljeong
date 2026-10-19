@@ -44,8 +44,9 @@ export function summaryLineCard(
   trip: SavedItinerary,
   t: (k: string, opts?: Record<string, unknown>) => string,
 ): string {
-  // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 베스트 여정 카드 요약 = 문장 없이 짧은 "베스트 여행" 7개 언어 번역 한 줄 (정본 §)
-  if (trip.rawData?.metadata?._sourceMode === "best") return t("trip.bestTrip");
+  // ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 인기 명소 여정 카드 요약 = 문장 없이 짧은 "인기 명소 여행" 7개 언어 번역 한 줄 (정본 §)
+  if (trip.rawData?.metadata?._sourceMode === "best")
+    return t("trip.popularTrip");
   const companionLabels: Record<string, string> = {
     Single: t("labels.companionSingle"),
     Couple: t("labels.companionCouple"),

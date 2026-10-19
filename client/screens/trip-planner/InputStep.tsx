@@ -27,6 +27,7 @@ import TripisModal, { type RepCard } from "@/components/tripis/TripisModal";
 import type { PlannerApi } from "./hooks/useTripPlanner";
 import { apiRequest } from "@/lib/query-client";
 import { fitTextProps } from "./utils";
+import GenerateButtons from "./components/GenerateButtons";
 
 import ShinyPillBanner from "@/components/ShinyPillBanner";
 
@@ -48,8 +49,8 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
     setFormData,
     toggleVibe,
     openPicker,
-    handleGenerate,
-    isAdmin,
+    fromCard,
+    setFromCard,
   } = planner;
 
   const [repCard, setRepCard] = useState<RepCard | null>(null);
@@ -59,6 +60,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
   const searchPlaceholder = t("trip.searchPlaceholder");
   // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 위젯이 나라 코드(ISO-2)를 같이 받아 서버로 보낸다 = 같은 나라 거점 우선 (정본 §)
   const handlePlaceSelect = (place: PlaceSelection) => {
+    setFromCard(false);
     setFormData((prev) => ({
       ...prev,
       destination: place.name || prev.destination,
@@ -90,6 +92,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
   // 도시 칩 = 그 도시를 목적지로 잡고 **항상** 카드를 띄운다(2026-08-02 사장님 지시 = 옛 "대표여정 없으면 안 띄움" 폐기 §19).
   const handleCityPress = async (city: ReadyCity) => {
     lastCityRef.current = city.id;
+    setFromCard(false);
     // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 가장 최근 선택이 최우선 = 도시 칩을 누르면 앞서 고른 숙소(좌표·이름·주소·장소 번호·나라 코드)를 지우고 도시 중심으로 (정본 §)
     setFormData((prev) => ({
       ...prev,
@@ -664,18 +667,14 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
           </View>
         </View>
 
-        {/* ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 관리자면 글자가 "베스트 여정" 으로 바뀐다(뒤에서 실제로 베스트만 뽑는다 = 한 짝). 한국어 전용 = 사장님만 보는 표시. */}
-        <Pressable style={styles.generateButton} onPress={handleGenerate}>
-          <LinearGradient
-            colors={[Brand.primary, Brand.secondary]}
-            style={styles.generateGradient}
-          >
-            <Icon name="navigation" size={20} color="#FFFFFF" />
-            <Text style={styles.generateText}>
-              {isAdmin ? "베스트 여정" : t("trip.generate")}
-            </Text>
-          </LinearGradient>
-        </Pressable>
+        <GenerateButtons
+          planner={planner}
+          showPick={
+            fromCard &&
+            !formData.accommodationCoords &&
+            readyCities.some((c) => c.nameEn === formData.destination)
+          }
+        />
       </ScrollView>
 
       {/* 🏙️ 도시 카드 = TRIPIS 통합 모달 1벌(§16). ▶ 배지를 누르면 같은 모달이 대표 숏폼 재생으로 바뀐다 */}
@@ -683,6 +682,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
         visible={repCard !== null}
         params={repCard ? { mode: "city", rep: repCard } : null}
         onClose={() => setRepCard(null)}
+        onCreateTrip={() => setFromCard(true)}
       />
 
       <WebInputModal planner={planner} />

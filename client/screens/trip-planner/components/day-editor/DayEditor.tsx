@@ -22,7 +22,14 @@ import type { PlannerApi } from "../../hooks/useTripPlanner";
 import EditBlock from "./EditBlock";
 import FinalBlock from "./FinalBlock";
 import { toHm } from "@shared/day-retime";
-import { PX_PER_MIN, STEP_MIN } from "./edit-layout";
+import {
+  cardHeight,
+  minutesAtPx,
+  MOVE_MIN_H,
+  PX_PER_MIN,
+  STEP_MIN,
+  timeAxis,
+} from "./edit-layout";
 import {
   editStyles as es,
   RED,
@@ -32,17 +39,21 @@ import {
   noTouch,
   noTouchScroll,
 } from "./editor-styles";
-import { startLabel } from "./start-label";
-import { useDayEdit } from "./useDayEdit";
+import { editStartLabel } from "./start-label";
+import type { TripEditApi } from "./useTripEdit";
 import { useDragHandle } from "./useDragHandle";
 
-// ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 여정 수정 화면 = 위 고정 영역(Day 줄 · 출발 줄 · 삭제한 장소 줄) + 시간표 · 폰 앱 아이콘 방식(길게 누르면 전체 편집 모드 · 스크롤 고정 · 톡 누르면 끝) · 오른쪽 시간 눈금 = 룰렛 바퀴(돌리면 하루 시간대 통째 이동) (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 여정 수정 화면 = 위 고정 영역(Day 1·2·3 줄 · 도시 이름 + 출발 줄 · 임시 보관함 줄(모든 날 공용 · 숫자 없음)) + 시간표 · 길게 누른 슬롯 하나만 편집(그 슬롯만 흔들림 + ✕ · 이동 · 늘리기 · 나머지는 그대로 · 스크롤 됨 · 톡 누르면 끝) · 오른쪽 시간 눈금 = 룰렛 바퀴(돌리면 하루 시간대 통째 이동) (정본 §)
+const WHEEL_ID = "__wheel__";
+
 export default function DayEditor({
   planner,
   day,
+  ed,
 }: {
   planner: PlannerApi;
   day: DayPlan;
+  ed: TripEditApi;
 }) {
   const {
     theme,
@@ -55,25 +66,31 @@ export default function DayEditor({
     setHotelModalDay,
     handleSetDayAccommodation,
     isReoptimizing,
+    setEditingDay,
   } = planner;
-  const ed = useDayEdit(planner, day);
-  const [editMode, setEditMode] = useState(false);
+  const [selId, setSelId] = useState<string | null>(null);
+  const editMode = selId !== null;
   const [drag, setDrag] = useState<{ id: string; top: number } | null>(null);
   const dragStart = useRef<{ id: string; top: number } | null>(null);
-  const wheelBase = useRef({ start: 0, end: 0, shift: 0 });
-  const enterEdit = () => {
-    if (editMode) return;
+  const wheelBase = useRef({
+    start: 0,
+    end: 0,
+    shift: 0,
+    yOf: (m: number) => m,
+  });
+  const enterEdit = (id: string) => {
+    if (selId === id) return;
     haptic("medium");
-    setEditMode(true);
+    setSelId(id);
   };
   const exitEdit = () => {
     haptic("light");
-    setEditMode(false);
+    setSelId(null);
   };
 
   const { starts, moves, lastEnd } = ed.layout;
   const viewEnd = Math.max(ed.endMin + ed.finalLen, lastEnd) + 30;
-  const yOf = (m: number) => (m - ed.startMin) * PX_PER_MIN;
+  const yOf = timeAxis(ed.slots, starts, ed.startMin);
   const contentH = yOf(viewEnd);
 
   const idxOf = (id: string) =>
@@ -88,11 +105,11 @@ export default function DayEditor({
     const cur = idxOf(id);
     if (!st || cur < 0) return;
     const top = st.top + dy;
-    const center = top + (ed.slotsRef.current[cur].stay * PX_PER_MIN) / 2;
+    const center = top + cardHeight(ed.slotsRef.current[cur].stay) / 2;
     let target = 0;
     ed.slotsRef.current.forEach((s, k) => {
       if (k === cur) return;
-      if (yOf(starts[k]) + (s.stay * PX_PER_MIN) / 2 < center) target++;
+      if (yOf(starts[k]) + cardHeight(s.stay) / 2 < center) target++;
     });
     if (target !== cur) ed.moveSlot(cur, target);
     setDrag({ id, top });
@@ -105,13 +122,19 @@ export default function DayEditor({
   const wheel = useDragHandle({
     slop: 4,
     onStart: () => {
-      wheelBase.current = { start: ed.startMin, end: ed.endMin, shift: 0 };
+      wheelBase.current = {
+        start: ed.startMin,
+        end: ed.endMin,
+        shift: 0,
+        yOf,
+      };
     },
     onMove: (dy) => {
       const base = wheelBase.current;
       const shift = ed.shiftWindow(
         base,
-        -Math.round(dy / PX_PER_MIN / STEP_MIN) * STEP_MIN,
+        -Math.round(minutesAtPx(base.yOf, base.start, dy) / STEP_MIN) *
+          STEP_MIN,
       );
       if (shift !== base.shift) {
         base.shift = shift;
@@ -141,20 +164,41 @@ export default function DayEditor({
             { backgroundColor: `${Brand.primary}12`, marginTop: 0 },
           ]}
         >
-          <View
-            style={[
-              resultStyles.dayHeaderBadge,
-              { backgroundColor: Brand.primary },
-            ]}
+          <ScrollView
+            horizontal
+            style={{ flex: 1 }}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: Spacing.xs }}
           >
-            <Text style={resultStyles.dayHeaderBadgeText}>Day {day.day}</Text>
-          </View>
-          <Text
-            style={[resultStyles.dayHeaderCity, { color: theme.textSecondary }]}
-          >
-            {displayCityName(itinerary!)}
-          </Text>
-          <View style={{ flex: 1 }} />
+            {(itinerary?.days || []).map((d) => {
+              const on = d.day === day.day;
+              return (
+                <Pressable
+                  key={d.day}
+                  style={[
+                    resultStyles.dayHeaderBadge,
+                    {
+                      backgroundColor: on
+                        ? Brand.primary
+                        : theme.backgroundSecondary,
+                    },
+                  ]}
+                  onPress={() => !on && !ed.saving && setEditingDay(d.day)}
+                  accessibilityRole="tab"
+                  aria-selected={on}
+                >
+                  <Text
+                    style={[
+                      resultStyles.dayHeaderBadgeText,
+                      !on && { color: theme.textSecondary },
+                    ]}
+                  >
+                    Day {d.day}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
           <Pressable
             style={[es.ghostBtn, { borderColor: theme.border }]}
             onPress={ed.cancel}
@@ -165,9 +209,9 @@ export default function DayEditor({
             </Text>
           </Pressable>
           <Pressable
-            style={es.primaryBtn}
+            style={[es.primaryBtn, { opacity: ed.ready ? 1 : 0.4 }]}
             onPress={ed.commit}
-            disabled={ed.saving}
+            disabled={ed.saving || !ed.ready}
           >
             {ed.saving ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
@@ -180,7 +224,12 @@ export default function DayEditor({
         <View style={[es.startRow, { borderBottomColor: theme.border }]}>
           <Icon name="home" size={14} color={Brand.primary} />
           <Text style={[es.startName, { color: theme.text }]} numberOfLines={1}>
-            {startLabel(day, dayAccommodations, t)}
+            {editStartLabel(
+              day,
+              dayAccommodations,
+              displayCityName(itinerary!),
+              t,
+            )}
           </Text>
           <Text style={[es.startTime, { color: theme.textSecondary }]}>
             {toHm(ed.startMin)}
@@ -216,30 +265,22 @@ export default function DayEditor({
 
         <View style={[es.tray, { borderBottomColor: theme.border }]}>
           <View style={es.trayLabel}>
-            <Text
-              style={[es.trayLabelText, { color: theme.textSecondary }]}
-              numberOfLines={1}
-            >
-              {t("trip.editRemoved")}
-            </Text>
-            <Text style={[es.trayCount, { color: theme.text }]}>
-              {ed.removed.length}
+            <Text style={[es.trayLabelText, { color: theme.textSecondary }]}>
+              {t("trip.editBucket")}
             </Text>
           </View>
           {ed.removed.length === 0 ? (
-            // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 지운 장소가 없을 때 띠 = 굵은 사용법 + 짧은 안내(안 들어가면 자동 줄바꿈) (정본 §)
-            <Text style={{ flex: 1, fontSize: 11, color: theme.textTertiary }}>
-              <Text
-                style={{
-                  fontSize: 14,
-                  fontFamily: Fonts.bold,
-                  color: Brand.primary,
-                }}
-              >
-                {t("trip.editHowTo")}
-              </Text>
-              {"  "}
-              {t("trip.editTrayEmpty")}
+            // ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 지운 장소가 없을 때 띠 = 굵은 사용법 한 줄(길게 눌러 이동·삭제·시간 조절) (정본 §)
+            <Text
+              style={{
+                flex: 1,
+                fontSize: 14,
+                fontFamily: Fonts.bold,
+                color: Brand.primary,
+              }}
+              numberOfLines={1}
+            >
+              {t("trip.editHowTo")}
             </Text>
           ) : (
             <ScrollView
@@ -273,7 +314,7 @@ export default function DayEditor({
 
       <ScrollView
         style={{ flex: 1 }}
-        scrollEnabled={!editMode}
+        scrollEnabled={!drag}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           paddingTop: Spacing.lg,
@@ -313,7 +354,7 @@ export default function DayEditor({
           {ed.slots.map((s, i) => {
             const prevEnd =
               i === 0 ? ed.startMin : starts[i - 1] + ed.slots[i - 1].stay;
-            const h = moves[i] * PX_PER_MIN;
+            const h = yOf(starts[i]) - yOf(prevEnd);
             return (
               <View
                 key={`mv-${String(s.place.id)}`}
@@ -328,7 +369,7 @@ export default function DayEditor({
                   noTouch,
                 ]}
               >
-                {h >= 16 && (
+                {h >= MOVE_MIN_H && (
                   <Text style={[es.moveText, { color: theme.textTertiary }]}>
                     {t("trip.durationM", { m: moves[i] })}
                   </Text>
@@ -349,15 +390,18 @@ export default function DayEditor({
               }
               startText={toHm(starts[i])}
               dragging={!!drag && drag.id === String(s.place.id)}
-              editMode={editMode}
+              editMode={selId === String(s.place.id)}
               theme={theme}
               t={t}
-              onRemove={ed.removeAt}
+              onRemove={(k) => {
+                ed.removeAt(k);
+                setSelId(null);
+              }}
               onResize={ed.setStay}
               onReorderStart={onReorderStart}
               onReorderMove={onReorderMove}
               onReorderEnd={onReorderEnd}
-              onEnterEdit={enterEdit}
+              onEnterEdit={() => enterEdit(String(s.place.id))}
               onExitEdit={exitEdit}
             />
           ))}
@@ -376,7 +420,7 @@ export default function DayEditor({
                   noTouch,
                 ]}
               >
-                {ed.layout.finalMove * PX_PER_MIN >= 16 && (
+                {ed.layout.finalMove * PX_PER_MIN >= MOVE_MIN_H && (
                   <Text style={[es.moveText, { color: theme.textTertiary }]}>
                     {t("trip.durationM", { m: ed.layout.finalMove })}
                   </Text>
@@ -392,7 +436,7 @@ export default function DayEditor({
                 theme={theme}
                 t={t}
                 editMode={editMode}
-                onEnterEdit={enterEdit}
+                onEnterEdit={() => enterEdit(WHEEL_ID)}
                 onExitEdit={exitEdit}
               />
             </>
@@ -411,7 +455,7 @@ export default function DayEditor({
               {t("trip.editEnd", { time: toHm(ed.endMin) })}
             </Text>
           )}
-          {editMode ? (
+          {selId === WHEEL_ID ? (
             <View
               style={[
                 es.wheel,
@@ -423,7 +467,7 @@ export default function DayEditor({
           ) : (
             <Pressable
               style={[es.wheel, noSelect]}
-              onLongPress={enterEdit}
+              onLongPress={() => enterEdit(WHEEL_ID)}
               delayLongPress={500}
             />
           )}

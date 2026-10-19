@@ -20,7 +20,7 @@ import PlaceAutocompleteWidget, {
 import TripisModal from "@/components/tripis/TripisModal";
 import { shortDate, fitTextPropsSingleLine } from "./utils";
 import DaySection from "./components/DaySection";
-import DayEditor from "./components/day-editor/DayEditor";
+import TripEditor from "./components/day-editor/TripEditor";
 import AiOpinionSheet from "./components/AiOpinionSheet";
 import { resultStyles } from "./styles/result";
 import { inputStyles } from "./styles/input";
@@ -75,9 +75,9 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
         { backgroundColor: theme.backgroundRoot },
       ]}
     >
-      {/* ⚠️ 수정금지(승인필요) 2026-10-09 사장님 결정 = 여정 수정 중에는 수정 화면이 화면 전체(지도 · 요약 숨김) (정본 §) */}
+      {/* ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 여정 수정 중에는 수정 화면이 화면 전체(지도 · 요약 숨김) · Day 탭으로 날을 바꿔도 수정 상태는 그대로 (정본 §) */}
       {editingDayData ? (
-        <DayEditor planner={planner} day={editingDayData} />
+        <TripEditor planner={planner} day={editingDayData} />
       ) : (
         <>
           <View
@@ -204,9 +204,9 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
                 numberOfLines={2}
               >
                 {(() => {
-                  // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 베스트 여정 요약 = 문장 없이 짧은 "베스트 여행" 7개 언어 번역 한 줄 (정본 §)
+                  // ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 인기 명소 여정 요약 = 문장 없이 짧은 "인기 명소 여행" 7개 언어 번역 한 줄 (정본 §)
                   if (itinerary.metadata?._sourceMode === "best")
-                    return t("trip.bestTrip");
+                    return t("trip.popularTrip");
                   const focusLabels: Record<string, string> = {
                     Kids: t("labels.curationKids"),
                     Parents: t("labels.curationParents"),
