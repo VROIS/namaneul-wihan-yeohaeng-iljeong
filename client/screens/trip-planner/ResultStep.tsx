@@ -204,9 +204,6 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
                 numberOfLines={2}
               >
                 {(() => {
-                  // ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 인기 명소 여정 요약 = 문장 없이 짧은 "인기 명소 여행" 7개 언어 번역 한 줄 (정본 §)
-                  if (itinerary.metadata?._sourceMode === "best")
-                    return t("trip.popularTrip");
                   const focusLabels: Record<string, string> = {
                     Kids: t("labels.curationKids"),
                     Parents: t("labels.curationParents"),
@@ -235,10 +232,13 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
                     companionLabels[companionType] ||
                     t("labels.companionFamily");
 
-                  // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 선택한 vibe 전부 표시(최대 3개) (정본 §)
-                  const vibes = vibesSummary(
-                    (itinerary.vibeWeights ?? []).map((v) => v.vibe),
-                  );
+                  // ⚠️ 수정금지(승인필요) 2026-10-21 사장님 결정 = 선택한 vibe 전부 표시(최대 3개) · 인기 명소 여정 = 같은 문장에 바이브 자리만 "인기 명소" (정본 §)
+                  const vibes =
+                    itinerary.metadata?._sourceMode === "best"
+                      ? t("trip.popularVibe")
+                      : vibesSummary(
+                          (itinerary.vibeWeights ?? []).map((v) => v.vibe),
+                        );
 
                   const count =
                     itinerary.companionCount || formData.companionCount || 2;

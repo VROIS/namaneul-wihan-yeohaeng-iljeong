@@ -99,7 +99,42 @@ function makeWebIcon(
   isStart: boolean,
   slot: number | null,
   isSelected = false,
+  plainColor?: string | null,
 ) {
+  if (plainColor) {
+    const size = isSelected ? 38 : 30;
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="' +
+      size +
+      '" height="' +
+      size +
+      '" viewBox="0 0 ' +
+      size +
+      " " +
+      size +
+      '"><circle cx="' +
+      size / 2 +
+      '" cy="' +
+      size / 2 +
+      '" r="' +
+      (size / 2 - 2) +
+      '" fill="' +
+      plainColor +
+      '" stroke="white" stroke-width="3"/><text x="' +
+      size / 2 +
+      '" y="' +
+      (size / 2 + 5) +
+      '" text-anchor="middle" font-family="Arial, sans-serif" font-size="' +
+      (isSelected ? 16 : 13) +
+      '" font-weight="bold" fill="white">' +
+      (slot ?? "") +
+      "</text></svg>";
+    return {
+      url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg),
+      scaledSize: new google.maps.Size(size, size),
+      anchor: new google.maps.Point(size / 2, size / 2),
+    };
+  }
   const color = COLORS[cat] || "#666";
   const path = LUCIDE[cat] || '<circle cx="12" cy="12" r="6"/>';
   const size = isStart ? 50 : isSelected ? 54 : 40;
@@ -172,7 +207,7 @@ function ItineraryMapWeb({
   const markersRef = useRef<Record<string, any>>({});
   const prevSelectedRef = useRef<string | null>(null);
   const markerMetaRef = useRef<
-    Record<string, { cat: string; slot: number | null }>
+    Record<string, { cat: string; slot: number | null; color?: string | null }>
   >({});
   const [mapReady, setMapReady] = useState(false);
 
@@ -231,12 +266,14 @@ function ItineraryMapWeb({
       const m = new google.maps.Marker({
         position: { lat: Number(p.lat), lng: Number(p.lng) },
         map: mapRef.current,
-        icon: makeWebIcon(google, cat, false, p.slot),
+        icon: makeWebIcon(google, cat, false, p.slot, false, p.color),
         title: p.name || "",
+        // 날짜색 번호 마커(인기 명소 목록) = 출발 깃발 위에 그린다(도심 바로 옆 장소가 가려지지 않게)
+        zIndex: p.color ? 1000 + (p.slot ?? 0) : undefined,
       });
       m.addListener("click", () => onMarkerPress(p.id));
       markersRef.current[p.id] = m;
-      markerMetaRef.current[p.id] = { cat, slot: p.slot };
+      markerMetaRef.current[p.id] = { cat, slot: p.slot, color: p.color };
     }
 
     const b = new google.maps.LatLngBounds();
@@ -266,14 +303,16 @@ function ItineraryMapWeb({
       const meta = markerMetaRef.current[prevId];
       if (meta)
         markersRef.current[prevId].setIcon(
-          makeWebIcon(google, meta.cat, false, meta.slot, false),
+          makeWebIcon(google, meta.cat, false, meta.slot, false, meta.color),
         );
     }
     if (selectedSlotId && markersRef.current[selectedSlotId]) {
       const meta = markerMetaRef.current[selectedSlotId];
       const m = markersRef.current[selectedSlotId];
       if (meta)
-        m.setIcon(makeWebIcon(google, meta.cat, false, meta.slot, true));
+        m.setIcon(
+          makeWebIcon(google, meta.cat, false, meta.slot, true, meta.color),
+        );
       mapRef.current.panTo(m.getPosition());
       if (mapRef.current.getZoom() < 14) mapRef.current.setZoom(15);
     }

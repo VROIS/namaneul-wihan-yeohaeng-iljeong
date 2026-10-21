@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -6,24 +6,28 @@ import {
   ScrollView,
   StyleSheet,
   ActivityIndicator,
+  Dimensions,
 } from "react-native";
+import Animated, { LinearTransition } from "react-native-reanimated";
 import { Brand, Fonts, Spacing, BorderRadius } from "@/constants/theme";
+import { dayColor } from "@/constants/day-colors";
 import { Icon } from "@/components/Icon";
+import ItineraryMap from "@/components/ItineraryMap";
 import SlotThumbnail from "./components/SlotThumbnail";
 import { displayCityName } from "@/lib/display-city-name";
+import { haptic } from "@/screens/bts/place-cart/utils";
+import { assignPickedDays } from "@shared/day-fill";
+import { toMin } from "@shared/day-retime";
 import type { PlannerApi } from "./hooks/useTripPlanner";
+import type { BestListPlace } from "./hooks/useBestList";
+import { shortDate } from "./utils";
 
 const CARD_H = 56;
 const THUMB = 48;
 
-const dayLabel = (start: string, day: number, lang: string): string => {
-  const d = new Date(`${start}T00:00:00`);
-  d.setDate(d.getDate() + day - 1);
-  const wd = d.toLocaleDateString(lang, { weekday: "short" });
-  return `Day ${day} · ${d.getMonth() + 1}/${d.getDate()}(${wd})`;
-};
+type Pick = BestListPlace & { stay: number };
 
-// ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 베스트 목록 = 고르기만 하는 화면 · 제목 "인기 명소 - 도시" + 설명 한 줄 · 날마다 6곳(한 화면에 하루치 + 다음 날 첫 줄이 살짝) · 카드 = 썸네일 · 이름 · 순위 · 구글 리뷰 · 누르면 선택/해제 · 완료 = 고른 곳만 예상 여정(여정 수정 화면) (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-21 사장님 결정 = 인기 명소 목록 = 위 지도(출발 깃발 항상 + 고른 곳만 날짜색 번호 마커 · 마커가 깃발 위) + 아래 하나의 목록 · 머리글 = 도시 + 여행 날짜 · 처음엔 체크 0 · 누른 카드가 위로 올라가 고른 순서대로 쌓임(블록 쌓기 · Reanimated LinearTransition) · 날짜 = 시간 기준 자동 배정(shared/day-fill) · 그날이 차면 구분선 뒤 다음 날 · 번호 배지 = 지도 마커와 같은 번호·날짜색(3색 순환) · 체크 풀기 없음(고칠 것은 여정 수정 화면) · 안 고른 카드 = 아래 순위순 · 다 차면 흐림 · 완료 = 날마다 1곳 이상 (정본 §)
 export default function BestListStep({ planner }: { planner: PlannerApi }) {
   const {
     theme,
@@ -40,31 +44,146 @@ export default function BestListStep({ planner }: { planner: PlannerApi }) {
     setBestPicked,
   } = planner;
   const [busy, setBusy] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const cardY = useRef<Record<number, number>>({});
+
+  const center =
+    formData.accommodationCoords ??
+    bestList?.center ??
+    formData.destinationCoords ??
+    null;
+  const cfg = useMemo(
+    () => ({ center: center ?? { lat: 0, lng: 0 }, mult: bestList?.mult ?? 2 }),
+    [center, bestList?.mult],
+  );
+  const windows = useMemo(
+    () =>
+      (bestList?.days ?? []).map((d) => ({
+        startMin: toMin(d.startTime),
+        endMin: toMin(d.endTime),
+      })),
+    [bestList?.days],
+  );
+  const byId = useMemo(
+    () => new Map((bestList?.places ?? []).map((p) => [p.id, p])),
+    [bestList?.places],
+  );
+  const assign = (ids: number[]) =>
+    assignPickedDays(
+      ids
+        .map((id) => byId.get(id))
+        .filter((p): p is BestListPlace => !!p)
+        .map((p): Pick => ({ ...p, stay: p.stayMin })),
+      windows,
+      cfg,
+    );
+  const { days } = useMemo(
+    () => assign(bestPicked.ids),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [bestPicked.ids, byId, windows, cfg],
+  );
+  const slotOf = useMemo(() => {
+    const m = new Map<number, { day: number; n: number }>();
+    days.forEach((d, di) =>
+      d.forEach((p, i) => m.set(p.id, { day: di + 1, n: i + 1 })),
+    );
+    return m;
+  }, [days]);
+  // 더 담을 수 있는 카드 = 지금 고른 순서 뒤에 붙여도 날짜 창 안에 들어가는 것
+  const addable = useMemo(
+    () =>
+      new Set(
+        (bestList?.places ?? [])
+          .filter(
+            (p) =>
+              !slotOf.has(p.id) &&
+              assign([...bestPicked.ids, p.id]).rest.length === 0,
+          )
+          .map((p) => p.id),
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [bestList?.places, slotOf, bestPicked.ids, byId, windows, cfg],
+  );
+  const mapPlaces = useMemo(
+    () =>
+      days.flatMap((d, di) =>
+        d.map((p, i) => ({
+          id: String(p.id),
+          name: p.nameEn || p.nameLocal || "",
+          seedCategory: p.seedCategory ?? null,
+          lat: p.lat,
+          lng: p.lng,
+          slot: i + 1,
+          color: dayColor(di + 1),
+        })),
+      ),
+    [days],
+  );
+
   if (!bestList) return null;
 
-  const picked = new Set(bestPicked.ids);
-  const toggle = (id: number) =>
-    setBestPicked((prev) => ({
-      ...prev,
-      ids: prev.ids.includes(id)
-        ? prev.ids.filter((x) => x !== id)
-        : [...prev.ids, id],
-    }));
-  const pickedDays = bestList.days.map((d) =>
-    d.places.filter((p) => picked.has(p.id)).map((p) => p.id),
-  );
-  const ready = pickedDays.every((d) => d.length > 0);
+  const pick = (id: number) => {
+    if (slotOf.has(id)) {
+      setSelectedId(String(id));
+      return;
+    }
+    if (!addable.has(id)) {
+      haptic("medium");
+      return;
+    }
+    haptic("light");
+    setBestPicked((prev) => ({ ...prev, ids: [...prev.ids, id] }));
+  };
+  const ready = days.every((d) => d.length > 0);
 
   const done = async () => {
     if (!ready || busy) return;
     setBusy(true);
-    const ok = await handleGenerate({ pickedDays });
+    const ok = await handleGenerate({
+      pickedDays: days.map((d) => d.map((p) => p.id)),
+    });
     setBusy(false);
     if (ok) {
       setBestPicked((prev) => ({ ...prev, ids: [] }));
       startDayEdit(1);
     }
   };
+
+  // 한 줄로 그린다(카드 key 가 그대로라 위로 올라가는 움직임이 보인다)
+  type Row =
+    | { kind: "card"; p: BestListPlace; day: number | null; n: number }
+    | { kind: "line"; day: number };
+  const rows: Row[] = [
+    ...days.flatMap((d, di): Row[] =>
+      d.length
+        ? [
+            ...(di > 0 ? [{ kind: "line" as const, day: di + 1 }] : []),
+            ...d.map((p, i) => ({
+              kind: "card" as const,
+              p,
+              day: di + 1,
+              n: i + 1,
+            })),
+          ]
+        : [],
+    ),
+    ...bestList.places
+      .filter((p) => !slotOf.has(p.id))
+      .map((p) => ({ kind: "card" as const, p, day: null, n: 0 })),
+  ];
+  const start = center
+    ? {
+        lat: center.lat,
+        lng: center.lng,
+        label: `${t("trip.departure")}: ${
+          formData.accommodationName ||
+          t("trip.departureCityCenter", {
+            destination: displayCityName(formData),
+          })
+        }`,
+      }
+    : null;
 
   return (
     <View
@@ -93,6 +212,10 @@ export default function BestListStep({ planner }: { planner: PlannerApi }) {
         <View style={{ flex: 1 }}>
           <Text style={[s.title, { color: theme.text }]} numberOfLines={1}>
             {t("trip.bestListTitle", { city: displayCityName(formData) })}
+            <Text style={[s.date, { color: theme.textSecondary }]}>
+              {"  "}
+              {shortDate(formData.startDate)} ~ {shortDate(formData.endDate)}
+            </Text>
           </Text>
           <Text
             style={[s.hint, { color: theme.textSecondary }]}
@@ -103,86 +226,117 @@ export default function BestListStep({ planner }: { planner: PlannerApi }) {
         </View>
       </View>
 
+      <View style={s.map}>
+        <ItineraryMap
+          places={mapPlaces}
+          start={start}
+          onMarkerPress={(id) => {
+            setSelectedId(id);
+            const y = cardY.current[Number(id)];
+            if (y != null)
+              scrollRef.current?.scrollTo({
+                y: Math.max(0, y - 8),
+                animated: true,
+              });
+          }}
+          selectedSlotId={selectedId}
+          height={Math.min(220, Dimensions.get("window").height * 0.28)}
+          language={i18n.language || "ko"}
+        />
+      </View>
+
       <ScrollView
+        ref={scrollRef}
         style={{ flex: 1 }}
         contentContainerStyle={s.list}
         showsVerticalScrollIndicator={false}
       >
-        {bestList.days.map((d) => (
-          <View key={d.day} style={s.day}>
-            <Text style={[s.dayLabel, { color: theme.text }]}>
-              {dayLabel(formData.startDate, d.day, i18n.language || "ko")}
-            </Text>
-            {d.places.map((p) => {
-              const on = picked.has(p.id);
-              return (
-                <Pressable
-                  key={p.id}
-                  style={[
-                    s.card,
-                    {
-                      backgroundColor: theme.backgroundDefault,
-                      borderColor: on ? Brand.primary : theme.border,
-                    },
-                  ]}
-                  onPress={() => toggle(p.id)}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: on }}
-                >
-                  <SlotThumbnail
-                    place={p}
-                    isMealSlot={false}
-                    isMeal={false}
-                    theme={theme}
-                    t={t}
-                  />
-                  <View style={s.textCol}>
-                    <Text
-                      style={[s.name, { color: theme.text }]}
-                      numberOfLines={1}
-                    >
-                      {p.nameEn || p.nameLocal}
-                    </Text>
-                    <View style={s.metaRow}>
-                      {p.rank != null && (
-                        <Text style={[s.rank, { color: Brand.primary }]}>
-                          {t("trip.bestRank", { n: p.rank })}
-                        </Text>
-                      )}
-                      {!!p.userRatingCount && (
-                        <>
-                          <Icon
-                            name="star"
-                            size={11}
-                            color={theme.textSecondary}
-                          />
-                          <Text
-                            style={[s.meta, { color: theme.textSecondary }]}
-                          >
-                            {p.userRatingCount.toLocaleString()}
-                          </Text>
-                        </>
-                      )}
-                    </View>
-                  </View>
-                  <View
-                    style={[
-                      s.check,
-                      on
-                        ? {
-                            backgroundColor: Brand.primary,
-                            borderColor: Brand.primary,
-                          }
-                        : { borderColor: theme.border },
-                    ]}
+        {rows.map((r) => {
+          if (r.kind === "line") {
+            const color = dayColor(r.day);
+            return (
+              <Animated.View
+                key={`line-${r.day}`}
+                layout={LinearTransition}
+                style={s.line}
+              >
+                <View style={[s.lineBar, { backgroundColor: color }]} />
+                <Text style={[s.lineText, { color }]}>Day {r.day}</Text>
+                <View style={[s.lineBar, { backgroundColor: color }]} />
+              </Animated.View>
+            );
+          }
+          const { p } = r;
+          const on = r.day != null;
+          const dim = !on && !addable.has(p.id);
+          const color = on ? dayColor(r.day!) : Brand.primary;
+          return (
+            <Animated.View
+              key={p.id}
+              layout={LinearTransition}
+              onLayout={(e) => {
+                cardY.current[p.id] = e.nativeEvent.layout.y;
+              }}
+            >
+              <Pressable
+                style={[
+                  s.card,
+                  {
+                    backgroundColor: theme.backgroundDefault,
+                    borderColor: on
+                      ? color
+                      : selectedId === String(p.id)
+                        ? Brand.primary
+                        : theme.border,
+                    opacity: dim ? 0.4 : 1,
+                  },
+                ]}
+                onPress={() => pick(p.id)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: on, disabled: dim }}
+              >
+                <SlotThumbnail
+                  place={p}
+                  isMealSlot={false}
+                  isMeal={false}
+                  theme={theme}
+                  t={t}
+                />
+                <View style={s.textCol}>
+                  <Text
+                    style={[s.name, { color: theme.text }]}
+                    numberOfLines={1}
                   >
-                    {on && <Icon name="check" size={14} color="#FFFFFF" />}
+                    {p.nameEn || p.nameLocal}
+                  </Text>
+                  <View style={s.metaRow}>
+                    {p.rank != null && (
+                      <Text style={[s.rank, { color: Brand.primary }]}>
+                        {t("trip.bestRank", { n: p.rank })}
+                      </Text>
+                    )}
+                    {!!p.userRatingCount && (
+                      <Text
+                        style={[s.meta, { color: theme.textSecondary }]}
+                        numberOfLines={1}
+                      >
+                        {t("trip.googleReviews")}{" "}
+                        {p.userRatingCount.toLocaleString()}
+                      </Text>
+                    )}
                   </View>
-                </Pressable>
-              );
-            })}
-          </View>
-        ))}
+                </View>
+                {on ? (
+                  <View style={[s.num, { backgroundColor: color }]}>
+                    <Text style={s.numText}>{r.n}</Text>
+                  </View>
+                ) : (
+                  <View style={[s.check, { borderColor: theme.border }]} />
+                )}
+              </Pressable>
+            </Animated.View>
+          );
+        })}
       </ScrollView>
 
       <View
@@ -232,13 +386,11 @@ const s = StyleSheet.create({
   },
   title: { fontSize: 18, lineHeight: 24, fontFamily: Fonts.bold },
   hint: { fontSize: 13, lineHeight: 18, fontFamily: Fonts.medium },
-  list: { paddingHorizontal: Spacing.md, paddingBottom: Spacing.lg },
-  day: { gap: Spacing.xs, paddingTop: Spacing.sm },
-  dayLabel: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontFamily: Fonts.bold,
-    paddingHorizontal: 2,
+  map: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm },
+  list: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    gap: Spacing.xs,
   },
   card: {
     height: CARD_H,
@@ -253,7 +405,29 @@ const s = StyleSheet.create({
   name: { fontSize: 14, lineHeight: 18, fontFamily: Fonts.bold },
   metaRow: { flexDirection: "row", alignItems: "center", gap: Spacing.xs },
   rank: { fontSize: 11, lineHeight: 15, fontFamily: Fonts.bold },
-  meta: { fontSize: 11, lineHeight: 15, fontFamily: Fonts.medium },
+  meta: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontFamily: Fonts.medium,
+    flexShrink: 1,
+  },
+  date: { fontSize: 13, fontFamily: Fonts.medium },
+  line: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.xs,
+  },
+  lineBar: { flex: 1, height: 2, borderRadius: 1 },
+  lineText: { fontSize: 12, fontFamily: Fonts.bold },
+  num: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  numText: { color: "#FFFFFF", fontSize: 13, fontFamily: Fonts.bold },
   check: {
     width: 22,
     height: 22,

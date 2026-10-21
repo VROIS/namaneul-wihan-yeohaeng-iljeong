@@ -29,7 +29,11 @@ import {
   toMin,
 } from "@shared/day-retime";
 import { buildBtsDay } from "./route-bts";
-import { buildPickedDay, type PickedLayoutItem } from "./route-picked";
+import {
+  buildLayoutDay,
+  buildPickedDay,
+  type PickedLayoutItem,
+} from "./route-picked";
 
 type LatLng = { lat: number; lng: number };
 
@@ -49,6 +53,8 @@ export function buildRouteLocal(
     days: string[][];
     layout?: PickedLayoutItem[][];
     anchors?: (LatLng | null | undefined)[];
+    estimate?: boolean;
+    mine?: boolean;
   },
 ): RouteHandlerResult {
   const pickedDays = picked?.days;
@@ -137,51 +143,31 @@ export function buildRouteLocal(
     return hit.r;
   };
 
-  // ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 예상 여정 식당 = 슬롯과 한 짝 = 그 볼거리에서 걸어갈 거리(1km · 베스트 발굴 지시문) 안의 베스트 식당 중 사용자 등급(도시 베스트 식당 가격 순 하·중·상)에서 가장 가까운 곳 → 없으면 우리 풀에서 예산 띠 안 가장 가까운 곳 (정본 §)
-  const PAIR_WALK_KM = 1.0;
-  const pickedTier = style === "Economic" ? 0 : style === "Reasonable" ? 1 : 2;
+  // ⚠️ 수정금지(승인필요) 2026-10-21 사장님 결정 = 인기 명소 여정 식당 = 도시 전체 식당 풀에서 사용자 예산 띠 안 묶음 → 기준점에서 무조건 가장 가까운 곳(거리 문턱 없음) · 같은 거리면 베스트 → 구글 리뷰 수 · 점심 기준 = 앞 볼거리 → 없으면 다음 활동 · 저녁 = 마지막 활동 근처와 숙소(도심) 근처 중 자기 기준점에 더 가까운 쪽(중간에 들르지 않음) · 옛 베스트 짝(1km) 삭제 (정본 §)
   const priceOf = (r: PlaceResult) =>
     r.estimatedPriceEur != null ? Number(r.estimatedPriceEur) : null;
-  const bestRests = pickedDays
-    ? restaurants.filter((r) => r.bestRank != null && priceOf(r) != null)
-    : [];
-  const bestPrices = [...new Set(bestRests.map((r) => priceOf(r)!))].sort(
-    (a, b) => a - b,
-  );
-  const tierOfPrice = new Map(
-    bestPrices.map((p, i) => [p, Math.floor((i * 3) / bestPrices.length)]),
-  );
-  const nearestOf = (cands: PlaceResult[], a: LatLng) => {
+  const poolNear = (a: LatLng): { r: PlaceResult; d: number } | null => {
     let best: { r: PlaceResult; d: number } | null = null;
-    for (const r of cands) {
+    for (const r of restaurants) {
+      const p = priceOf(r);
+      if (
+        usedRest.has(r.id) ||
+        p == null ||
+        p < Math.min(band.min, band.cap) ||
+        p > band.cap
+      )
+        continue;
       const d = haversineKm(a.lat, a.lng, r.lat, r.lng);
-      if (!best || d < best.d) best = { r, d };
+      const better =
+        !best ||
+        d < best.d ||
+        (d === best.d &&
+          ((r.bestRank != null ? 1 : 0) - (best.r.bestRank != null ? 1 : 0) ||
+            (r.userRatingCount ?? 0) - (best.r.userRatingCount ?? 0)) > 0);
+      if (better) best = { r, d };
     }
     return best;
   };
-  const pairNear = (a: LatLng): PlaceResult | null => {
-    const hit = nearestOf(
-      bestRests.filter(
-        (r) =>
-          !usedRest.has(r.id) && tierOfPrice.get(priceOf(r)!) === pickedTier,
-      ),
-      a,
-    );
-    return hit && hit.d <= PAIR_WALK_KM ? hit.r : null;
-  };
-  const poolNear = (a: LatLng): PlaceResult | null =>
-    nearestOf(
-      restaurants.filter((r) => {
-        const p = priceOf(r);
-        return (
-          !usedRest.has(r.id) &&
-          p != null &&
-          p >= Math.min(band.min, band.cap) &&
-          p <= band.cap
-        );
-      }),
-      a,
-    )?.r ?? null;
 
   const SAME_SPOT_KM = 0.5;
   const keyOf = (p: PlaceResult) =>
@@ -356,7 +342,7 @@ export function buildRouteLocal(
       btsBuilt = true;
       lunchDone = true;
       const byId = new Map(places.map((p) => [p.id, p]));
-      const day = buildPickedDay({
+      const base = {
         acts: (pickedDays[di] ?? [])
           .map((id) => byId.get(id))
           .filter((p): p is PlaceResult => !!p && hasCoord(p)),
@@ -364,17 +350,30 @@ export function buildRouteLocal(
         startMin: toMin(dc.startTime),
         endMin,
         mult: MOVE_MULT,
-        lunchFrom: LUNCH_FROM,
-        lunchBy: LUNCH_BY,
-        mealDuration,
         stayMin,
-        layout: picked?.layout?.[di],
-        pickMeal: (prev, next) =>
-          (prev ? pairNear(prev) : null) ??
-          (next ? pairNear(next) : null) ??
-          poolNear(next ? (prev ?? next) : dayCenter),
-        markUsed: (id) => usedRest.add(id),
-      });
+        pickMeal: (prev?: PlaceResult, next?: PlaceResult) => {
+          if (next) return poolNear(prev ?? next)?.r ?? null;
+          const a = prev ? poolNear(prev) : null;
+          const b = poolNear(dayCenter);
+          if (!a || !b) return (a ?? b)?.r ?? null;
+          return a.d <= b.d ? a.r : b.r;
+        },
+        markUsed: (id: string) => usedRest.add(id),
+      };
+      const layout = picked?.layout?.[di];
+      const day =
+        picked?.mine && layout
+          ? buildLayoutDay({
+              ...base,
+              layout,
+              lunchFrom: LUNCH_FROM,
+              lunchBy: LUNCH_BY,
+            })
+          : buildPickedDay({
+              ...base,
+              layout,
+              estimate: !!picked?.estimate,
+            });
       day.items.forEach((it, i) => {
         seq.push(it);
         slotStartMins.push(day.starts[i]);

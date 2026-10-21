@@ -90,12 +90,15 @@ export function registerItineraryGenerateDbRoutes(
         return res.status(400).json({
           error: "destination, startDate, endDate are required",
         });
-      const cityCheck = await isCityReady(
-        db,
-        formData.destination,
-        formData.accommodationCoords ?? formData.destinationCoords,
-        formData.destinationCountryCode,
-      );
+      // 수정 화면(저장된 여정)은 그 여정의 거점 번호로 같은 목록을 다시 받는다
+      const cityCheck = formData.cityId
+        ? await cityReadyById(db, Number(formData.cityId))
+        : await isCityReady(
+            db,
+            formData.destination,
+            formData.accommodationCoords ?? formData.destinationCoords,
+            formData.destinationCountryCode,
+          );
       if (!cityCheck.cityId)
         return res.status(404).json({ error: "도시 없음" });
       res.json(await listBest(db, formData, cityCheck));

@@ -188,15 +188,19 @@ export default function PlaceSlotCard({
               style={styles.placeInfo}
               onPress={() => setSelectedSlotId(String(place.id))}
             >
-              {/* ① 영어명 (메인 = 크게). ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 =
-                  [점심]/[저녁] 텍스트 프리픽스 폐기(식당명 노출공간 확보, 위 번호원 워터마크로 구분
-                  대체) + numberOfLines 제한 폐기(비한국어 번역시 더 필요한 공간 확보, 슬롯카드는
-                  페이지 스크롤 안이라 길어져도 문제없음). */}
+              {/* ⚠️ 수정금지(승인필요) 2026-10-21 사장님 결정 = 이름 = 영어명 → 현지명 → name(프리픽스·줄 제한 없음 그대로) · 예상 여정의 식당 없는 식사 칸만 "점심/저녁" 글자 (정본 §) */}
               <View style={styles.placeHeader}>
                 <Text style={[styles.placeName, { color: theme.text }]}>
                   {(place as any).nameEn ||
                     (place as any).nameLocal ||
-                    place.name}
+                    place.name ||
+                    (isMealSlot
+                      ? t(
+                          place.mealType === "dinner"
+                            ? "trip.mealDinner"
+                            : "trip.mealLunch",
+                        )
+                      : "")}
                 </Text>
               </View>
               {/* ② 로컬명 (보조 = 작게, 있고 메인과 다를 때만) */}

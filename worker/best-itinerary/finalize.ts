@@ -61,6 +61,8 @@ interface AG4DbInput {
     days: string[][];
     layout?: PickedLayoutItem[][];
     anchors?: ({ lat: number; lng: number } | null | undefined)[];
+    estimate?: boolean;
+    mine?: boolean;
   };
 }
 

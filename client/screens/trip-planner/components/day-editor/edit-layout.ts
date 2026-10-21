@@ -5,6 +5,7 @@ export const PX_PER_MIN = 0.8;
 export const MOVE_MIN_H = 14;
 export const STEP_MIN = 30;
 export const MIN_STAY_MIN = 30;
+export const LONG_PRESS_MS = 500;
 export const MAX_END_MIN = 24 * 60;
 
 export type EditSlot = { place: any; stay: number };

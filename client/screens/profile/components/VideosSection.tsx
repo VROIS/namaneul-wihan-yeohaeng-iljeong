@@ -12,6 +12,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { Icon } from "@/components/Icon";
+import { TRIO_GRADIENTS } from "@/constants/day-colors";
 import { ThemedText } from "@/components/ThemedText";
 import { apiRequest } from "@/lib/query-client";
 import TripisModal, {
@@ -134,12 +135,6 @@ export default function VideosSection({ profile }: { profile: ProfileApi }) {
 
   if (displayVideos.length === 0 && displayGuides.length === 0) return null;
 
-  const gradientPalettes = [
-    ["#4F46E5", "#7C3AED"],
-    ["#06B6D4", "#3B82F6"],
-    ["#EC4899", "#8B5CF6"],
-  ];
-
   return (
     <View style={styles.section}>
       <View style={styles.sectionTitleHeader}>
@@ -217,7 +212,7 @@ export default function VideosSection({ profile }: { profile: ProfileApi }) {
 
             <View style={styles.videoThumbnail}>
               <LinearGradient
-                colors={gradientPalettes[idx % gradientPalettes.length] as any}
+                colors={TRIO_GRADIENTS[idx % TRIO_GRADIENTS.length] as any}
                 style={styles.videoThumbnailGradient}
               >
                 <View style={styles.videoPlayOverlayRich}>
@@ -274,7 +269,7 @@ export default function VideosSection({ profile }: { profile: ProfileApi }) {
                 />
               ) : (
                 <LinearGradient
-                  colors={gradientPalettes[i % gradientPalettes.length] as any}
+                  colors={TRIO_GRADIENTS[i % TRIO_GRADIENTS.length] as any}
                   style={StyleSheet.absoluteFill}
                 />
               )}

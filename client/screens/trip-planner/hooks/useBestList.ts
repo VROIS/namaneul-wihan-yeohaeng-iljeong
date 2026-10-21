@@ -11,13 +11,20 @@ export type BestListPlace = {
   image?: string | null;
   userRatingCount?: number;
   rank: number | null;
+  lat: number;
+  lng: number;
+  seedCategory?: string | null;
+  stayMin: number;
 };
 export type BestList = {
   cityId: number;
-  days: { day: number; places: BestListPlace[] }[];
+  center: { lat: number; lng: number } | null;
+  mult: number;
+  days: { day: number; startTime: string; endTime: string }[];
+  places: BestListPlace[];
 };
 
-// ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 인기 명소 고르기 버튼 = 목록(날마다 6곳)을 받아 목록 화면으로 간다 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-21 사장님 결정 = 인기 명소 여정 버튼 = 하나의 목록(순위순 · 좌표 · 체류분)과 날짜 창을 받아 목록 화면으로 간다 · 체크한 순서(ids)가 슬롯 순서 · 화면을 오가도 유지 · 도시·날짜·시각·숙소·예산·이동 수단이 바뀌면 비움(배정이 달라짐) · 생성 성공 시 비움 (정본 §)
 export function useBestList({
   formData,
   isAuthed,
@@ -34,7 +41,6 @@ export function useBestList({
   i18n: { language: string };
 }) {
   const [bestList, setBestList] = useState<BestList | null>(null);
-  // ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 목록에서 고른 곳은 화면을 오가도 유지(생성 실패·뒤로 가기 뒤에도) · 도시·날짜가 바뀌면 비움 · 생성에 성공하면 비움 (정본 §)
   const [bestPicked, setBestPicked] = useState<{
     key: string;
     ids: number[];
@@ -51,12 +57,21 @@ export function useBestList({
         ...formData,
         language: i18n.language || "ko",
       });
-      const key = `${formData.destination}|${formData.startDate}|${formData.endDate}`;
+      const key = JSON.stringify([
+        formData.destination,
+        formData.startDate,
+        formData.endDate,
+        formData.startTime,
+        formData.endTime,
+        formData.accommodationCoords,
+        formData.travelStyle,
+        formData.mobilityStyle,
+      ]);
       setBestPicked((prev) => (prev.key === key ? prev : { key, ids: [] }));
       setBestList(await res.json());
       setScreen("BestList");
     } catch (e) {
-      console.error("[TripPlanner] 베스트 목록 실패:", e);
+      console.error("[TripPlanner] 인기 명소 목록 실패:", e);
       Alert.alert(t("trip.generateFailed"), t("trip.retryHint"));
       setScreen("Input");
     }

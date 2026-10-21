@@ -8,6 +8,7 @@ export type ItinMapPlace = {
   lat: number | null;
   lng: number | null;
   slot: number; // 슬롯 번호 (1-base, 마커 라벨)
+  color?: string | null; // ⚠️ 2026-10-21 사장님 결정 = 색이 오면 분류 아이콘 없이 그 색 동그라미 + 번호만(인기 명소 목록 = 날짜색)
 };
 
 export type ItinMapStart = {
@@ -56,7 +57,14 @@ body { background: #f8f7fb; font-family: -apple-system, "Segoe UI", "Malgun Goth
   let placesById = {};
   let selectedId = null;   // 🗺️ 2026-06-28 = 현재 선택 슬롯 id (= 슬롯 본문 터치 → focusSlot)
 
-  function makeIcon(cat, isStart, slot, isSelected) {
+  function makeIcon(cat, isStart, slot, isSelected, plainColor) {
+    if (plainColor) {
+      const size = isSelected ? 38 : 30;
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">' +
+        '<circle cx="' + (size / 2) + '" cy="' + (size / 2) + '" r="' + (size / 2 - 2) + '" fill="' + plainColor + '" stroke="white" stroke-width="3"/>' +
+        '<text x="' + (size / 2) + '" y="' + (size / 2 + 5) + '" text-anchor="middle" font-family="Arial, sans-serif" font-size="' + (isSelected ? 16 : 13) + '" font-weight="bold" fill="white">' + (slot || '') + '</text></svg>';
+      return { url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg), scaledSize: new google.maps.Size(size, size), anchor: new google.maps.Point(size / 2, size / 2) };
+    }
     const color = COLORS[cat] || '#666';
     const path = LUCIDE[cat] || '<circle cx="12" cy="12" r="6"/>';
     const size = isStart ? 50 : (isSelected ? 54 : 40);
@@ -123,8 +131,9 @@ body { background: #f8f7fb; font-family: -apple-system, "Segoe UI", "Malgun Goth
       const m = new google.maps.Marker({
         position: { lat: Number(p.lat), lng: Number(p.lng) },
         map,
-        icon: makeIcon(p.seedCategory || 'attraction', false, p.slot, p.id === selectedId),
+        icon: makeIcon(p.seedCategory || 'attraction', false, p.slot, p.id === selectedId, p.color),
         title: p.name || '',
+        zIndex: p.color ? 1000 + (p.slot || 0) : undefined,
       });
       m.addListener('click', (function(pid) { return function() { postRN({ type: 'marker', id: pid }); }; })(p.id));
       markers[p.id] = m;
@@ -135,12 +144,12 @@ body { background: #f8f7fb; font-family: -apple-system, "Segoe UI", "Malgun Goth
   window.focusSlot = function(id) {
     if (selectedId && selectedId !== id && markers[selectedId]) {
       const prev = placesById[selectedId];
-      if (prev) markers[selectedId].setIcon(makeIcon(prev.seedCategory || 'attraction', false, prev.slot, false));
+      if (prev) markers[selectedId].setIcon(makeIcon(prev.seedCategory || 'attraction', false, prev.slot, false, prev.color));
     }
     selectedId = id;
     if (!id || !markers[id]) return;
     const cur = placesById[id];
-    if (cur) markers[id].setIcon(makeIcon(cur.seedCategory || 'attraction', false, cur.slot, true));
+    if (cur) markers[id].setIcon(makeIcon(cur.seedCategory || 'attraction', false, cur.slot, true, cur.color));
     map.panTo(markers[id].getPosition());
     if (map.getZoom() < 14) map.setZoom(15);
   };

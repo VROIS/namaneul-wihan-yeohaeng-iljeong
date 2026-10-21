@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 인기 명소 고르기 = 베스트 목록 → 고른 장소로 예상 여정(모든 사용자 · 옛 관리자 전용 베스트 여정 계산 삭제) (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-21 사장님 결정 = 들어온 버튼으로 가른다 · 인기 명소 여정 = 하나의 목록(순위순 · 좌표 · 체류분 · 구글 리뷰수) + 날짜 창 + 이동 배수 → 앱이 체크한 순서대로 시간 기준 자동 배정(shared/day-fill) → 예상 여정(밀도 고정 빡빡하게 60 · 식당 없는 식사 칸 · 반영 바이브 = 누구랑·누구를 위한·예산·이동 스타일) → 수정 완료 = 그 배치 그대로 식당만 새로 · 내 취향 여정 수정 완료 = 사용자 밀도·식사 칸 자리·길이 그대로 식당만 새로 (정본 §)
 
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { TripFormData } from "./lib/services/agents/types";
@@ -9,6 +9,13 @@ import {
   recalcCrossCityZone,
   servingGateSql,
 } from "./lib/services/shared/pool-radius";
+import {
+  cityHourlyRate,
+  slotMinutesFor,
+} from "./lib/services/shared/slot-duration";
+import { shouldApplyGuidePrice } from "./lib/services/transport/guide-pricing";
+import { moveMult } from "@shared/day-retime";
+import { PACE_SLOT_MINUTES } from "@shared/pace-duration";
 import { finalizeDbOnlyItinerary } from "./best-itinerary/finalize";
 import type { PickedFinalDay } from "./lib/services/route/route-picked";
 import { AG2_SELECT_COLS, dbRowToPlace } from "./best-itinerary/places";
@@ -31,6 +38,12 @@ const agreeOf = (r: { bestRank?: number | null }) =>
 
 const ordinalOf = (r: { bestRank?: number | null }) =>
   bestRankOrdinal(r.bestRank) ?? Number.MAX_SAFE_INTEGER;
+
+// 인기 명소 여정 = 사용자 밀도를 받지 않는다 = 항상 빡빡하게(활동·식사 60)
+const pickedForm = (formData: TripFormData): TripFormData => ({
+  ...formData,
+  travelPace: "Packed",
+});
 
 // ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 베스트 순서 = 산출표 순위(앞자리) → 동의 수 → 리뷰수 · 목록·예상 여정도 이 순서를 쓴다 (정본 §)
 async function selectBest(
@@ -63,7 +76,6 @@ async function selectBest(
   return rows;
 }
 
-// ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 베스트 목록 = 베스트(분류 무관) 순위 순 → 유적·포토스팟·힐링·즐길거리 리뷰 순 · 날마다 6곳 · 카드 = 이름 · 순위 · 구글 리뷰 (정본 §)
 const BEST_LIST_PER_DAY = 6;
 
 export async function listBest(
@@ -73,8 +85,11 @@ export async function listBest(
 ) {
   const cityId = cityCheck.cityId!;
   const cityCoords = cityCoordsOf(cityCheck);
-  const skeleton = await buildSkeleton(formData);
-  const rows = await selectBest(db, cityId, cityCoords, false);
+  const skeleton = await buildSkeleton(pickedForm(formData));
+  const [rows, hourlyRate] = await Promise.all([
+    selectBest(db, cityId, cityCoords, false),
+    cityHourlyRate(db, cityId),
+  ]);
   const best = rows.filter((r) => r.bestRank != null);
   const fill = rows
     .filter(
@@ -93,38 +108,53 @@ export async function listBest(
   ]);
   return {
     cityId,
-    days: skeleton.daySlotsConfig.map((dc, d) => ({
+    center: cityCoords ?? null,
+    mult: moveMult(
+      shouldApplyGuidePrice(formData.mobilityStyle, formData.travelStyle),
+    ),
+    days: skeleton.daySlotsConfig.map((dc) => ({
       day: dc.day,
-      places: picked
-        .slice(d * BEST_LIST_PER_DAY, (d + 1) * BEST_LIST_PER_DAY)
-        .map((r) => {
-          const p: any = dbRowToPlace(r, imagePidMap, formData.destination);
-          return {
-            id: r.id,
-            nameEn: p.name,
-            nameLocal: p.nameLocal,
-            image: p.image,
-            userRatingCount: p.userRatingCount,
-            rank: bestRankOrdinal(r.bestRank),
-          };
-        }),
+      startTime: dc.startTime,
+      endTime: dc.endTime,
     })),
+    places: picked.map((r) => {
+      const p: any = dbRowToPlace(r, imagePidMap, formData.destination);
+      return {
+        id: r.id,
+        nameEn: p.name,
+        nameLocal: p.nameLocal,
+        image: p.image,
+        userRatingCount: p.userRatingCount,
+        rank: bestRankOrdinal(r.bestRank),
+        lat: p.lat,
+        lng: p.lng,
+        seedCategory: p.seedCategory,
+        stayMin: slotMinutesFor(
+          p.estimatedPriceEur,
+          PACE_SLOT_MINUTES.Packed,
+          hourlyRate,
+          p.seedCategory,
+        ),
+      };
+    }),
   };
 }
 
-// ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 예상 여정 = 사용자가 목록에서 날마다 고른 장소를 그 순서 그대로 엔진이 계산 · 최종 완료(finalDays) = 사용자가 남긴 활동·식사 칸 배치와 날마다 시각 그대로 식당만 새로(식당·식사 규칙 = route-picked) (정본 §)
 export async function runPipelinePicked(
   db: Db,
-  formData: TripFormData & {
+  input: TripFormData & {
     pickedDays?: number[][];
     finalDays?: PickedFinalDay[];
+    sourceMode?: string;
   },
   cityCheck: CityReadyResult,
 ): Promise<any> {
   const cityId = cityCheck.cityId!;
   const cityCoords = cityCoordsOf(cityCheck);
+  const finalDays = input.finalDays;
+  const best = !finalDays || input.sourceMode === "best";
+  const formData = best ? pickedForm(input) : input;
   const skeleton = await buildSkeleton(formData);
-  const finalDays = formData.finalDays;
   if (finalDays)
     skeleton.daySlotsConfig.forEach((dc, d) => {
       if (!finalDays[d]) return;
@@ -133,7 +163,7 @@ export async function runPipelinePicked(
     });
   const pickedIds: string[][] = finalDays
     ? finalDays.map((d) => d.items.flatMap((x) => ("meal" in x ? [] : [x.id])))
-    : (formData.pickedDays ?? []).map((d) => d.map((id) => `db-${id}`));
+    : (input.pickedDays ?? []).map((d) => d.map((id) => `db-${id}`));
   const ids = pickedIds
     .flat()
     .map((id) => Number(id.replace(/^db-/, "")))
@@ -145,7 +175,7 @@ export async function runPipelinePicked(
           .from(placeSeedRaw)
           .where(inArray(placeSeedRaw.id, ids))
       : Promise.resolve([] as any[]),
-    selectBest(db, cityId, cityCoords, true),
+    finalDays ? selectBest(db, cityId, cityCoords, true) : Promise.resolve([]),
   ]);
   const imagePidMap = await loadImagePidMap([
     cityId,
@@ -171,12 +201,14 @@ export async function runPipelinePicked(
       days: pickedIds,
       layout: finalDays?.map((d) => d.items),
       anchors: finalDays?.map((d) => d.anchor),
+      estimate: !finalDays,
+      mine: !best,
     },
   });
   result.metadata = {
     ...result.metadata,
-    _pipelineVersion: "best-picked-2026-10-19",
-    _sourceMode: "best",
+    _pipelineVersion: "best-picked-2026-10-21",
+    _sourceMode: best ? "best" : "db-only",
   };
   return result;
 }
