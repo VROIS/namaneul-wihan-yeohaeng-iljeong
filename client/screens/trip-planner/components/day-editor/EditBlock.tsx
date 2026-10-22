@@ -191,13 +191,7 @@ export default function EditBlock({
     onRelease(id, true, false);
 
   return (
-    <View
-      style={[
-        es.block,
-        { top, height, right: RULER_W },
-        dragging && { zIndex: 20 },
-      ]}
-    >
+    <View style={[es.block, { top, height, right: RULER_W }]}>
       <Animated.View style={[es.blockInner, { transform: [{ rotate }] }]}>
         <View style={[es.numberCol, { width: LEFT_COL }, noTouch]}>
           <View

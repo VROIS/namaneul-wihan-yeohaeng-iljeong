@@ -126,7 +126,7 @@
     "editLate": "Llega {{m}} min después de que empiece",
     "editItinerary": "Editar",
     "editDone": "Listo",
-    "editHowTo": "Mantén pulsado un lugar para moverlo y ajustar el tiempo\nMover a/añadir desde guardado temporal",
+    "editHowTo": "Mantén pulsado un lugar\npara moverlo y ajustarlo\nGuardado: mover/añadir",
     "editBucket": "Guardado\ntemporal",
     "bestListTitle": "Lo más popular - {{city}}",
     "bestListHint": "Selecciona los lugares que quieras, en orden",

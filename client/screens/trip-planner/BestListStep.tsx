@@ -27,7 +27,7 @@ const THUMB = 48;
 
 type Pick = BestListPlace & { stay: number };
 
-// ⚠️ 수정금지(승인필요) 2026-10-21 사장님 결정 = 인기 명소 목록 = 위 지도(출발 깃발 항상 + 고른 곳만 날짜색 번호 마커 · 마커가 깃발 위) + 아래 하나의 목록 · 머리글 = 도시 + 여행 날짜 · 처음엔 체크 0 · 누른 카드가 위로 올라가 고른 순서대로 쌓임(블록 쌓기 · Reanimated LinearTransition) · 날짜 = 시간 기준 자동 배정(shared/day-fill) · 그날이 차면 구분선 뒤 다음 날 · 번호 배지 = 지도 마커와 같은 번호·날짜색(3색 순환) · 체크 풀기 없음(고칠 것은 여정 수정 화면) · 안 고른 카드 = 아래 순위순 · 다 차면 흐림 · 완료 = 날마다 1곳 이상 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-21 사장님 결정 = 인기 명소 목록 = 위 지도(출발 깃발 항상 + 고른 곳만 날짜색 번호 마커 · 마커가 깃발 위) + 아래 하나의 목록 · 머리글 = 도시 + 여행 날짜 · 처음엔 체크 0 · 누른 카드가 위로 올라가 고른 순서대로 쌓임(블록 쌓기 · Reanimated LinearTransition) · 날짜 = 시간 기준 자동 배정(shared/day-fill) · 그날이 차면 구분선 뒤 다음 날 · 번호 배지 = 지도 마커와 같은 번호·날짜색(3색 순환) · 한 번 더 누르면 풀림(뒤 카드가 당겨짐) · 안 고른 카드 = 아래 순위순 · 다 차면 흐림 · 완료 = 날마다 1곳 이상 (정본 §)
 export default function BestListStep({ planner }: { planner: PlannerApi }) {
   const {
     theme,
@@ -125,7 +125,11 @@ export default function BestListStep({ planner }: { planner: PlannerApi }) {
 
   const pick = (id: number) => {
     if (slotOf.has(id)) {
-      setSelectedId(String(id));
+      haptic("light");
+      setBestPicked((prev) => ({
+        ...prev,
+        ids: prev.ids.filter((x) => x !== id),
+      }));
       return;
     }
     if (!addable.has(id)) {

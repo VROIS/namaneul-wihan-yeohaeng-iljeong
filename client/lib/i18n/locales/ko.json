@@ -126,7 +126,7 @@
     "editLate": "공연 시작보다 {{m}}분 늦게 도착",
     "editItinerary": "여정 수정",
     "editDone": "완료",
-    "editHowTo": "장소를 길게 눌러 옮기고 시간을 조절하세요\n보관함으로 이동/추가할 수 있어요",
+    "editHowTo": "장소를 길게 눌러 옮기고\n시간을 조절하세요\n보관함으로 이동/추가해요",
     "editBucket": "임시\n보관함",
     "bestListTitle": "인기 명소 - {{city}}",
     "bestListHint": "원하시는 장소를 순서대로 선택해 주세요",

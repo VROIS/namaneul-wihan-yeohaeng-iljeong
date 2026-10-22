@@ -126,7 +126,7 @@
     "editLate": "Arrivée {{m}} min après le début",
     "editItinerary": "Modifier",
     "editDone": "OK",
-    "editHowTo": "Appui long sur un lieu pour le déplacer et régler la durée\nDéplacer vers/ajouter depuis mis de côté",
+    "editHowTo": "Appui long sur un lieu\npour déplacer et régler\nMis de côté : ôter/ajouter",
     "editBucket": "Mis de\ncôté",
     "bestListTitle": "Incontournables - {{city}}",
     "bestListHint": "Sélectionnez les lieux souhaités, dans l’ordre",

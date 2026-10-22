@@ -126,7 +126,7 @@
     "editLate": "開演より{{m}}分遅れて到着",
     "editItinerary": "編集",
     "editDone": "完了",
-    "editHowTo": "場所を長押しして移動し、時間を調整してください\n一時保管へ移動/追加できます",
+    "editHowTo": "場所を長押しして移動し\n時間を調整してください\n一時保管へ移動/追加",
     "editBucket": "一時\n保管",
     "bestListTitle": "人気スポット - {{city}}",
     "bestListHint": "行きたい場所を順番に選んでください",
