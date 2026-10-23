@@ -98,8 +98,6 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
   const placesListOffsetRef = useRef<Record<number, number>>({});
   const [currentMapDay, setCurrentMapDay] = useState(1);
   const [editingDay, setEditingDay] = useState<number | null>(null);
-  // ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 도시 카드의 "여정 생성"을 눌러야 "인기 명소 고르기"가 나타난다(토글) · 화면을 오가도 유지 · 도시 칩을 새로 누르거나 검색창으로 고르면 사라짐 (정본 §)
-  const [fromCard, setFromCard] = useState(false);
   // ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 여정 수정은 로그인한 사람만(공유 링크로 연 여정도 = 로그인 창) (정본 §)
   const startDayEdit = (day: number) => {
     if (!isAuthed) {
@@ -191,14 +189,15 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     i18n,
   });
 
-  const { bestList, openBestList, bestPicked, setBestPicked } = useBestList({
-    formData,
-    isAuthed,
-    requestLogin,
-    setScreen,
-    t,
-    i18n,
-  });
+  const { bestList, bestForm, openBestList, bestPicked, setBestPicked } =
+    useBestList({
+      formData,
+      isAuthed,
+      requestLogin,
+      setScreen,
+      t,
+      i18n,
+    });
 
   const pickers = usePickers({ formData, setFormData });
 
@@ -425,8 +424,6 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     setItinerary,
     editingDay,
     setEditingDay,
-    fromCard,
-    setFromCard,
     startDayEdit,
     formData,
     setFormData,
@@ -434,6 +431,7 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     restoreItineraryById,
     handleGenerate,
     bestList,
+    bestForm,
     openBestList,
     bestPicked,
     setBestPicked,

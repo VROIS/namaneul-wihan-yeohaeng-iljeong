@@ -53,7 +53,9 @@ function checkOne(
     errs.push(`${id}: 증거에 url 없음`);
   if (typeof ev.h1 !== "string" || !ev.h1.trim())
     errs.push(`${id}: 증거에 읽은 이름(h1) 없음`);
+  // ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 걸림(keep=false) 판정의 증거는 진짜 곳(다른 CID) 페이지일 수 있다 = 이어짐 검사는 짝 맞음(keep=true)에만 (정본 §)
   else if (
+    v?.keep !== false &&
     !(typeof ev.url === "string" && urlHasCid(ev.url, cid)) &&
     !sameName(ev.h1, name)
   )

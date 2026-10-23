@@ -8,20 +8,12 @@ const SYMBOL: Record<string, string> = {
   "₹": "INR",
   R$: "BRL",
 };
-const DOLLAR: Record<string, string> = {
-  US: "USD",
-  CA: "CAD",
-  CL: "CLP",
-  CO: "COP",
-  MX: "MXN",
-  AR: "ARS",
-  AU: "AUD",
-  NZ: "NZD",
-  SG: "SGD",
-  HK: "HKD",
-  TW: "TWD",
-};
-const YEN: Record<string, string> = { JP: "JPY", CN: "CNY" };
+// ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 나라 → 화폐(ISO 3166 → ISO 4217) 1벌 = $·¥ 처럼 여러 나라가 쓰는 기호와 현지 기호(RM · ฿ · Rp 등)는 도시 나라의 화폐로 본다 (정본 §2026-10-23)
+const COUNTRY_CUR: Record<string, string> = Object.fromEntries(
+  "AD:EUR AE:AED AF:AFN AG:XCD AL:ALL AM:AMD AO:AOA AR:ARS AT:EUR AU:AUD AW:AWG AZ:AZN BA:BAM BB:BBD BD:BDT BE:EUR BF:XOF BG:BGN BH:BHD BI:BIF BJ:XOF BN:BND BO:BOB BR:BRL BS:BSD BT:BTN BW:BWP BY:BYN BZ:BZD CA:CAD CD:CDF CF:XAF CG:XAF CH:CHF CI:XOF CL:CLP CM:XAF CN:CNY CO:COP CR:CRC CU:CUP CV:CVE CY:EUR CZ:CZK DE:EUR DJ:DJF DK:DKK DM:XCD DO:DOP DZ:DZD EC:USD EE:EUR EG:EGP ER:ERN ES:EUR ET:ETB FI:EUR FJ:FJD FR:EUR GA:XAF GB:GBP GD:XCD GE:GEL GH:GHS GM:GMD GN:GNF GQ:XAF GR:EUR GT:GTQ GW:XOF GY:GYD HK:HKD HN:HNL HR:EUR HT:HTG HU:HUF ID:IDR IE:EUR IL:ILS IN:INR IQ:IQD IR:IRR IS:ISK IT:EUR JM:JMD JO:JOD JP:JPY KE:KES KG:KGS KH:KHR KM:KMF KN:XCD KR:KRW KW:KWD KZ:KZT LA:LAK LB:LBP LC:XCD LI:CHF LK:LKR LR:LRD LS:LSL LT:EUR LU:EUR LV:EUR LY:LYD MA:MAD MC:EUR MD:MDL ME:EUR MG:MGA MK:MKD ML:XOF MM:MMK MN:MNT MO:MOP MR:MRU MT:EUR MU:MUR MV:MVR MW:MWK MX:MXN MY:MYR MZ:MZN NA:NAD NE:XOF NG:NGN NI:NIO NL:EUR NO:NOK NP:NPR NZ:NZD OM:OMR PA:PAB PE:PEN PG:PGK PH:PHP PK:PKR PL:PLN PR:USD PT:EUR PY:PYG QA:QAR RO:RON RS:RSD RU:RUB RW:RWF SA:SAR SB:SBD SC:SCR SD:SDG SE:SEK SG:SGD SI:EUR SK:EUR SL:SLE SM:EUR SN:XOF SO:SOS SR:SRD SS:SSP SV:USD SY:SYP SZ:SZL TD:XAF TG:XOF TH:THB TJ:TJS TL:USD TM:TMT TN:TND TO:TOP TR:TRY TT:TTD TW:TWD TZ:TZS UA:UAH UG:UGX US:USD UY:UYU UZ:UZS VA:EUR VE:VES VN:VND VU:VUV WS:WST YE:YER ZA:ZAR ZM:ZMW ZW:ZWL"
+    .split(" ")
+    .map((kv) => kv.split(":")),
+);
 
 export type EurPer = Record<string, number>;
 type EurResult = { eur?: number; open?: boolean; why?: string };
@@ -55,11 +47,7 @@ function currencyOf(
 ): string | undefined {
   return /^[A-Z]{3}$/.test(cp.cur)
     ? cp.cur
-    : cp.cur === "$"
-      ? DOLLAR[countryCode ?? ""]
-      : cp.cur === "¥"
-        ? YEN[countryCode ?? ""]
-        : SYMBOL[cp.cur];
+    : (SYMBOL[cp.cur] ?? COUNTRY_CUR[countryCode ?? ""]);
 }
 
 // ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 페이지 가격 읽기 1벌 = 식당은 머리줄 → 본문 1인당, 그 밖은 입장권 (정본 §)

@@ -183,6 +183,8 @@ type PageData = {
 // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 채널 막힘 = 제한 보기 + "로봇이 아닌지 확인" 인증 페이지(unusual traffic) = 둘 다 빈 등록이 아니므로 지우지 않고 멈춘다 (정본 §)
 export const LIMITED_VIEW_RE =
   /limited view of Google Maps|unusual traffic from your computer network/i;
+// ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 가격 글자의 돈 표시 1벌 = ISO 3글자 · 알려진 기호 · 그 밖의 현지 기호(RM · ฿ · Rp · S/ 등) = 현지 기호는 도시 나라의 화폐로 환산한다(price-eur currencyOf) (정본 §2026-10-23)
+const CUR = String.raw`[A-Z]{3}|R\$|[$€£¥₩₹]|[A-Z][A-Za-z]|S\/|[^\x00-\x7F\s·–~\d]{1,2}`;
 export function headerPrice(
   mainText: string,
   category: string | null,
@@ -191,13 +193,16 @@ export function headerPrice(
   const cut = category ? t.indexOf(category) : -1;
   const head = cut > 0 ? t.slice(0, cut) : t.slice(0, 160);
   const m = head.match(
-    /·\s*((?:[A-Z]{3}\s?|R\$|[$€£¥₩₹])\d[\d,]*(?:\s?[–~-]\s?\d[\d,]*)?\+?)/,
+    new RegExp(
+      String.raw`·\s*((?:${CUR})\s?\d[\d,]*(?:\s?[–~-]\s?\d[\d,]*)?\+?)`,
+    ),
   );
   return m ? priceText(m[1]) : null;
 }
 
-const PRICE_ANY =
-  /(?:[A-Z]{3}\s?|R\$|[$€£¥₩₹])\d[\d,]*(?:\.\d+)?(?:\s?[–~-]\s?\d[\d,]*(?:\.\d+)?)?\+?/;
+const PRICE_ANY = new RegExp(
+  String.raw`(?:${CUR})\s?\d[\d,]*(?:\.\d+)?(?:\s?[–~-]\s?\d[\d,]*(?:\.\d+)?)?\+?`,
+);
 const OFFICIAL_RE = new RegExp(
   /(?:Official site|공식 사이트)\s*\n?\s*/.source +
     "(" +
@@ -418,8 +423,18 @@ export async function readPlacePage(
       .locator("body")
       .innerText({ timeout: 2000 })
       .catch(() => ""));
-  if (CLOSED_PERM_RE.test(mainText)) out.status = "CLOSED_PERMANENTLY";
-  else if (CLOSED_TEMP_RE.test(mainText)) out.status = "CLOSED_TEMPORARILY";
+  // ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 영업 상태 = 구글맵 요약 머리(첫 탭 앞)가 있으면 그 머리만 본다 · 요약 머리가 없을 때만 밑의 리뷰·본문을 본다 (정본 §2026-10-23)
+  const firstTab = (
+    await page
+      .locator('div[role="main"] [role="tablist"] [role="tab"]')
+      .first()
+      .innerText({ timeout: 2000 })
+      .catch(() => "")
+  ).trim();
+  const tabAt = firstTab ? mainText.indexOf(firstTab) : -1;
+  const head = tabAt > 0 ? mainText.slice(0, tabAt) : mainText;
+  if (CLOSED_PERM_RE.test(head)) out.status = "CLOSED_PERMANENTLY";
+  else if (CLOSED_TEMP_RE.test(head)) out.status = "CLOSED_TEMPORARILY";
   out.limited = LIMITED_VIEW_RE.test(mainText);
   out.price = headerPrice(mainText, out.category);
   out.rawText = mainText || null;
@@ -444,11 +459,13 @@ export type Candidate = {
 export type CardPrice = { cur: string; lo: number; hi: number | null };
 export function priceText(s: string): CardPrice | null {
   const m = s.match(
-    /(?:([A-Z]{3})\s?|(R\$|[$€£¥₩₹]))(\d[\d,]*(?:\.\d+)?)(?:\s?[–~-]\s?(\d[\d,]*(?:\.\d+)?))?/,
+    new RegExp(
+      String.raw`(${CUR})\s?(\d[\d,]*(?:\.\d+)?)(?:\s?[–~-]\s?(\d[\d,]*(?:\.\d+)?))?`,
+    ),
   );
   if (!m) return null;
   const num = (x: string) => Number(x.replace(/,/g, ""));
-  return { cur: m[1] || m[2], lo: num(m[3]), hi: m[4] ? num(m[4]) : null };
+  return { cur: m[1], lo: num(m[2]), hi: m[3] ? num(m[3]) : null };
 }
 export function cardPrice(snippet: string): CardPrice | null {
   const seg = snippet.match(/\d[.,]\d\s*(?:\([\d.,]+\))?\s*·\s*([^·]+)/)?.[1];

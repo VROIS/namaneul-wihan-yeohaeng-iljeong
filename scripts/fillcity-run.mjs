@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = `/fillcity <도시번호>` = 상태표(베이스라인) → 필시티 한 판(--auto, .claude 폴더에 신호 파일 fillcity-only 가 있으면 그 단계만 한 번) → 실행 후 상태표 → 전후 비교 (정본 §)
-import { spawnSync } from "node:child_process";
+// ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = `/fillcity <도시번호>` = 상태표(베이스라인) → 필시티 한 판(--auto, .claude 폴더에 신호 파일 fillcity-only 가 있으면 그 단계만 한 번) → 실행 후 상태표 → 전후 비교 (정본 §)
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,15 +12,53 @@ if (!Number.isInteger(city) || city <= 0) {
   console.error("사용법: /fillcity <도시번호>");
   process.exit(1);
 }
-const CDP = "http://127.0.0.1:9222";
-try {
-  const r = await fetch(`${CDP}/json/version`, {
-    signal: AbortSignal.timeout(3000),
-  });
-  if (!r.ok) throw new Error(String(r.status));
-} catch {
-  console.error(`⛔ 전용 크롬(${CDP})이 안 켜져 있다 = 켠 뒤 다시.`);
-  process.exit(2);
+// ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 전용 크롬 = 포트 9333(Aside 9222 와 안 겹침) · 응답이 없으면 필시티가 같은 프로필의 옛 전용 크롬을 닫고 최소화로 새로 켠다(로그인은 프로필에 남음 · 화면을 가로채지 않음) · 켜도 응답 없을 때만 멈춤 (정본 §)
+const CDP = "http://127.0.0.1:9333";
+const cdpUp = async () => {
+  try {
+    const r = await fetch(`${CDP}/json/version`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
+};
+if (!(await cdpUp())) {
+  console.log("🟡 전용 크롬이 꺼져 있어 켭니다(최소화).");
+  spawnSync(
+    "powershell",
+    [
+      "-NoProfile",
+      "-Command",
+      "Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | Where-Object { $_.CommandLine -like '*fillcity-chrome*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }",
+    ],
+    { stdio: "ignore", windowsHide: true },
+  );
+  await new Promise((r) => setTimeout(r, 1500));
+  spawn(
+    "cmd",
+    [
+      "/c",
+      "start",
+      '""',
+      "/min",
+      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+      "--remote-debugging-port=9333",
+      "--user-data-dir=C:/Users/hzino/fillcity-chrome",
+    ],
+    { detached: true, stdio: "ignore", windowsHide: true },
+  ).unref();
+  let up = false;
+  for (let i = 0; i < 30 && !up; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    up = await cdpUp();
+  }
+  if (!up) {
+    console.error(`⛔ 전용 크롬(${CDP})을 켰지만 응답이 없다.`);
+    process.exit(2);
+  }
+  console.log("✅ 전용 크롬 켜짐 = 작업 표시줄에 최소화.");
 }
 const stamp = () =>
   new Date().toISOString().slice(0, 19).replace("T", "_").replaceAll(":", "");

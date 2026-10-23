@@ -49,8 +49,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
     setFormData,
     toggleVibe,
     openPicker,
-    fromCard,
-    setFromCard,
+    openBestList,
   } = planner;
 
   const [repCard, setRepCard] = useState<RepCard | null>(null);
@@ -60,7 +59,6 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
   const searchPlaceholder = t("trip.searchPlaceholder");
   // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 위젯이 나라 코드(ISO-2)를 같이 받아 서버로 보낸다 = 같은 나라 거점 우선 (정본 §)
   const handlePlaceSelect = (place: PlaceSelection) => {
-    setFromCard(false);
     setFormData((prev) => ({
       ...prev,
       destination: place.name || prev.destination,
@@ -92,7 +90,6 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
   // 도시 칩 = 그 도시를 목적지로 잡고 **항상** 카드를 띄운다(2026-08-02 사장님 지시 = 옛 "대표여정 없으면 안 띄움" 폐기 §19).
   const handleCityPress = async (city: ReadyCity) => {
     lastCityRef.current = city.id;
-    setFromCard(false);
     // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 가장 최근 선택이 최우선 = 도시 칩을 누르면 앞서 고른 숙소(좌표·이름·주소·장소 번호·나라 코드)를 지우고 도시 중심으로 (정본 §)
     setFormData((prev) => ({
       ...prev,
@@ -667,22 +664,16 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
           </View>
         </View>
 
-        <GenerateButtons
-          planner={planner}
-          showPick={
-            fromCard &&
-            !formData.accommodationCoords &&
-            readyCities.some((c) => c.nameEn === formData.destination)
-          }
-        />
+        <GenerateButtons planner={planner} />
       </ScrollView>
 
       {/* 🏙️ 도시 카드 = TRIPIS 통합 모달 1벌(§16). ▶ 배지를 누르면 같은 모달이 대표 숏폼 재생으로 바뀐다 */}
+      {/* ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 도시 카드 "인기 명소 여정" = 곧바로 인기 명소 목록(고정값 주입은 useBestList) (정본 §) */}
       <TripisModal
         visible={repCard !== null}
         params={repCard ? { mode: "city", rep: repCard } : null}
         onClose={() => setRepCard(null)}
-        onCreateTrip={() => setFromCard(true)}
+        onCreateTrip={openBestList}
       />
 
       <WebInputModal planner={planner} />

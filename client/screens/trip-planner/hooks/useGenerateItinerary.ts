@@ -8,8 +8,8 @@ import { useMapToggle } from "@/contexts/MapToggleContext";
 import { parseCreditShortfall, useCreditShortfall } from "@/lib/creditError";
 import type { ScreenState } from "./useTripPlanner";
 
-// ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 베스트 목록에서 고른 날별 장소(pickedDays)를 같은 생성 요청에 실어 예상 여정을 만든다 (정본 §)
-type GenerateExtra = { pickedDays?: number[][] };
+// ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 인기 명소 목록에서 고른 날별 장소(pickedDays)와 인기 명소 고정값을 같은 생성 요청에 실어 예상 여정을 만든다 (정본 §)
+type GenerateExtra = Partial<TripFormData> & { pickedDays?: number[][] };
 
 export function useGenerateItinerary({
   formData,

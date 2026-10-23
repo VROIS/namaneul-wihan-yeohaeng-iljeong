@@ -27,6 +27,7 @@ import {
 import { absorbInto } from "../../worker/lib/services/fill/gmaps-absorb";
 import { decidePrice } from "../../worker/lib/services/shared/price-eur";
 import { upsertPlace } from "../../worker/lib/services/place-upsert";
+import { auditWithRetry, checkFindItem, chromeVisits } from "./procedure-check";
 
 loadEnv();
 const argv = parseArgs();
@@ -105,32 +106,79 @@ type Found = {
     console.log("DRY = --apply 로 일꾼을 띄우고 찾은 CID 를 창고에 넣는다");
     process.exit(0);
   }
-  await runAgents({
-    label: "find",
-    instruction: INSTRUCTION,
-    ranges,
-    promptOf: (j) =>
-      [
-        `- 명단 파일 = ${listFile}`,
-        `- 네게 배정된 순서 = 명단 항목의 order 값이 ${j.from}부터 ${j.to}까지(끝 번호 포함, 도시 번호 ${cityId}, 조 번호 ${j.k})`,
-        `- 결과 폴더 = ${dir}`,
-      ].join("\n"),
-    doneOf: (j) => fs.existsSync(path.join(dir, `result-${j.k}.json`)),
-    dir,
-  });
+  // ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 일꾼 결과는 항목마다 판단 순서(제미니 힌트 → 구글 검색 → 구글맵)를 기계가 크롬 방문 기록과 대조한다 · 어긴 항목은 결과에서 빼고 그 항목만 이유와 함께 한 번 되돌림 · 두 번째도 어기면 단계 실패 (정본 §2026-10-23)
+  const t0 = Date.now();
+  const run = (
+    list: { k: number; from: number; to: number }[],
+    retryFile?: string,
+  ) =>
+    runAgents({
+      label: "find",
+      instruction: INSTRUCTION,
+      ranges: list,
+      promptOf: (j) =>
+        [
+          `- 명단 파일 = ${listFile}`,
+          retryFile
+            ? `- 네 몫 = ${retryFile} 의 "${j.k}" 목록(order 값). 이 항목들은 아래 이유로 받지 않았다 = 이유를 읽고 지시문 순서대로 다시 한다(도시 번호 ${cityId}, 조 번호 ${j.k})`
+            : `- 네게 배정된 순서 = 명단 항목의 order 값이 ${j.from}부터 ${j.to}까지(끝 번호 포함, 도시 번호 ${cityId}, 조 번호 ${j.k})`,
+          `- 결과 폴더 = ${dir}`,
+        ].join("\n"),
+      doneOf: (j) => fs.existsSync(path.join(dir, `result-${j.k}.json`)),
+      dir,
+    });
+  await run(ranges);
   const byOrder = new Map<number, Found>();
-  for (const j of ranges) {
-    const f = path.join(dir, `result-${j.k}.json`);
-    if (!fs.existsSync(f)) continue;
-    try {
-      const arr: Found[] = JSON.parse(fs.readFileSync(f, "utf-8"));
-      for (const r of Array.isArray(arr) ? arr : [])
-        if (Number.isInteger(r.order) && r.order >= j.from && r.order <= j.to)
+  const audit = (): Map<number, string[]> => {
+    const visits = chromeVisits(t0 - 60_000, Date.now());
+    byOrder.clear();
+    const bad = new Map<number, string[]>();
+    for (const f of fs
+      .readdirSync(dir)
+      .filter((x) => /^result-\d+\.json$/.test(x))
+      .sort((a, b) => Number(a.slice(7, -5)) - Number(b.slice(7, -5)))) {
+      let arr: any[] = [];
+      try {
+        arr = JSON.parse(fs.readFileSync(path.join(dir, f), "utf-8"));
+      } catch (e: any) {
+        console.log(`  ✘ ${f} 읽기 실패: ${e?.message || e}`);
+        continue;
+      }
+      const keep: any[] = [];
+      const out: any[] = [];
+      for (const r of Array.isArray(arr) ? arr : []) {
+        if (!Number.isInteger(r?.order) || !items[r.order]) continue;
+        const why = checkFindItem(r, visits);
+        if (why.length) {
+          bad.set(r.order, why);
+          out.push({ ...r, 받지않은이유: why });
+        } else {
+          bad.delete(r.order);
+          keep.push(r);
           byOrder.set(r.order, r);
-    } catch (e: any) {
-      console.log(`  ✘ result-${j.k}.json 읽기 실패: ${e?.message || e}`);
+        }
+      }
+      if (out.length) {
+        fs.writeFileSync(path.join(dir, f), JSON.stringify(keep, null, 2));
+        fs.writeFileSync(
+          path.join(dir, f.replace("result-", "rejected-")),
+          JSON.stringify(out, null, 2),
+        );
+      }
     }
-  }
+    return bad;
+  };
+  const rejected = await auditWithRetry({
+    audit,
+    retry: run,
+    dir,
+    nextK: ranges.length + 1,
+  });
+  for (const [o, why] of rejected)
+    console.log(
+      `  ✘ order ${o} ${items[o].name_en}: 판단 순서 위반 2번 = ${why.join(" · ")}`,
+    );
+  const failed = rejected.size ? 1 : 0;
   const found = items.filter(
     (x) =>
       byOrder.get(x.order)?.found &&
@@ -139,7 +187,7 @@ type Found = {
   console.log(
     `\n일꾼 결과 = ${items.length}곳 중 찾음 ${found.length} · 못 찾음 ${items.length - found.length}`,
   );
-  if (!found.length) process.exit(0);
+  if (!found.length) process.exit(failed);
 
   const c = await connectDb();
   const { writeBestRankUnion } = await import(
@@ -303,7 +351,7 @@ type Found = {
   console.log(
     `═══ 못 찾은 베스트 끝 = 찾음 ${found.length} / ${items.length} · 새 행 ${made.length} · 장부 = ${path.relative(ROOT, ledgerPath(cityId))} ═══`,
   );
-  process.exit(0);
+  process.exit(failed);
 })().catch((e) => {
   console.error("✗ 못 찾은 베스트 실패:", e?.message || e);
   process.exit(1);

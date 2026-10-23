@@ -12,6 +12,7 @@ import {
   runAgents,
   shareRanges,
 } from "./common";
+import { checkFixItem, chromeVisits, waitHistory } from "./procedure-check";
 
 loadEnv();
 const argv = parseArgs();
@@ -98,6 +99,21 @@ async function exportList(c: any): Promise<{ file: string; rows: any[] }> {
 
 async function applyFile(c: any, file: string): Promise<number> {
   const verdicts: Verdict[] = JSON.parse(fs.readFileSync(file, "utf-8"));
+  // ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = ⑦ 최종 검수 판정(final-fix-claude.json)은 항목마다 근거 칸(제미니 원본·로그·구글 검색·구글맵)이 있고 크롬 방문 기록과 맞아야 넣는다 · 하나라도 어기면 파일 전체를 넣지 않는다 (정본 §)
+  if (/final-fix-claude\.json$/.test(file)) {
+    await waitHistory();
+    const visits = chromeVisits(Date.now() - 48 * 3600e3, Date.now());
+    const rawDir = path.join(ROOT, "docs", "raw", String(cityId));
+    const bad = verdicts
+      .map((v) => ({ id: v.id, why: checkFixItem(v, rawDir, visits) }))
+      .filter((x) => x.why.length);
+    if (bad.length) {
+      for (const b of bad) console.log(`  ✘ #${b.id} = ${b.why.join(" · ")}`);
+      throw new Error(
+        `판단 순서 검문 불통과 ${bad.length}건 = 이 파일은 넣지 않는다`,
+      );
+    }
+  }
   const ids = verdicts.map((v) => Number(v.id)).filter(Boolean);
   const mine = new Map<number, string>(
     (

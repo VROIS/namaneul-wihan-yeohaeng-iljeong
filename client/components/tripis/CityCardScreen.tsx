@@ -69,7 +69,7 @@ const COUNTRY_NAMES_EN: Record<string, string> = {
 
 interface Props {
   rep: RepCard;
-  onCreateTrip(): void; // [여정 만들기] = 뒤 플래너 도시입력칸이 이미 채워진 상태 → 카드만 닫는다
+  onCreateTrip(): void; // [인기 명소 여정] = 카드를 닫고 인기 명소 목록으로
   onVideo(): void; // [영상] = 같은 모달 안에서 숏폼 영상 화면으로 전환(카드는 사라짐)
   onGuide(): void;
   onCourse(): void; // [코스] = 그 여정 화면(프로필 '나의 여정' 카드와 같은 경로)
@@ -183,8 +183,8 @@ export default function CityCardScreen({
             >
               <Icon name="check-circle" size={18} color="#FFFFFF" />
               <Text style={styles.selectBtnText}>
-                {/* ⚠️ §23 = 버튼은 짧은 동사만. 어느 도시인지는 이 카드 안이라 위치로 자명하므로 도시명을 넣지 않는다(2026-07-30) */}
-                {t("trip.generate")}
+                {/* ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 카드 버튼 = "인기 명소 여정" · 누르면 곧바로 인기 명소 목록 (정본 §) */}
+                {t("trip.pickPopular")}
               </Text>
             </LinearGradient>
           </Pressable>

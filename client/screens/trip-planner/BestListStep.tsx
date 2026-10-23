@@ -35,7 +35,7 @@ export default function BestListStep({ planner }: { planner: PlannerApi }) {
     i18n,
     insets,
     bestList,
-    formData,
+    bestForm,
     setScreen,
     handleGenerate,
     startDayEdit,
@@ -49,9 +49,9 @@ export default function BestListStep({ planner }: { planner: PlannerApi }) {
   const cardY = useRef<Record<number, number>>({});
 
   const center =
-    formData.accommodationCoords ??
+    bestForm?.accommodationCoords ??
     bestList?.center ??
-    formData.destinationCoords ??
+    bestForm?.destinationCoords ??
     null;
   const cfg = useMemo(
     () => ({ center: center ?? { lat: 0, lng: 0 }, mult: bestList?.mult ?? 2 }),
@@ -121,7 +121,7 @@ export default function BestListStep({ planner }: { planner: PlannerApi }) {
     [days],
   );
 
-  if (!bestList) return null;
+  if (!bestList || !bestForm) return null;
 
   const pick = (id: number) => {
     if (slotOf.has(id)) {
@@ -141,10 +141,12 @@ export default function BestListStep({ planner }: { planner: PlannerApi }) {
   };
   const ready = days.every((d) => d.length > 0);
 
+  // ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 목록 화면은 인기 명소 고정값(bestForm)으로 보이고 완료 요청에도 그대로 싣는다 · 입력 화면 값은 안 씀 (정본 §)
   const done = async () => {
     if (!ready || busy) return;
     setBusy(true);
     const ok = await handleGenerate({
+      ...bestForm,
       pickedDays: days.map((d) => d.map((p) => p.id)),
     });
     setBusy(false);
@@ -181,9 +183,9 @@ export default function BestListStep({ planner }: { planner: PlannerApi }) {
         lat: center.lat,
         lng: center.lng,
         label: `${t("trip.departure")}: ${
-          formData.accommodationName ||
+          bestForm.accommodationName ||
           t("trip.departureCityCenter", {
-            destination: displayCityName(formData),
+            destination: displayCityName(bestForm),
           })
         }`,
       }
@@ -215,10 +217,10 @@ export default function BestListStep({ planner }: { planner: PlannerApi }) {
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={[s.title, { color: theme.text }]} numberOfLines={1}>
-            {t("trip.bestListTitle", { city: displayCityName(formData) })}
+            {t("trip.bestListTitle", { city: displayCityName(bestForm) })}
             <Text style={[s.date, { color: theme.textSecondary }]}>
               {"  "}
-              {shortDate(formData.startDate)} ~ {shortDate(formData.endDate)}
+              {shortDate(bestForm.startDate)} ~ {shortDate(bestForm.endDate)}
             </Text>
           </Text>
           <Text
