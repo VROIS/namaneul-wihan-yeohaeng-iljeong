@@ -9,6 +9,7 @@ import {
   runAgents,
   shareRanges,
   stamp,
+  waitHumanCleared,
 } from "./common";
 import { LABEL_STATES, readListRaws } from "./lists-common";
 import { validateRefine } from "./refine-validate";
@@ -173,22 +174,32 @@ function refineDir(selectName: string): string {
     });
   }
 
-  const todo = fs
-    .readdirSync(path.join(dir, "todo"))
-    .filter((x) => x.endsWith(".json"))
-    .map((x) => JSON.parse(fs.readFileSync(path.join(dir, "todo", x), "utf-8")))
-    .filter((x) => !has("done", String(x.cid)))
-    .sort((a, b) => String(a.cid).localeCompare(String(b.cid)));
-  const openRanges = shareRanges(todo.length);
-  openRanges.forEach((j) =>
-    fs.writeFileSync(
-      path.join(dir, `mine-${j.k}.json`),
-      JSON.stringify(todo.slice(j.from, j.to + 1), null, 2),
-    ),
-  );
-  if (openRanges.length) {
+  // ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 직접 열어 볼 곳 = 일꾼이 인증·중단으로 못 연 곳은 인증이 풀린 뒤 그곳만 다시 맡긴다(최대 3번) = 판을 멈추지 않고 이어 돈다 (정본 §2026-10-23)
+  let kBase = 0;
+  for (let round = 0; round <= 3; round++) {
+    const todo = fs
+      .readdirSync(path.join(dir, "todo"))
+      .filter((x) => x.endsWith(".json"))
+      .map((x) =>
+        JSON.parse(fs.readFileSync(path.join(dir, "todo", x), "utf-8")),
+      )
+      .filter((x) => !has("done", String(x.cid)))
+      .sort((a, b) => String(a.cid).localeCompare(String(b.cid)));
+    if (!todo.length) break;
+    if (round > 0) await waitHumanCleared("목록 정제 = 못 연 곳 이어서");
+    const openRanges = shareRanges(todo.length).map((j) => ({
+      ...j,
+      k: j.k + kBase,
+    }));
+    kBase += openRanges.length;
+    openRanges.forEach((j) =>
+      fs.writeFileSync(
+        path.join(dir, `mine-${j.k}.json`),
+        JSON.stringify(todo.slice(j.from, j.to + 1), null, 2),
+      ),
+    );
     console.log(
-      `🌐 직접 열어 볼 곳 ${todo.length}곳 → 일꾼 ${openRanges.length}명 동시(몫 ${openRanges.map((j) => j.to - j.from + 1).join("·")})`,
+      `🌐 직접 열어 볼 곳 ${todo.length}곳 → 일꾼 ${openRanges.length}명 동시(몫 ${openRanges.map((j) => j.to - j.from + 1).join("·")})${round ? ` · 이어서 ${round}번째` : ""}`,
     );
     await runAgents({
       label: "open",

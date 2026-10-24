@@ -11,7 +11,6 @@ import {
 import { absorbInto } from "./gmaps-absorb";
 import {
   LIMITED_WHY,
-  loadPriceCtx,
   newStat,
   pageTools,
   provenanceTag,
@@ -67,22 +66,15 @@ export async function insertSeedEntries(o: {
     await c.query("SELECT name_en FROM cities WHERE id=$1", [cityId])
   ).rows[0];
   const rawRows: any[] = [];
-  const priceCtx = await loadPriceCtx(c, cityId);
   const reads = await readAll(
     o.browser,
     BROWSER_UA,
     신규,
-    { ...pageTools(), cityId, cityNameEn: city?.name_en, rawRows, priceCtx },
+    { ...pageTools(), cityId, cityNameEn: city?.name_en, rawRows },
     stat,
   );
   for (const r of reads) {
-    await writeRead(
-      c,
-      o.upsertPlace,
-      r,
-      { cityId, provenanceTag: tag, priceCtx },
-      stat,
-    );
+    await writeRead(c, o.upsertPlace, r, { cityId, provenanceTag: tag }, stat);
     if (o.onRead) await o.onRead(r);
   }
   const { saveRaw } = await import("../shared/save-raw");
@@ -141,7 +133,7 @@ export const entryOfRow = (r: any): NewEntry =>
     nameKo: r.name_ko,
     langs: 1,
     cat: r.seed_category,
-    avgPrice: r.price_eur,
+    price: r.price_eur,
     avgRank: null,
     copies: [
       { lang: "ko", summary: r.summary_ko, editorial: r.editorial_summary },
@@ -202,7 +194,6 @@ export async function runGmapsPost(o: {
   );
 
   let pidResults: Result[] = [];
-  const priceCtx = await loadPriceCtx(c, cityId);
   if (directIds.length) {
     const pidRows: Row[] = (
       await c.query(
@@ -221,7 +212,7 @@ export async function runGmapsPost(o: {
       client: c,
       cityId,
       apply: true,
-      writeCtx: { ...priceCtx, deleteRow },
+      writeCtx: { deleteRow },
       parallel: o.parallel,
       onResult: (r) =>
         log(
@@ -255,7 +246,6 @@ export async function runGmapsPost(o: {
         cityId,
         cityNameEn: city.name_en,
         rawRows: [],
-        priceCtx,
         parallel: o.parallel,
       },
       stat,
@@ -271,7 +261,7 @@ export async function runGmapsPost(o: {
         c,
         o.upsertPlace,
         rd,
-        { cityId, provenanceTag: "gmaps-post", targetRowId, priceCtx },
+        { cityId, provenanceTag: "gmaps-post", targetRowId },
         stat,
       );
       if (rd.why && rd.why !== LIMITED_WHY)

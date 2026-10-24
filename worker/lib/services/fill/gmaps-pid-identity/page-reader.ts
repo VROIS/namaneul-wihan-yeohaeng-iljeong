@@ -1,5 +1,7 @@
-// ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = §0 700줄 가드 = 폴더 분리(로직 무변경)
+// ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = 구글맵 페이지 읽기 1벌(§0 700줄 폴더 분리 · 브라우저 켜기·시간 제한 = browser-launch) · 인증 창을 윈도우 맨 앞으로 올리는 child_process 사용 (정본 §2026-10-24)
+import { spawn } from "child_process";
 import type { Page } from "playwright";
+import { CUR_WORDS } from "../../shared/price-eur";
 
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 지시 = 리뷰수 언어별 패턴. 실측 서울 hl=ko = 라벨이 "리뷰 46,716개"(숫자 뒤 단어 없음) 라 단어 없는 숫자 대체 로직이 별점 4.6 → 46 으로 오독(169행) = 그 대체 로직 폐기 = 2026-08-28. 숫자 = 정수(천 단위 구분 허용)만 = "4.6" 은 리뷰수 후보에서 제외.
 const RC_NUM = "(\\d{1,3}(?:[.,\\s\\u00a0]\\d{3})+|\\d+)";
@@ -33,11 +35,7 @@ const CONSENT_ACCEPT_SEL = [
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 확정 = 브라우저 UA = 일반 크롬. 실측(보고타 3 PID): Playwright 기본 headless UA 면 구글맵이 별점만 있는 축약 헤더를 내려 리뷰수 span 이 영영 안 뜸 / 일반 UA 면 리뷰수("50,729 reviews") 가 뜸. 동의 직후 첫 페이지만 축약 렌더 = readPlacePage 가 1회 reload 로 복구.
 export const BROWSER_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
-// ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 구글맵 읽기 브라우저 = GMAPS_CDP(주소)가 있으면 사장님이 로그인해 둔 전용 크롬에 붙는다(로그인 상태 = 제한 보기 없음), 없으면 새 크롬 (정본 §)
-export const launchBrowser = (chromium: any) =>
-  process.env.GMAPS_CDP
-    ? chromium.connectOverCDP(process.env.GMAPS_CDP)
-    : chromium.launch({ channel: "chrome", headless: true });
+export { launchBrowser, withTimeout, ROW_TIMEOUT_MS } from "./browser-launch";
 // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 구글맵을 여는 시각에 사람 같은 편차(0.3~3초, 이 PC 전용 크롬 GMAPS_CDP 일 때만)를 준다 · 모든 단계가 이 함수(export) 하나를 쓴다 (정본 §)
 export const humanPause = (page: Page) =>
   process.env.GMAPS_CDP
@@ -48,13 +46,40 @@ export const GMAPS_WINDOWS = 5;
 const OFFSCREEN = { left: -2400, top: 100, width: 1280, height: 900 };
 const ONSCREEN = { left: 120, top: 80, width: 1280, height: 900 };
 const WINDOW_OF = new WeakMap<object, { cdp: any; windowId: number }>();
+// ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = 창을 화면 안으로 끌어오기 1벌 = 최소화·화면 밖 어느 쪽이든 보통 크기로 되돌린 뒤 화면 안 좌표로 옮기고 **윈도우 맨 앞으로 올린다**(92번 사고 = 좌표만 옮겨 다른 창 뒤에 깔려 사장님이 인증 창을 못 봄 · 뒤에서 연 창은 윈도우가 앞으로 올려 주지 않는다) · 사람 인증 대기도 화면 밖 창(openWindow)으로 확인하고 막혔을 때만 이것으로 끌어온다 = 평소에는 사장님 화면을 가리지 않는다 (정본 §2026-10-24)
 export async function showWindow(page: Page): Promise<void> {
   const w = WINDOW_OF.get(page);
   if (!w) return;
-  await w.cdp
-    .send("Browser.setWindowBounds", { windowId: w.windowId, bounds: ONSCREEN })
-    .catch(() => {});
+  for (const bounds of [{ windowState: "normal" }, ONSCREEN])
+    await w.cdp
+      .send("Browser.setWindowBounds", { windowId: w.windowId, bounds })
+      .catch(() => {});
   await page.bringToFront().catch(() => {});
+  await activateWindow(page);
+}
+// 윈도우 맨 앞으로 = 창 제목이 페이지 제목으로 시작하는 크롬 창(실측 = 전용 크롬 제목 끝은 "- Chrome", 보통은 "- Google Chrome")을 찾아 입력 스레드를 붙이고 SetForegroundWindow(뒤에서 연 창은 이것 없이는 앞으로 안 올라온다)
+const WIN32_FOREGROUND = [
+  'Add-Type -Name W -Namespace U -MemberDefinition \'[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h); [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, IntPtr p); [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId(); [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool f);\'',
+  "$p = Get-Process chrome -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like ($env:TRIPIS_WIN_TITLE + '*') } | Select-Object -First 1",
+  "if ($p) { $h = $p.MainWindowHandle; $t = [U.W]::GetWindowThreadProcessId($h, [IntPtr]::Zero); $me = [U.W]::GetCurrentThreadId(); [U.W]::AttachThreadInput($me, $t, $true) | Out-Null; [U.W]::ShowWindow($h, 9) | Out-Null; [U.W]::SetForegroundWindow($h) | Out-Null; [U.W]::AttachThreadInput($me, $t, $false) | Out-Null }",
+].join("; ");
+async function activateWindow(page: Page): Promise<void> {
+  if (process.platform !== "win32") return;
+  const title = await page.title().catch(() => "");
+  if (!title) return;
+  await new Promise<void>((resolve) => {
+    const child = spawn(
+      "powershell",
+      ["-NoProfile", "-NonInteractive", "-Command", WIN32_FOREGROUND],
+      {
+        stdio: "ignore",
+        windowsHide: true,
+        env: { ...process.env, TRIPIS_WIN_TITLE: title },
+      },
+    );
+    child.on("exit", () => resolve());
+    child.on("error", () => resolve());
+  });
 }
 export async function openWindow(
   browser: any,
@@ -123,7 +148,7 @@ const cidOf = (m: RegExpMatchArray | null) =>
 const cidFromUrl = (url: string) =>
   cidOf(url.match(/[?&#!]\d*m\d+!1s(0x[0-9a-f]+:0x[0-9a-f]+)/i));
 
-// ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 좌표 = 주소창 @위도,경도 · 없으면(한국 구글맵은 좌표를 안 줌) 주소창 플러스코드(!20s…)를 풀어서(경복궁·우래옥 실측 = 창고 좌표와 일치)
+// ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = 장소 좌표 = 주소창의 장소 핀(!3d위도!4d경도) 먼저 · 핀이 없으면 장소 페이지(/maps/place/)일 때만 @위도,경도(지도 화면 중심) · 그다음 플러스코드(!20s…, 한국 구글맵) · 검색 목록 화면의 @ 는 장소 좌표가 아니다(92번 사고 = 화면 중심을 장소 좌표로 써서 외국 장소 19행이 도시 중심 좌표로 들어옴)
 const OLC = "23456789CFGHJMPQRVWX";
 const PLUS_IN_URL_RE = new RegExp(
   `!20s([${OLC}]{8})(?:%2B|\\+)([${OLC}]{2,7})`,
@@ -148,17 +173,26 @@ function plusCodeLatLng(code: string): [number, number] {
   }
   return [lat + hLat / 2, lng + hLng / 2];
 }
+const PIN_IN_URL_RE = /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/;
 export function coordsFromUrl(url: string): [number, number] | null {
-  const m = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  const pin = url.match(PIN_IN_URL_RE);
+  if (pin) return [Number(pin[1]), Number(pin[2])];
+  const m = url.includes("/maps/place/")
+    ? url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)
+    : null;
   if (m) return [Number(m[1]), Number(m[2])];
   const p = url.match(PLUS_IN_URL_RE);
   return p ? plusCodeLatLng(p[1] + p[2]) : null;
 }
 
-const CLOSED_PERM_RE =
+export const CLOSED_PERM_RE =
   /Permanently closed|Cerrado permanentemente|Cerrado definitivamente|Définitivement fermé|Fermé définitivement|Dauerhaft geschlossen|Chiuso definitivamente|Fechado permanentemente|Fechado definitivamente|Permanent gesloten|Tancat permanentment|폐업|閉業|永久停业|永久停業|Đã đóng cửa vĩnh viễn|Tutup permanen|ปิดถาวร|Imefungwa kabisa/i;
-const CLOSED_TEMP_RE =
+export const CLOSED_TEMP_RE =
   /Temporarily closed|Cerrado temporalmente|Temporairement fermé|Fermé temporairement|Vorübergehend geschlossen|Chiuso temporaneamente|Fechado temporariamente|Tijdelijk gesloten|Tancat temporalment|임시 휴업|臨時休業|暂时关闭|暫時關閉|Tạm thời đóng cửa|Tutup sementara|ปิดชั่วคราว|Imefungwa kwa muda/i;
+
+// ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 영업 상태 글자 1벌 = 폐업·휴업·영업 중 글자를 이 파일에만 두고 ⑦ 값 검문도 이것을 쓴다 (정본 §2026-10-23)
+export const OPEN_RE =
+  /\bOpen\b|\bOpens\b|영업 중|Ouvert|Abierto|Geöffnet|Aperto|Aberto|Geopend|営業中|营业中|營業中|Đang mở cửa|Buka|เปิดอยู่|OPERATIONAL/i;
 
 type PageData = {
   h1: string | null;
@@ -198,6 +232,36 @@ export function headerPrice(
     ),
   );
   return m ? priceText(m[1]) : null;
+}
+
+// ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 글 속 돈 글자 읽기 1벌 = 돈 표시가 숫자 앞(€11 · RM 65 · MYR 598)이든 뒤(84€ · 12,50 € · 10 euros · 50 ringgit)이든 다 읽는다 · 앞 표시는 CUR(단어 중간 글자 제외), 뒤 표시는 유럽식 숫자 · 값 검문이 쓴다 (정본 §2026-10-23)
+const WORDS = Object.keys(CUR_WORDS)
+  .map((w) => `[${w[0]}${w[0].toUpperCase()}]${w.slice(1)}(?![A-Za-z])`)
+  .join("|");
+const CUR_AFTER = String.raw`[€£¥₩₹฿]|${WORDS}|\b[A-Z]{3}\b`;
+const NUM = String.raw`\d+(?:[.,]\d+)*`;
+export const numberOf = (s: string): number => {
+  const last = Math.max(s.lastIndexOf("."), s.lastIndexOf(","));
+  if (last < 0) return Number(s);
+  const dec = (s.includes(".") && s.includes(",")) || s.length - last - 1 !== 3;
+  return dec
+    ? Number(`${s.slice(0, last).replace(/[.,]/g, "")}.${s.slice(last + 1)}`)
+    : Number(s.replace(/[.,]/g, ""));
+};
+const TEXT_CUR = /^(?:[A-Z]{2,3}|Rp|Rs|R\$|S\/|\p{Sc}{1,2})$/u;
+const MONEY_BEFORE = new RegExp(
+  String.raw`(?<![A-Za-z])(${CUR})\s?(${NUM})`,
+  "g",
+);
+const MONEY_AFTER = new RegExp(String.raw`(${NUM})\s?(${CUR_AFTER})`, "g");
+export function moneyInText(s: string): CardPrice[] {
+  const out: CardPrice[] = [];
+  for (const m of s.matchAll(MONEY_BEFORE))
+    if (TEXT_CUR.test(m[1]))
+      out.push({ cur: m[1], lo: numberOf(m[2]), hi: null });
+  for (const m of s.matchAll(MONEY_AFTER))
+    out.push({ cur: m[2], lo: numberOf(m[1]), hi: null });
+  return out;
 }
 
 const PRICE_ANY = new RegExp(
@@ -241,6 +305,21 @@ const exactPrice = (p: CardPrice | null): CardPrice | null =>
 function perPersonPrice(text: string): CardPrice | null {
   const line = text.match(PER_PERSON_LINE_RE)?.[0];
   return exactPrice(line ? priceText(line) : null);
+}
+// ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 페이지 글 → 가격 3칸(머리줄·입장권·1인당) 1벌 = 페이지 읽기와 판정 대조(저장된 페이지 글을 지금 규칙으로 다시 읽기)가 같이 쓴다 (정본 §2026-10-23)
+export function pagePrices(
+  text: string,
+  category: string | null,
+): {
+  price: CardPrice | null;
+  admission: CardPrice | null;
+  perPerson: CardPrice | null;
+} {
+  return {
+    price: headerPrice(text, category),
+    admission: admissionPrice(text),
+    perPerson: perPersonPrice(text),
+  };
 }
 async function scrollPanel(page: Page): Promise<void> {
   for (let i = 0; i < 3; i++) {
@@ -396,10 +475,9 @@ export async function readPlacePage(
         .catch(() => "")
     ).trim() || null;
   if (wantCoords) {
+    // 장소 핀(!3d!4d)이 주소창에 실릴 때까지 기다린다 = 화면 중심(@)이 먼저 보여도 그것으로 끝내지 않는다
     await page
-      .waitForURL((u) => coordsFromUrl(u.toString()) != null, {
-        timeout: 8000,
-      })
+      .waitForURL((u) => PIN_IN_URL_RE.test(u.toString()), { timeout: 8000 })
       .catch(() => {});
     const xy = coordsFromUrl(page.url());
     if (xy) [out.urlLat, out.urlLng] = xy;
@@ -436,10 +514,8 @@ export async function readPlacePage(
   if (CLOSED_PERM_RE.test(head)) out.status = "CLOSED_PERMANENTLY";
   else if (CLOSED_TEMP_RE.test(head)) out.status = "CLOSED_TEMPORARILY";
   out.limited = LIMITED_VIEW_RE.test(mainText);
-  out.price = headerPrice(mainText, out.category);
+  Object.assign(out, pagePrices(mainText, out.category));
   out.rawText = mainText || null;
-  out.admission = admissionPrice(mainText);
-  out.perPerson = perPersonPrice(mainText);
   const cid = cidFromUrl(page.url());
   if (cid) out.mapsUri = `https://maps.google.com/?cid=${cid}`;
   return out;

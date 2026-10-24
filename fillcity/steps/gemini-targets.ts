@@ -13,6 +13,7 @@ import {
   stamp,
   stampOf,
 } from "./common";
+import { savedEnrichRaws } from "../../worker/lib/services/shared/gemini-curate";
 
 loadEnv();
 const argv = parseArgs();
@@ -87,21 +88,11 @@ const isBlank = (x: unknown) => x == null || String(x).trim() === "";
       add(Number(x.id), "에이전트 보고 어긋남");
 
   // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 이어 돌기 = --since(이 판 시작 시각) 뒤 제미니가 이미 답한 행은 다시 묻지 않는다(저장된 응답은 다시 적용만, 돈 0) · 어떤 이유로 멈췄다 이어도 외부 호출 이중 0 (정본 §)
-  const rawDir = path.join(ROOT, "docs", "raw", String(cityId));
   const sinceStamp = argv["since"] ? stampOf(String(argv["since"])) : null;
-  const answered = new Set<number>();
-  const savedRaws: { file: string; part: string }[] = [];
-  if (sinceStamp && fs.existsSync(rawDir))
-    for (const f of fs.readdirSync(rawDir).sort()) {
-      const m = f.match(/_gemini-enrich-after-google-(\d+)\.json$/);
-      if (!m || f < sinceStamp) continue;
-      savedRaws.push({ file: path.join(rawDir, f), part: m[1] });
-      try {
-        const j = JSON.parse(fs.readFileSync(path.join(rawDir, f), "utf-8"));
-        for (const p of j?.raw?.parsed?.places ?? [])
-          answered.add(Number(p.id));
-      } catch {}
-    }
+  const savedRaws = sinceStamp ? savedEnrichRaws(cityId, sinceStamp) : [];
+  const answered = new Set<number>(
+    savedRaws.flatMap((s) => s.places.map((p: any) => Number(p.id))),
+  );
   const byId = new Map<number, any>(rows.map((r: any) => [r.id, r]));
   const targets = [...reason.keys()]
     .filter((id) => byId.has(id) && !answered.has(id))
@@ -159,28 +150,19 @@ const isBlank = (x: unknown) => x == null || String(x).trim() === "";
         sh(["--call=true", `--ids-file=${f}`, `--part=${k + 1}`, "--apply"]),
       ),
     );
+    const savedNow = savedEnrichRaws(cityId, st);
     const stillFailed = await retryFailed(
       files.map((_, k) => k),
       codes,
       async (k) => {
-        const saved = fs
-          .readdirSync(rawDir)
-          .filter(
-            (x) =>
-              x.endsWith(`_gemini-enrich-after-google-${k + 1}.json`) &&
-              x >= st,
-          )
-          .sort()
-          .pop();
+        const saved = savedNow
+          .filter((s) => s.part === String(k + 1))
+          .pop()?.file;
         console.error(
           `⚠️ 제미니 호출 ${k + 1} 실패 = ${saved ? "저장된 응답을 적용" : "그 몫만 다시 호출"}`,
         );
         const retry = saved
-          ? await sh([
-              `--raw=${path.join(rawDir, saved)}`,
-              `--part=${k + 1}`,
-              "--apply",
-            ])
+          ? await sh([`--raw=${saved}`, `--part=${k + 1}`, "--apply"])
           : await sh([
               "--call=true",
               `--ids-file=${files[k]}`,

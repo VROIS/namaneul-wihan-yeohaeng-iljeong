@@ -1,7 +1,12 @@
 // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 모든 기준 = PID. B1 = 창고에 이미 있나만 거르는 0원 문지기(트리거 드라이런). A등급 직행 merge·자체 등급조정(regrade R1~R6) 삭제 §19 = 기존 행에 걸리면 전부 confirm(B2 TS→PID 판정), 아니면 new.
 import fs from "fs";
 import path from "path";
+import {
+  rawDirOf,
+  reportDirOf,
+} from "../../worker/lib/services/shared/local-paths";
 import { fileURLToPath } from "url";
+import { DIFF_SECTIONS } from "./common";
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = 산출표 저장(mkdir+versionedName+쓰기) 1벌 = saveVersionedReport()
 import {
   rawDate,
@@ -99,6 +104,7 @@ interface RawPlace {
   lng?: number;
   c?: string;
   price_eur?: number;
+  distance_km_from_center?: number;
   address?: string;
   rank?: number; // 그 언어 응답 안에서의 순위(1-20) = 리포트 참고값(best_rank 원천 아님 — 2026-08-27 사장님 확정 = best_rank 는 언어코드)
   summary?: string; // 원어 요약(그 언어) = B2 place_translations 선충전 원천
@@ -115,6 +121,8 @@ interface GroupMember {
   lat?: number;
   lng?: number;
   address?: string;
+  price_eur?: number;
+  distance_km_from_center?: number;
   raw?: RawPlace;
   tier: string; // 불변3 | 불변5 | 불변6 | 의심(영어명/한국어명) | 의심(영어명·유니크색인) | new
 }
@@ -131,7 +139,6 @@ export interface Group {
   lats: number[];
   lngs: number[];
   cats: string[];
-  prices: number[];
   addresses: Set<string>;
   ranks: number[];
   copies: { lang: string; summary?: string; editorial?: string }[];
@@ -162,7 +169,7 @@ function deserializeGroup(g: any): Group {
 
 (async () => {
   const today = rawDate();
-  const outDir = path.join(ROOT, "docs", "b1-reports", String(cityId));
+  const outDir = reportDirOf(cityId);
 
   const pg = await import("pg");
   const c = new (pg as any).default.Client({
@@ -201,9 +208,9 @@ function deserializeGroup(g: any): Group {
       `불러온 선별표 = ${fromExtractedPath} (${saved.generatedAt}) · 선별 대상 ${staged.length}건`,
     );
   } else {
-    const dir = path.join(ROOT, "docs", "raw", String(cityId));
+    const dir = rawDirOf(cityId);
     if (!fs.existsSync(dir)) {
-      console.error(`✗ docs/raw/${cityId} 없음 = 02-discover 선행 필요`);
+      console.error(`✗ ${rawDirOf(cityId)} 없음 = 02-discover 선행 필요`);
       process.exit(1);
     }
     const files = fs
@@ -231,7 +238,7 @@ function deserializeGroup(g: any): Group {
       if (!f) continue;
       const j = JSON.parse(fs.readFileSync(path.join(dir, f), "utf-8"));
       const res = j.raw?.parsed?.results || j.parsed?.results;
-      for (const type of ["landmarks", "restaurants"] as const) {
+      for (const type of DIFF_SECTIONS) {
         for (const p of res?.[type] || []) {
           all.push({
             type,
@@ -243,6 +250,7 @@ function deserializeGroup(g: any): Group {
             lng: p.lng,
             c: p.c,
             price_eur: p.price_eur,
+            distance_km_from_center: p.distance_km_from_center,
             address: p.address,
             rank: p.rank,
             summary: p.summary,
@@ -284,7 +292,6 @@ function deserializeGroup(g: any): Group {
         lats: [],
         lngs: [],
         cats: [],
-        prices: [],
         addresses: new Set(),
         ranks: [],
         copies: [],
@@ -304,6 +311,8 @@ function deserializeGroup(g: any): Group {
             lat: p.lat,
             lng: p.lng,
             address: p.address,
+            price_eur: p.price_eur,
+            distance_km_from_center: p.distance_km_from_center,
             tier,
           },
           "raw",
@@ -319,7 +328,6 @@ function deserializeGroup(g: any): Group {
         g.lngs.push(p.lng);
       }
       if (p.c) g.cats.push(p.c);
-      if (typeof p.price_eur === "number") g.prices.push(p.price_eur);
       if (p.address) g.addresses.add(p.address);
       if (typeof p.rank === "number") g.ranks.push(p.rank);
       if (p.summary || p.editorial)
@@ -579,11 +587,14 @@ function deserializeGroup(g: any): Group {
   const report = { landmarks: emptySection(), restaurants: emptySection() };
   for (const s of staged) {
     const g = s.g;
+    // ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = 깔때기 바탕 = 제미니 1차 응답 1건(한국어 응답, 없으면 첫 응답)을 그대로 넘긴다(가격 평균·좌표 가운데 값 같은 가공 없음) · 도심 거리도 그 응답 값 (정본 §2026-10-24)
+    const rep = g.members.find((m) => m.lang === "ko") ?? g.members[0];
     const base = {
       name: [...g.names][0],
       langs: g.langs.size,
       cat: majorityCat(g.cats),
-      avgPrice: g.prices.length ? Math.round(avg(g.prices)!) : null,
+      price: rep?.price_eur ?? null,
+      distanceKm: rep?.distance_km_from_center ?? null,
       // 언어별 원 순위 평균 = 리포트 참고값(best_rank 원천 아님 — 2026-08-27 사장님 확정 = best_rank 는 언어코드)
       avgRank: g.ranks.length ? Math.round(avg(g.ranks)!) : null,
       copies: g.copies, // 원어 카피(B2 = place_translations 선충전 원천, 외부호출 0)
@@ -592,11 +603,11 @@ function deserializeGroup(g: any): Group {
     };
     const newShape = {
       ...base,
-      nameLocal: [...g.locals][0] || null,
-      nameKo: [...g.kos][0] || null,
-      lat: mid(g.lats),
-      lng: mid(g.lngs),
-      address: [...g.addresses][0] || null,
+      nameLocal: rep?.name_local || null,
+      nameKo: rep?.name_ko || null,
+      lat: rep?.lat ?? null,
+      lng: rep?.lng ?? null,
+      address: rep?.address || null,
       aliases: [...g.names, ...g.locals],
       by: s.by,
     };
@@ -628,7 +639,7 @@ function deserializeGroup(g: any): Group {
   console.log(
     `\n② 기존 PSR 대조 결과(문지기 판정 그대로 → 기존 행에 걸림=confirm / 없음=new):`,
   );
-  for (const label of ["landmarks", "restaurants"] as const) {
+  for (const label of DIFF_SECTIONS) {
     const o = report[label];
     console.log(
       `\n[${label}] 총 ${sizeOf(o)}곳 = confirm ${o.confirm.length} / new ${o.new.length}`,
@@ -645,7 +656,7 @@ function deserializeGroup(g: any): Group {
     );
     for (const n of o.new)
       console.log(
-        `  [${n.langs}] ${n.name} (${n.cat}, avg€${n.avgPrice ?? "-"})${n.mixed ? " ⚠mixed" : ""}`,
+        `  [${n.langs}] ${n.name} (${n.cat}, €${n.price ?? "-"})${n.mixed ? " ⚠mixed" : ""}`,
       );
   }
   if (errors.length) {
@@ -657,7 +668,7 @@ function deserializeGroup(g: any): Group {
   const totalNew = report.landmarks.new.length + report.restaurants.new.length;
   const totalConfirm =
     report.landmarks.confirm.length + report.restaurants.confirm.length;
-  const allItems = (["landmarks", "restaurants"] as const).flatMap((k) => [
+  const allItems = DIFF_SECTIONS.flatMap((k) => [
     ...report[k].confirm,
     ...report[k].new,
   ]);

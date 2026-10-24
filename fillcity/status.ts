@@ -1,6 +1,10 @@
 // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = v3 ⑤ 검수 = 도시 상태표 1벌(임시 점검 스크립트 대신) = 분류별 칸 채움 · DB-only 전환 기준(손님상 120곳 + 베스트) · 손님상 구성(랜드마크·식당) · 식당 상·중·하(그 도시 분포 1벌) · 튀는 가격 · 결손(사진·CID·구글맵 도장)·같은 CID 쌍둥이 = 손님상 관문·전환 기준·분포는 엔진 1벌을 그대로 부른다 (정본 §)
 import fs from "fs";
 import path from "path";
+import {
+  lastGoogleLogs,
+  reportDirOf,
+} from "../worker/lib/services/shared/local-paths";
 import { fileURLToPath } from "url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -190,16 +194,7 @@ if (!cityId) {
   }
   // ⚠️ 수정금지(승인필요) 2026-10-01 사장님 결정 = 구글맵 읽기 로그 대조 = 도시 폴더 로그(행마다 가장 나중 것)와 활성 행을 맞춰 빠진 행·읽기가 막힌 행을 센다(누락 0 확인)
   {
-    const dir = path.join(ROOT, "docs", "raw", String(cityId));
-    const last = new Map<number, any>();
-    if (fs.existsSync(dir))
-      for (const f of fs
-        .readdirSync(dir)
-        .filter((f) => /_gmaps-page-read-\d+\.json$/.test(f))
-        .sort())
-        for (const r of JSON.parse(fs.readFileSync(path.join(dir, f), "utf-8"))
-          ?.raw?.rows ?? [])
-          last.set(Number(r.id), r);
+    const last = lastGoogleLogs(cityId);
     const ids: number[] = (
       await c.query(
         "SELECT id FROM place_seed_raw WHERE city_id=$1 AND status='active' AND seed_category NOT LIKE 'bts_%'",
@@ -324,7 +319,7 @@ if (!cityId) {
       );
     } else console.log("식당 상·중·하 = 분포 없음(가격 있는 식당 5곳 미만)");
   }
-  // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = ⑥ 판정식 1벌 = 한 도시의 마침표 = 손님상 120 이상 · 베스트 1 이상 · 가격 없어 상에 못 오른 행 0 · 손님상 행의 1,000€ 초과 0 · 사진 없음 0 · 대사·카피 없음 0 · 한글 아닌 글자 0 (글자 수는 재지 않는다 = 제미니 응답 그대로) = 걸린 행은 명단 파일(docs/b1-reports/{도시}/{시각}_final-todo.json)로 남겨 클로드·사장님이 직접 채운다 · --judge=true 일 때만 불통과 = exit 1(베이스라인 상태표는 늘 0) (정본 §)
+  // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = ⑥ 판정식 1벌 = 한 도시의 마침표 = 손님상 120 이상 · 베스트 1 이상 · 가격 없어 상에 못 오른 행 0 · 손님상 행의 1,000€ 초과 0 · 사진 없음 0 · 대사·카피 없음 0 · 한글 아닌 글자 0 (글자 수는 재지 않는다 = 제미니 응답 그대로) = 걸린 행은 명단 파일(docs/b1-reports/{도시}/{시각}_final-todo.json)로 남겨 ⑦ 최종 검수 = 최종 보고 → 승인 명령 → 손으로 채움 · --judge=true 일 때만 불통과 = exit 1(베이스라인 상태표는 늘 0) (정본 §)
   {
     const NO_IMG = sql`(${placeSeedRaw.imageUrl} IS NULL OR ${placeSeedRaw.imageUrl} !~ '/[0-9]+/images/')`;
     const NO_TEXT = sql`(COALESCE(${placeSeedRaw.summaryKo}, '') = '' OR COALESCE(${placeSeedRaw.editorialSummary}, '') = '')`;
@@ -360,13 +355,13 @@ if (!cityId) {
       `\n⑥ 판정 = ${fails.length ? `불통과: ${fails.join(" · ")}` : "통과 = 이 도시는 마침표(다시 창고를 볼 일 없음)"}`,
     );
     if (hits.length) {
-      const dir = path.join(ROOT, "docs", "b1-reports", String(cityId));
+      const dir = reportDirOf(cityId);
       fs.mkdirSync(dir, { recursive: true });
       const { fileStamp } = await import("../shared/r2-paths");
       const f = path.join(dir, `${fileStamp()}_final-todo.json`);
       fs.writeFileSync(f, JSON.stringify({ cityId, hits }, null, 2));
       console.log(
-        `  걸린 행 ${hits.length} → ${path.relative(ROOT, f)} (클로드·사장님이 직접 채움 → llm-review.ts --apply=<판정 JSON>)`,
+        `  걸린 행 ${hits.length} → ${path.relative(ROOT, f)} (⑦ 최종 검수 = 최종 보고 → 승인 명령 → 손으로 채움 → llm-review.ts --apply=<판정 JSON>)`,
       );
       for (const h of hits.slice(0, 40))
         console.log(`  #${h.id} ${h.name} = ${h.why}`);

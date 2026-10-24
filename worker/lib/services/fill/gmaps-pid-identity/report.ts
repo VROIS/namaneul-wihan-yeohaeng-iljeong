@@ -1,5 +1,5 @@
-// ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = §0 700줄 가드 = 폴더 분리(로직 무변경)
-import path from "path";
+// ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = PID 짝 맞추기 보고서 = 보고 폴더 reportDirOf 1벌 · §0 700줄 가드 폴더 분리(로직 무변경) (정본 §2026-10-23)
+import { reportDirOf } from "../../shared/local-paths";
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = 산출표 저장(mkdir+versionedName+쓰기) 1벌 = saveVersionedReport()
 import { rawDate, saveVersionedReport } from "../../shared/raw-filename";
 import { PHASE_TAG } from "./apply";
@@ -17,9 +17,8 @@ export function printAndSaveReport(opts: {
   apply: boolean;
   cityId: number;
   lang: string;
-  ROOT: string;
 }): void {
-  const { results, elapsed, apply, cityId, lang, ROOT } = opts;
+  const { results, elapsed, apply, cityId, lang } = opts;
   console.table(
     results.map((r) => ({
       id: r.id,
@@ -164,7 +163,7 @@ export function printAndSaveReport(opts: {
     }, // 소요시간은 해시(중복판정)에서 제외 = 같은 결과면 1파일
     results,
   };
-  const outDir = path.join(ROOT, "docs", "b1-reports", String(cityId));
+  const outDir = reportDirOf(cityId);
   const outPath = saveVersionedReport(
     outDir,
     "gmaps-pid-identity.json",

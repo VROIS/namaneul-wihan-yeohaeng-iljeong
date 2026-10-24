@@ -1,12 +1,12 @@
 // ⚠️ 수정금지(승인필요) 2026-10-15 사장님 결정 = 필시티 읽은 뒤 탐지 = 구글맵 로그와 DB 로 장소 아님 남음·호텔 페이지·표가 못 정하는 행을 목록으로 뽑는다 · CID 가 다르면 다른 장소라 같은 장소 쌍은 뽑지 않는다(DB 쓰기 없음) (정본 §)
 import fs from "fs";
 import path from "path";
+import { lastGoogleLogs } from "../../worker/lib/services/shared/local-paths";
 import { pathToFileURL } from "url";
 import {
   ROOT,
   connectDb,
   isLodgingPage,
-  lastGoogleLogs,
   loadEnv,
   parseArgs,
   reportDir,

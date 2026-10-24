@@ -1,7 +1,11 @@
 // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 깔때기 숫자 자동 출력 1벌 = 한 판의 보고서·원본 로그(실행 창 안 파일)만 읽어 창고 시작 → ① 삭제 → 구글 목록 → 선별 → 정제 → 제미니 7언어 → 교집합 → ④ 신규 → 장부 → 2차 → 최종 점검 → 페이지 열기 합 → 판정을 표 하나로 찍는다(손으로 세지 않는다, DB 쓰기 0, 다른 도구 파일은 읽기만) (정본 §)
 import fs from "fs";
 import path from "path";
-import { ROOT, loadEnv, parseArgs, reportDir, stampOf } from "./common";
+import {
+  GMAPS_READ_RE,
+  rawDirOf,
+} from "../../worker/lib/services/shared/local-paths";
+import { latestReport, loadEnv, parseArgs, reportDir, stampOf } from "./common";
 
 loadEnv();
 const argv = parseArgs();
@@ -13,7 +17,7 @@ if (!cityId) {
   process.exit(1);
 }
 const dir = reportDir(cityId);
-const rawDir = path.join(ROOT, "docs", "raw", String(cityId));
+const rawDir = rawDirOf(cityId);
 const files = (d: string) => (fs.existsSync(d) ? fs.readdirSync(d).sort() : []);
 const J = (f: string) => JSON.parse(fs.readFileSync(f, "utf-8"));
 const baselines = files(dir).filter((f) => f.endsWith("_baseline-status.txt"));
@@ -80,9 +84,9 @@ if (sels.length) {
       `업체 제외 ${(r.refined.removed || []).length} → 입력 ${(r.picks || []).length}곳`,
     ]);
 }
-const b1 = last(dir, /_b1-discovery-diff\.json$/);
+const b1 = latestReport(cityId, "b1-discovery-diff", inWin);
 if (b1) {
-  const b = J(path.join(dir, b1));
+  const b = J(b1);
   const sec = (k: string) => b.report?.[k] || {};
   const cnt = (k: string, f: string) => (sec(k)[f] || []).length;
   const 있음 = cnt("landmarks", "confirm") + cnt("restaurants", "confirm");
@@ -137,9 +141,7 @@ if (fc && fs.existsSync(path.join(dir, fc, "final-table.json"))) {
     `${t.total}행 · 짝 안 맞음 ${(t.mismatch || []).length}`,
   ]);
 }
-const reads = files(rawDir).filter(
-  (f) => /_gmaps-page-read-\d+\.json$/.test(f) && inWin(f),
-);
+const reads = files(rawDir).filter((f) => GMAPS_READ_RE.test(f) && inWin(f));
 const readRows = reads.reduce(
   (a, f) => a + (J(path.join(rawDir, f)).raw?.rows || []).length,
   0,

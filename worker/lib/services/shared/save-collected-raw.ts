@@ -1,6 +1,7 @@
 // ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 발굴형 raw(모음/parsedPlaces) 저장 단일 헬퍼 = 로컬 docs/raw/{도시} + R2 {도시}/raw 2곳 (정본 K3)
 import fs from "fs";
 import path from "path";
+import { rawDirOf } from "./local-paths";
 import { rawName, versionedNameR2, rawHash } from "./raw-filename";
 import { uploadToR2, isR2Configured } from "./r2-client";
 import { rawPlace } from "../../../../shared/r2-paths";
@@ -24,7 +25,7 @@ export async function saveCollectedRaw(
     const newHash = rawHash((opts.body as any)?.[opts.hashKey] ?? {}); // 판정 기준 필드만 해싱(§18 버전순번)
     const ctx = String(opts.cityId);
 
-    const localRawRoot = path.resolve(process.cwd(), "docs", "raw");
+    const localDir = rawDirOf(ctx);
     const dir = rawPlace(ctx).dir;
     let fileName = stem;
     // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 순번 판정 기준 = R2 에 있는 같은 stem 파일 (Worker 는 디스크 없음) = 1차 raw 가 2차에 덮이는 손실 0 (정본 §)
@@ -53,7 +54,7 @@ export async function saveCollectedRaw(
       }
     }
     try {
-      const localPath = path.join(localRawRoot, ctx, fileName);
+      const localPath = path.join(localDir, fileName);
       fs.mkdirSync(path.dirname(localPath), { recursive: true });
       fs.writeFileSync(localPath, text);
     } catch {}

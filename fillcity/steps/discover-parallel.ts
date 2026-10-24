@@ -1,6 +1,7 @@
 // ⚠️ 수정금지(승인필요) 2026-10-05 사장님 결정 = v3.2 최적화 (정본 §)
 import fs from "fs";
 import path from "path";
+import { rawDirOf } from "../../worker/lib/services/shared/local-paths";
 import {
   ROOT,
   loadEnv,
@@ -30,7 +31,7 @@ const RUN = path.join(
     console.error("Usage: --city-id=<N> [--langs=ko,en,...]");
     process.exit(1);
   }
-  const rawDir = path.join(ROOT, "docs", "raw", String(cityId));
+  const rawDir = rawDirOf(cityId);
   // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 이어 돌기 = --since(이 판 시작 시각) 뒤 이미 받은 언어는 다시 부르지 않는다 · 이어 돌 때도 이중 호출 0 (정본 §)
   const st = argv["since"] ? stampOf(String(argv["since"])) : stamp();
   // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 언어별 발굴 실행 = 공용 runTsx 1벌(출력 줄마다 언어 꼬리표) (정본 §)

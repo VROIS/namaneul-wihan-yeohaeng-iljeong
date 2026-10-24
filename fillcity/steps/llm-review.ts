@@ -1,18 +1,25 @@
 // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = ① LLM 검토 = 명단만 보고 쓰레기를 거른다 · --judge = 일꾼 4명이 기준대로 판정 → 합친 판정 파일 → --write=true 면 바로 적용(행 0 이면 건너뜀 = 신도시) · 이름만 엉터리이고 PID 가 있는 행은 지우지 않는다(PID 짝 맞추기가 살린다) (정본 §)
 import fs from "fs";
 import path from "path";
+import {
+  rawDirOf,
+  reportDirOf,
+} from "../../worker/lib/services/shared/local-paths";
 import { fileStamp } from "../../shared/r2-paths";
 import {
   AGENT_WORKERS,
   ROOT,
+  BOKMYEONG_FORMAT,
+  bokmyeongOk,
   connectDb,
+  latestReport,
   loadEnv,
   parseArgs,
   reportDir,
   runAgents,
   shareRanges,
 } from "./common";
-import { checkFixItem, chromeVisits, waitHistory } from "./procedure-check";
+import { checkFixItem, loadEvidence } from "./procedure-check";
 
 loadEnv();
 const argv = parseArgs();
@@ -99,13 +106,22 @@ async function exportList(c: any): Promise<{ file: string; rows: any[] }> {
 
 async function applyFile(c: any, file: string): Promise<number> {
   const verdicts: Verdict[] = JSON.parse(fs.readFileSync(file, "utf-8"));
-  // ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = ⑦ 최종 검수 판정(final-fix-claude.json)은 항목마다 근거 칸(제미니 원본·로그·구글 검색·구글맵)이 있고 크롬 방문 기록과 맞아야 넣는다 · 하나라도 어기면 파일 전체를 넣지 않는다 (정본 §)
+  // ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = ⑦ 판정(final-fix-claude.json)은 항목마다 근거 칸(제미니 원본·로그·구글 검색·구글맵)을 지시문 양식대로 채우고 값(가격·영업 상태)이 외부 응답값(구글맵 페이지·제미니·검색 원문) 안에 있어야 넣는다(방문 기록 대조 없음) · 하나라도 어기면 파일 전체를 넣지 않는다 (정본 §2026-10-24)
   if (/final-fix-claude\.json$/.test(file)) {
-    await waitHistory();
-    const visits = chromeVisits(Date.now() - 48 * 3600e3, Date.now());
-    const rawDir = path.join(ROOT, "docs", "raw", String(cityId));
+    // ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = ⑦ 도 지시문을 읽었다는 답이 먼저 = 그 도시 보고 폴더의 {시각}_bokmyeong-claude.json(24시간 안)에 {"읽음": true} 가 없으면 넣지 않는다 (정본 §2026-10-24)
+    const bok = latestReport(cityId, "bokmyeong-claude");
+    if (
+      !bok ||
+      Date.now() - fs.statSync(bok).mtimeMs > 24 * 3600e3 ||
+      !bokmyeongOk(bok)
+    )
+      throw new Error(
+        `지시문 읽음 없음 = ${reportDirOf(cityId)}/{시각}_bokmyeong-claude.json 에 ${BOKMYEONG_FORMAT} 를 먼저 쓴다(지시문 = fillcity/prompts/09-ai-final-review/instruction.txt)`,
+      );
+    const rawDir = rawDirOf(cityId);
+    const ev = await loadEvidence(c, cityId);
     const bad = verdicts
-      .map((v) => ({ id: v.id, why: checkFixItem(v, rawDir, visits) }))
+      .map((v) => ({ id: v.id, why: checkFixItem(v, rawDir, ev) }))
       .filter((x) => x.why.length);
     if (bad.length) {
       for (const b of bad) console.log(`  ✘ #${b.id} = ${b.why.join(" · ")}`);
@@ -127,82 +143,101 @@ async function applyFile(c: any, file: string): Promise<number> {
     "../../worker/lib/services/place-upsert"
   );
   const done: any[] = [];
+  const skipped: any[] = [];
+  // ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = 판정 한 건이 막히면(DB 중복 차단 등) 그 한 건만 건너뛰고 나머지는 다 넣는다 = 판이 멈추지 않는다(64번 = 중복 차단 1건에 쓰레기 삭제 판정 전부가 안 들어감) (정본 §2026-10-24)
   for (const v of verdicts) {
-    if (!mine.has(Number(v.id))) {
-      console.log(`  ⏭ #${v.id} 이 도시 행 아님/이미 없음`);
-      continue;
-    }
-    if (
-      v.fix &&
-      Object.values(v.fix).some((x) =>
-        Array.isArray(x) ? x.length > 0 : x != null && x !== false,
-      )
-    ) {
-      const cat = (
-        await c.query("SELECT seed_category FROM place_seed_raw WHERE id=$1", [
-          Number(v.id),
-        ])
-      ).rows[0]?.seed_category;
-      // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = CID 를 바꿔 쌍둥이에 흡수될 때 진 행(작은 등록)의 이름이 원행 이름을 덮지 않는다 = 그 CID 를 이미 가진 행이 있으면 그 행의 이름을 넘긴다(마르세유·니스·스트라스부르에서 손으로 복원하던 것) (정본 §)
-      const cid = String(v.fix.google_maps_uri || "").match(/cid=(\d+)/)?.[1];
-      const twin =
-        cid && !v.fix.name_en
-          ? (
-              await c.query(
-                `SELECT id, name_en FROM place_seed_raw WHERE city_id=$1 AND id<>$2 AND merged_into IS NULL AND google_maps_uri ~ ('cid=' || $3 || '(\\D|$)')`,
-                [cityId, Number(v.id), cid],
-              )
-            ).rows[0]
-          : null;
-      const r = await upsertPlace({
-        targetRowId: Number(v.id),
-        cityId,
-        seedCategory: v.fix.seed_category ?? cat,
-        nameEn: v.fix.name_en ?? twin?.name_en ?? mine.get(Number(v.id)),
-        overwriteSeedCategory: !!v.fix.seed_category,
-        categoryTags: [v.fix.seed_category ?? cat, ...(v.fix.tags ?? [])],
-        removeCategoryTags: v.fix.remove_tags,
-        priceEur: v.fix.price_eur ?? null,
-        clearPriceEur: !!v.fix.clear_price,
-        selectionReasonKo: v.fix.summary_ko ?? null,
-        shortformKo: v.fix.editorial_summary ?? null,
-        businessStatus: v.fix.business_status ?? null,
-        nameLocal: v.fix.name_local ?? null,
-        nameKo: v.fix.name_ko ?? null,
-        address: v.fix.address ?? null,
-        ...(v.fix.google_maps_uri
-          ? {
-              googleMapsUri: v.fix.google_maps_uri,
-              followTriggerDup: true,
-              dupCheckOnWrite: true,
-            }
-          : {}),
-        phaseTags: ["llm-fix"],
-      });
-      const kept = r.rowId && r.rowId !== Number(v.id) ? r.rowId : null;
-      done.push({
+    try {
+      if (!mine.has(Number(v.id))) {
+        console.log(`  ⏭ #${v.id} 이 도시 행 아님/이미 없음`);
+        continue;
+      }
+      if (
+        v.fix &&
+        Object.values(v.fix).some((x) =>
+          Array.isArray(x) ? x.length > 0 : x != null && x !== false,
+        )
+      ) {
+        const cat = (
+          await c.query(
+            "SELECT seed_category FROM place_seed_raw WHERE id=$1",
+            [Number(v.id)],
+          )
+        ).rows[0]?.seed_category;
+        // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = CID 를 바꿔 쌍둥이에 흡수될 때 진 행(작은 등록)의 이름이 원행 이름을 덮지 않는다 = 그 CID 를 이미 가진 행이 있으면 그 행의 이름을 넘긴다(마르세유·니스·스트라스부르에서 손으로 복원하던 것) (정본 §)
+        const cid = String(v.fix.google_maps_uri || "").match(/cid=(\d+)/)?.[1];
+        const twin =
+          cid && !v.fix.name_en
+            ? (
+                await c.query(
+                  `SELECT id, name_en FROM place_seed_raw WHERE city_id=$1 AND id<>$2 AND merged_into IS NULL AND google_maps_uri ~ ('cid=' || $3 || '(\\D|$)')`,
+                  [cityId, Number(v.id), cid],
+                )
+              ).rows[0]
+            : null;
+        const r = await upsertPlace({
+          targetRowId: Number(v.id),
+          cityId,
+          seedCategory: v.fix.seed_category ?? cat,
+          nameEn: v.fix.name_en ?? twin?.name_en ?? mine.get(Number(v.id)),
+          overwriteSeedCategory: !!v.fix.seed_category,
+          categoryTags: [v.fix.seed_category ?? cat, ...(v.fix.tags ?? [])],
+          removeCategoryTags: v.fix.remove_tags,
+          priceEur: v.fix.price_eur ?? null,
+          clearPriceEur: !!v.fix.clear_price,
+          selectionReasonKo: v.fix.summary_ko ?? null,
+          shortformKo: v.fix.editorial_summary ?? null,
+          businessStatus: v.fix.business_status ?? null,
+          nameLocal: v.fix.name_local ?? null,
+          nameKo: v.fix.name_ko ?? null,
+          address: v.fix.address ?? null,
+          ...(v.fix.google_maps_uri
+            ? {
+                googleMapsUri: v.fix.google_maps_uri,
+                followTriggerDup: true,
+                dupCheckOnWrite: true,
+              }
+            : {}),
+          phaseTags: ["llm-fix"],
+        });
+        const kept = r.rowId && r.rowId !== Number(v.id) ? r.rowId : null;
+        done.push({
+          id: v.id,
+          fixed: v.fix,
+          reason: v.reason,
+          result: r.action,
+          ...(kept ? { absorbedInto: kept } : {}),
+        });
+        console.log(
+          `  ✎ #${v.id} ${mine.get(Number(v.id))} → ${JSON.stringify(v.fix)} (${r.action}${kept ? `, 🧲 흡수 → #${kept} = 재읽기는 이 번호로` : ""}) = ${v.reason}`,
+        );
+        continue;
+      }
+      await deletePlaceRow(Number(v.id));
+      done.push({ id: v.id, name: mine.get(Number(v.id)), reason: v.reason });
+      console.log(`  🗑 #${v.id} ${mine.get(Number(v.id))} 삭제 = ${v.reason}`);
+    } catch (e: any) {
+      const why = String(e?.message || e).slice(0, 160);
+      skipped.push({
         id: v.id,
-        fixed: v.fix,
+        fix: v.fix ?? null,
         reason: v.reason,
-        result: r.action,
-        ...(kept ? { absorbedInto: kept } : {}),
+        막힘: why,
       });
       console.log(
-        `  ✎ #${v.id} ${mine.get(Number(v.id))} → ${JSON.stringify(v.fix)} (${r.action}${kept ? `, 🧲 흡수 → #${kept} = 재읽기는 이 번호로` : ""}) = ${v.reason}`,
+        `  ✘ #${v.id} ${mine.get(Number(v.id)) ?? ""} 건너뜀 = ${why}`,
       );
-      continue;
     }
-    await deletePlaceRow(Number(v.id));
-    done.push({ id: v.id, name: mine.get(Number(v.id)), reason: v.reason });
-    console.log(`  🗑 #${v.id} ${mine.get(Number(v.id))} 삭제 = ${v.reason}`);
   }
   const out = path.join(
     reportDir(cityId),
     `${fileStamp()}_llm-review-deleted.json`,
   );
-  fs.writeFileSync(out, JSON.stringify({ cityId, deleted: done }, null, 2));
+  fs.writeFileSync(
+    out,
+    JSON.stringify({ cityId, deleted: done, skipped }, null, 2),
+  );
   console.log(
-    `═══ LLM 삭제·고침 끝 = ${done.length}행 · 기록 ${path.relative(ROOT, out)} ═══`,
+    `═══ LLM 삭제·고침 끝 = ${done.length}행 · 건너뜀 ${skipped.length} · 기록 ${path.relative(ROOT, out)} ═══`,
   );
   return done.length;
 }

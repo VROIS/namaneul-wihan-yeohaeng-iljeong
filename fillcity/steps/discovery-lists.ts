@@ -1,5 +1,6 @@
 // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 필시티 v3.2 목록 읽기 = 검색 문장을 구글 맵에서 읽고 로그를 전부 남긴다, 플레이라이트는 최대한 덜 쓴다 · 종료 코드는 common.ts 1벌 (정본 §)
 import { EXIT_LIMITED, connectDb, loadEnv, parseArgs, stamp } from "./common";
+import { rawDirOf } from "../../worker/lib/services/shared/local-paths";
 import { isR2Configured } from "../../worker/lib/services/shared/r2-client";
 import { LIST_QUERIES, labelOfLine } from "./lists-common";
 
@@ -190,7 +191,7 @@ const PAUSE_SEC = Math.max(0, Number(argv["pause"] || 7));
     await browser.close().catch(() => {});
   }
   console.log(
-    `═══ 목록 읽기 끝 = 원본 로그 ${stamp().slice(0, 10)} 로컬 docs/raw/${cityId}/ + R2 ${cityId}/raw/ ═══`,
+    `═══ 목록 읽기 끝 = 원본 로그 ${stamp().slice(0, 10)} 로컬 ${rawDirOf(cityId)}/ + R2 ${cityId}/raw/ ═══`,
   );
   process.exit(limited ? EXIT_LIMITED : 0);
 })().catch((e) => {

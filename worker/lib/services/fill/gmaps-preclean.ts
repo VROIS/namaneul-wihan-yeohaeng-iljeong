@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 시드발굴 v3 ① 맨 앞 사전 정제 = LLM 검토가 장소 아님으로 본 행(--drop-ids) 삭제 → PID/CID 행 페이지 직행 → 이름만 있거나 빈 등록(리뷰·사진 없음)·빈 페이지(구글 등록 사라짐)인 행은 도시 이름 없이 검색(좌표 없는 행은 지도 화면만 그 도시 중심 = 세계 체인점이 다른 대륙 지점으로 가지 않게 · 사진은 장소가 붙을 도시 폴더) → 끝내 7요소 못 갖춘 행·행 좌표(없으면 도시 중심)에서 500km 밖만 나오는 행 삭제(이미 확보한 자료는 살린다 = 100km 제한 없음 · 500km 밖 = 딴 대륙 같은 이름 가게)(검색은 행 이름으로 이름 관문 · 분류 불일치는 지우지 않고 멀티태그 · 제미니가 뽑은 게 아니니 베스트 안 찍음 · 일시 오류·쓰기 오류는 남겨 다음 판에). 구글맵 엔진 함수 그대로 = 유료 0 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 시드발굴 v3 ① 맨 앞 사전 정제 = LLM 검토가 장소 아님으로 본 행(--drop-ids) 삭제 → PID/CID 행 페이지 직행 → 이름만 있거나 빈 등록(리뷰·사진 없음)·빈 페이지(구글 등록 사라짐)인 행은 도시 이름 없이 검색(좌표 없는 행은 지도 화면만 그 도시 중심 = 세계 체인점이 다른 대륙 지점으로 가지 않게 · 사진은 장소가 붙을 도시 폴더) → 끝내 7요소 못 갖춘 행·행 좌표(없으면 도시 중심)에서 500km 밖만 나오는 행 삭제(이미 확보한 자료는 살린다 = 100km 제한 없음 · 500km 밖 = 딴 대륙 같은 이름 가게)(검색은 행 이름으로 이름 관문 · 분류 불일치는 지우지 않고 멀티태그 · 단 좌표 없는 이름뿐 행은 분류가 안 맞으면 삭제(2026-10-23) · 제미니가 뽑은 게 아니니 베스트 안 찍음 · 일시 오류·쓰기 오류는 남겨 다음 판에). 구글맵 엔진 함수 그대로 = 유료 0 (정본 §)
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -22,11 +22,10 @@ import {
   PID_ROWS_SELECT,
   verifyPidRows,
 } from "./gmaps-pid-identity/run";
-import { lastGoogleLogs } from "../../../../fillcity/steps/common";
+import { lastGoogleLogs } from "../shared/local-paths";
 import { entryOfRow, r2PrefixOf, ROW_COLS } from "./gmaps-post";
 import {
   LIMITED_WHY,
-  loadPriceCtx,
   newStat,
   pageTools,
   readAll,
@@ -133,7 +132,6 @@ const passing = (why: string) =>
   };
   for (const d of drops) await drop(d.id, d.name_en, "LLM 검토 = 장소 아님");
   const stat = newStat();
-  const priceCtx = await loadPriceCtx(c, cityId, argv["fx"]);
   const stopLimited = async (where: string) => {
     console.error(
       `⛔ 구글맵 제한 보기(${where}) = 채널 막힘 = 이 도시 멈춤(지운 것 없음, 남은 행은 다음 판에)`,
@@ -162,7 +160,7 @@ const passing = (why: string) =>
         cityId,
         apply: true,
         parallel,
-        writeCtx: { ...priceCtx, deleteRow: (id) => deletePlaceRow(id) },
+        writeCtx: { deleteRow: (id) => deletePlaceRow(id) },
         onResult: (r) =>
           console.log(
             `  ${r.gate} #${r.id} ${r.name_en} rc=${r.rc_page ?? "-"} ${r.photo_url ? "사진" : "사진없음"} ${r.upsert || ""}`,
@@ -203,7 +201,6 @@ const passing = (why: string) =>
           cityOf: (lat, lng) => cityForCoords(cities, lat, lng, cityId),
           preclean: true,
           rawRows: [],
-          priceCtx,
           parallel,
         },
         stat,
@@ -225,7 +222,6 @@ const passing = (why: string) =>
               cityId,
               provenanceTag: "gmaps-preclean",
               targetRowId: id,
-              priceCtx,
             },
             stat,
           ).catch((e: any) => {

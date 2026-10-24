@@ -2,6 +2,7 @@
 
 import fs from "fs";
 import path from "path";
+import { rawDirOf } from "./local-paths";
 // ⚠️ 수정금지(승인필요) 2026-06-16 = raw 버전순번 헬퍼 = 정적 top-level import (= CJS 번들 import.meta.url 깨짐 회피).
 import { rawHash, versionedNameR2 } from "./raw-filename";
 import { uploadToR2, isR2Configured } from "./r2-client";
@@ -36,8 +37,8 @@ export async function saveRaw(opts: SaveRawOpts): Promise<string | null> {
     const place = rawPlace(ctx);
     const stemFileName = `${fileStamp()}_${opts.source}-${tag}${place.suffix}.json`;
     let fileName = stemFileName;
-    // ⚠️ 수정금지(승인필요) 2026-06-16 사장님 SSOT = 로컬 docs/raw 루트 = process.cwd() 기준(= CJS 번들 import.meta.url 깨짐 회피, throw 없음).
-    const localRawRoot = path.resolve(process.cwd(), "docs", "raw"); // cwd/docs/raw 절대경로 (= 버전판정·로컬쓰기 동일 기준 통일)
+    // ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 로컬 원본 자리 = process.cwd() 기준 rawDirOf 1벌(CJS 번들 import.meta.url 깨짐 회피, throw 없음) (정본 §18)
+    const localDir = rawDirOf(ctx);
     // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 순번 판정 기준 = 로컬 폴더가 아니라 R2 에 있는 같은 stem 파일 (Worker 는 디스크 없음) (정본 §)
     try {
       fileName = await versionedNameR2(
@@ -84,7 +85,7 @@ export async function saveRaw(opts: SaveRawOpts): Promise<string | null> {
     //   ⚠️ 2026-06-19 사장님 SSOT = localSkip=true(건건 TS) 시 로컬 생략 = 스토리지(위 PUT)만 보존 = 로컬 폴더 깔끔.
     if (!opts.localSkip)
       try {
-        const localPath = path.join(localRawRoot, ctx, fileName); // ⚠️ 수정금지(승인필요) 2026-06-16 = 버전판정과 동일 localRawRoot 기준 (= cwd 비의존, 두 곳 기준 통일).
+        const localPath = path.join(localDir, fileName); // ⚠️ 수정금지(승인필요) 2026-10-23 = 로컬 자리 = rawDirOf 1벌 (정본 §18).
         fs.mkdirSync(path.dirname(localPath), { recursive: true });
         fs.writeFileSync(localPath, body);
       } catch {}

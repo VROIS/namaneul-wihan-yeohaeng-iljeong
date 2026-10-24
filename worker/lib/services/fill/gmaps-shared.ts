@@ -6,6 +6,8 @@ import {
   launchBrowser,
   openWindow,
   showWindow,
+  withTimeout,
+  ROW_TIMEOUT_MS,
   coordsFromUrl,
   listCandidates,
   readPlacePage,
@@ -17,7 +19,7 @@ import {
   finalCategory,
   resolveCategory,
 } from "../shared/place-category-map";
-import { decidePrice, pagePriceEur, type EurPer } from "../shared/price-eur";
+import { decidePrice } from "../shared/price-eur";
 import { bestRankCode, writeBestRankUnion } from "../shared/best-rank";
 import { upsertTranslationWith } from "../place-upsert";
 import {
@@ -45,7 +47,8 @@ export interface NewEntry {
   nameKo: string | null;
   langs: number;
   cat: string;
-  avgPrice: number | null;
+  price: number | null;
+  distanceKm?: number | null;
   avgRank: number | null;
   copies: CopyEntry[];
   lat: number | null;
@@ -97,21 +100,6 @@ export const newStat = (): Stat => ({
 // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 제한 보기 = 채널 막힘(빈 등록 아님) = 그 행은 "다음 판에", 연속 3행이면 남은 행을 열지 않는다 (정본 §)
 export const LIMITED_WHY = "제한보기";
 export const LIMITED_STOP = 3;
-type PriceCtx = { eurPer: EurPer; countryCode: string | null };
-export async function loadPriceCtx(
-  c: { query: (q: string, v?: unknown[]) => Promise<any> },
-  cityId: number,
-  fx?: string,
-): Promise<PriceCtx> {
-  const { loadEurPer } = await import("../shared/price-eur");
-  const row = (
-    await c.query("SELECT country_code FROM cities WHERE id=$1", [cityId])
-  ).rows[0];
-  return {
-    eurPer: await loadEurPer(c, fx),
-    countryCode: row?.country_code ?? null,
-  };
-}
 
 /** ⚠️ 수정금지(승인필요) 2026-08-27 사장님 확정 = best_rank = 카피에 든 언어들의 7자리 언어코드(bestRankCode 1벌). */
 export function codeOf(
@@ -280,7 +268,6 @@ type PageTools = {
   cityOf?: (lat: number, lng: number) => number | null;
   preclean?: boolean;
   rawRows: any[];
-  priceCtx?: PriceCtx; // 있으면 페이지 가격을 유로로 바꿔 식당 가격에 쓴다
   parallel?: number; // 창 수(기본 5). 제한 보기가 잦으면 1로 천천히
 };
 
@@ -365,8 +352,9 @@ export async function readOne(
       if (!d.h1) why = "빈페이지";
       else if (isLocalityPage(d) && n.aliases?.length)
         why = `동네페이지(${d.h1})`;
+      // ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 사전 정제에서도 좌표 없는 이름뿐 행은 분류 관문을 지난다 = 같은 이름 다른 가게(백화점 Printemps → 동네 바-타박)를 붙이지 않는다 (정본 §2026-10-23)
       else if (
-        !t.preclean &&
+        (!t.preclean || n.noXY) &&
         (!best || isHard(n.cat)) &&
         resolveCategory(d.category, n.cat, n.name).mismatch
       )
@@ -442,7 +430,7 @@ export async function readOne(
       lat: n.lat,
       lng: n.lng,
       cat: n.cat,
-      avgPrice: n.avgPrice,
+      price: n.price,
       langs: n.langs,
       searchQuery: q,
       tier,
@@ -477,7 +465,7 @@ export async function readOne(
   return { n, d, why, imageUrl, cat, photospotTag: fc.photospotTag, tier };
 }
 
-// ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 구글맵 열기 = 창 5개 병렬(실측 곳당 6.2초→4.5초, 10개는 8.8초로 느려짐). 창고 쓰기는 뒤에서 한 줄로(트랜잭션 1연결).
+// ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = 구글맵 열기 = 창 5개 병렬(실측 곳당 6.2초→4.5초, 10개는 8.8초로 느려짐) · 창고 쓰기는 뒤에서 한 줄로(트랜잭션 1연결) · 한 행이 90초 안에 안 끝나면 그 행만 건너뛰고(다음 판에) 창을 새로 연다 (정본 §2026-10-24)
 export async function readAll(
   browser: any,
   browserUa: string,
@@ -491,7 +479,7 @@ export async function readAll(
   let limitedRun = 0;
   await Promise.all(
     Array.from({ length: Math.min(PARALLEL, queue.length) }, async () => {
-      const { page, close: closeWin } = await openWindow(
+      let { page, close: closeWin } = await openWindow(
         browser,
         browserUa,
         "en-US",
@@ -501,7 +489,21 @@ export async function readAll(
         const n = queue.shift();
         if (!n) break;
         stat.pageOpens++;
-        const r = await readOne(page, n, t);
+        const got = await withTimeout(readOne(page, n, t));
+        if (got === "timeout") {
+          console.log(
+            `  ⏱ ${n.name} = ${ROW_TIMEOUT_MS / 1000}초 안에 못 읽음 = 건너뜀(다음 판에) · 창 새로`,
+          );
+          reads.push({ n, d: null, why: "오류:시간 초과" });
+          await closeWin().catch(() => {});
+          ({ page, close: closeWin } = await openWindow(
+            browser,
+            browserUa,
+            "en-US",
+          ));
+          continue;
+        }
+        const r = got;
         reads.push(r);
         if (r.why === LIMITED_WHY) {
           stat.limited++;
@@ -529,7 +531,6 @@ export async function writeRead(
     cityId: number;
     provenanceTag: string;
     targetRowId?: number | null;
-    priceCtx?: PriceCtx;
   },
   stat: Stat,
 ): Promise<void> {
@@ -539,31 +540,8 @@ export async function writeRead(
     console.log(`  ✗ ${why}: ${n.name}`);
     return;
   }
-  // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 가격 = 가격 결정 1벌(decidePrice) = 페이지(pagePriceEur 1벌) > 제미니 > NULL · 페이지를 열었는데 가격이 없고 제미니도 없으면 옛 값은 비운다 (정본 §)
-  const oldPrice: number | null =
-    opts.targetRowId != null
-      ? ((
-          await c.query(
-            "SELECT price_eur::float8 AS price FROM place_seed_raw WHERE id=$1",
-            [opts.targetRowId],
-          )
-        ).rows[0]?.price ?? null)
-      : null;
-  const pagePrice = opts.priceCtx
-    ? pagePriceEur(
-        cat,
-        d,
-        opts.priceCtx.countryCode,
-        opts.priceCtx.eurPer,
-        oldPrice,
-      )
-    : null;
-  const pd = decidePrice({
-    pagePrice,
-    geminiPrice: n.avgPrice ?? null,
-    oldPrice,
-    pageOpened: true,
-  });
+  // ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = 깔때기 = 제미니 응답이 바탕(가격·한국어·현지어 이름·요약·묘사·도심 거리를 그대로 입힌다) · 구글맵 페이지는 열어야만 증명되는 것(영업명·주소·좌표·리뷰수·영업 상태·사진·CID·분류)만 덮는다 · 가격 = 가격 결정 1벌(decidePrice = 제미니 값, 없으면 있는 값 그대로 = 페이지 가격은 쓰지 않는다) (정본 §2026-10-24)
+  const price = decidePrice({ base: true, geminiPrice: n.price ?? null });
   if (d.status !== "OPERATIONAL") {
     stat.closed++;
     console.log(`  [${d.status}] ${n.name} = 넣되 손님상 관문이 거른다`);
@@ -596,8 +574,8 @@ export async function writeRead(
     businessStatus: d.status,
     // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 페이지를 실제로 열어 확인했으면 그 기록을 남긴다(찍힌 것 = 확인됨 / 안 찍힌 것 = 다음 대상).
     verifySource: "gmaps-search-page",
-    priceEur: pd.price,
-    clearPriceEur: pd.clear,
+    priceEur: price,
+    distanceKmFromCenter: n.distanceKm ?? null,
     selectionReasonKo: ko?.summary || null,
     shortformKo: ko?.editorial || null,
     categoryTags: [

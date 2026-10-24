@@ -1,6 +1,7 @@
 // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 필시티 v3.2 목록 입력 = 선별한 곳을 CID 행으로 넣고 후처리가 구글 맵 페이지를 열어 9요소를 확정한다 · DB 접속은 common.ts connectDb 1벌 (정본 §)
 import fs from "fs";
 import path from "path";
+import { reportDirOf } from "../../worker/lib/services/shared/local-paths";
 import {
   EXIT_LIMITED,
   connectDb,
@@ -29,7 +30,7 @@ function latestSelect(): string {
     .pop();
   if (!f) {
     console.error(
-      `✗ docs/b1-reports/${cityId} 에 선별 보고서 없음 = discovery-lists-select.ts 선행 필요`,
+      `✗ ${reportDirOf(cityId)} 에 선별 보고서 없음 = discovery-lists-select.ts 선행 필요`,
     );
     process.exit(1);
   }

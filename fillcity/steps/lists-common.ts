@@ -2,7 +2,7 @@
 
 import fs from "fs";
 import path from "path";
-import { ROOT } from "./common";
+import { rawDirOf } from "../../worker/lib/services/shared/local-paths";
 
 export const LIST_QUERIES: {
   key: string;
@@ -121,7 +121,7 @@ export const LABEL_STATES: { lodging: string[]; place: string[] } = {
 
 // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 도시 폴더의 목록 원본 읽기 1벌(선별·정제가 같이 쓴다) = 이름순 = 같은 문장은 나중 것이 이긴다 (정본 §)
 export function readListRaws(cityId: number): { file: string; json: any }[] {
-  const dir = path.join(ROOT, "docs", "raw", String(cityId));
+  const dir = rawDirOf(cityId);
   if (!fs.existsSync(dir)) return [];
   return fs
     .readdirSync(dir)

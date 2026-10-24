@@ -1,6 +1,7 @@
 // ⚠️ 수정금지(승인필요) 2026-10-12 사장님 결정 = 분류 정렬 = 구글 분류 글자(google_primary_type)가 이미 있는 행을 페이지 안 열고(0원) finalCategory 1벌로 확정 = 장소 아님 → 삭제(껍데기 0) · 구글이 이김 · 포토스팟은 태그로 · 이름에 식당이 든 와이너리는 식당 유지 · 표에 없는 글자는 산출표 "새 글자"로 (정본 §)
 import fs from "fs";
 import path from "path";
+import { reportDirOf } from "../shared/local-paths";
 import { fileURLToPath } from "url";
 import { finalCategory } from "../shared/place-category-map";
 import { fileStamp } from "../../../../shared/r2-paths";
@@ -123,7 +124,7 @@ const TAG = `category-align-${new Date().toISOString().slice(0, 10)}`;
         console.log(`  ⚠️ #${x.id} 쓰기 이상: ${r.action} ${r.reason ?? ""}`);
     }
   }
-  const dir = path.join(ROOT, "docs", "b1-reports", String(cityId));
+  const dir = reportDirOf(cityId);
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `${fileStamp()}_category-align.json`);
   fs.writeFileSync(

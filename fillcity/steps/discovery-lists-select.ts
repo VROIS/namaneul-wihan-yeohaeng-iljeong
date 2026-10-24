@@ -1,6 +1,7 @@
 // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 필시티 v3.2 목록 선별 = 우리 분류표에 있는 라벨만 가져온다(식당은 예외), 분류마다 모자란 만큼만 뽑는다 · 거리는 geo-distance 1벌 · 목록 원본 읽기는 lists-common 1벌 (정본 §)
 import fs from "fs";
 import path from "path";
+import { rawDirOf } from "../../worker/lib/services/shared/local-paths";
 import { connectDb, loadEnv, parseArgs, reportDir, stamp } from "./common";
 import { labelOfLine, readListRaws } from "./lists-common";
 import { distanceKmFromCoords } from "../../worker/lib/services/shared/geo-distance";
@@ -36,7 +37,7 @@ function latestLists(): Map<string, { file: string; json: any }> {
   const lists = latestLists();
   if (!lists.size) {
     console.error(
-      `✗ docs/raw/${cityId} 에 목록 원본 없음 = discovery-lists.ts 선행 필요`,
+      `✗ ${rawDirOf(cityId)} 에 목록 원본 없음 = discovery-lists.ts 선행 필요`,
     );
     process.exit(1);
   }

@@ -1,7 +1,8 @@
-// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 사진 단일 진입점 = 재링크 → PID 구글맵 공개페이지 무료(API 호출 0, 영업상태도 기입) → 유료(PM·TS)는 사장님 명시 승인 플래그(--allow-pm / --allow-ts)에서만 · TS 가격은 가격 결정 1벌(decidePrice = 3개월 안 페이지 값 > TS > 옛 값) (정본 §)
-import { FRESH_SQL, loadEurPer, tsPriceDecision } from "../shared/price-eur";
+// ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = 사진 단일 진입점 = 재링크 → PID 구글맵 공개페이지 무료(API 호출 0, 영업상태도 기입) → 유료(PM·TS)는 사장님 명시 승인 플래그(--allow-pm / --allow-ts)에서만 · TS 가격은 가격 결정 1벌(decidePrice = 있는 값 > TS = 빈 칸일 때만) (정본 §2026-10-24)
+import { loadEurPer, tsPriceDecision } from "../shared/price-eur";
 import fs from "fs";
 import path from "path";
+import { rawDirOf } from "../shared/local-paths";
 import { fileURLToPath, pathToFileURL } from "url";
 import { relinkStorageImages } from "./storage-image-relink";
 import { placeImageKey } from "../../../../shared/r2-paths";
@@ -14,7 +15,7 @@ function collectPhotoNamesFromRaw(
   cityId: number,
 ): Map<string, { photoName?: string; status?: string }> {
   const map = new Map<string, { photoName?: string; status?: string }>();
-  const dir = path.join(ROOT, "docs", "raw", String(cityId));
+  const dir = rawDirOf(cityId);
   if (!fs.existsSync(dir)) return map;
   const walk = (node: any) => {
     if (!node || typeof node !== "object") return;
@@ -90,7 +91,7 @@ async function backfillImages(opts: {
     SELECT id, seed_category AS cat, name_en, name_local, address,
            latitude::float8 AS latitude, longitude::float8 AS longitude,
            google_place_id AS pid, google_review_count AS rc, business_status,
-           image_url, verified_at, price_eur::float8 AS price, ${FRESH_SQL} AS fresh,
+           image_url, verified_at, price_eur::float8 AS price,
            (image_url IS NOT NULL AND image_url ~ '/[0-9]+/images/'
             AND image_url NOT LIKE '%-wiki.%'
             AND position(google_place_id IN image_url) > 0) AS has_image
@@ -430,8 +431,9 @@ async function backfillImages(opts: {
           longitude: ts.longitude && ts.longitude !== 0 ? ts.longitude : null,
           googleMapsUri: ts.googleMapsUri ?? null,
           googleReviewCount: ts.googleReviewCount ?? null,
-          // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 가격 = tsPriceDecision 1벌(3개월 안 페이지 값 > TS > 옛 값) = MIX 저장과 같은 함수 (정본 §)
-          priceEur: tsPriceDecision(ts.priceRange, eurPer, r) ?? undefined,
+          // ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = 가격 = tsPriceDecision 1벌(있는 값 > TS = 빈 칸일 때만) = MIX 저장과 같은 함수 (정본 §2026-10-24)
+          priceEur:
+            tsPriceDecision(ts.priceRange, eurPer, r.price) ?? undefined,
           businessStatus: ts.businessStatus ?? null,
           phaseTags: closed ? ["영구폐업"] : undefined,
         });

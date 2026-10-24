@@ -20,14 +20,17 @@ import {
   codeOf,
   inTxn,
   kindWordOf,
-  loadPriceCtx,
   newStat,
   upsertTranslations,
 } from "../../worker/lib/services/fill/gmaps-shared";
 import { absorbInto } from "../../worker/lib/services/fill/gmaps-absorb";
 import { decidePrice } from "../../worker/lib/services/shared/price-eur";
 import { upsertPlace } from "../../worker/lib/services/place-upsert";
-import { auditWithRetry, checkFindItem, chromeVisits } from "./procedure-check";
+import {
+  type AuditResult,
+  auditWithRetry,
+  checkFindItem,
+} from "./procedure-check";
 
 loadEnv();
 const argv = parseArgs();
@@ -106,8 +109,7 @@ type Found = {
     console.log("DRY = --apply 로 일꾼을 띄우고 찾은 CID 를 창고에 넣는다");
     process.exit(0);
   }
-  // ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 일꾼 결과는 항목마다 판단 순서(제미니 힌트 → 구글 검색 → 구글맵)를 기계가 크롬 방문 기록과 대조한다 · 어긴 항목은 결과에서 빼고 그 항목만 이유와 함께 한 번 되돌림 · 두 번째도 어기면 단계 실패 (정본 §2026-10-23)
-  const t0 = Date.now();
+  // ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = 일꾼 결과는 항목마다 판단 순서(제미니 힌트 → 구글 검색 → 구글맵) 칸을 지시문 양식대로 채웠는지만 검문한다(방문 기록 대조 없음) · 어긴 항목은 결과에서 빼고 그 항목만 이유와 함께 한 번 되돌림 · 못 한 행(인증·중단)은 인증이 풀린 뒤 다 할 때까지(최대 3번) 다시 맡긴다 (정본 §2026-10-24)
   const run = (
     list: { k: number; from: number; to: number }[],
     retryFile?: string,
@@ -129,10 +131,11 @@ type Found = {
     });
   await run(ranges);
   const byOrder = new Map<number, Found>();
-  const audit = (): Map<number, string[]> => {
-    const visits = chromeVisits(t0 - 60_000, Date.now());
+  const audit = (): AuditResult => {
     byOrder.clear();
     const bad = new Map<number, string[]>();
+    const missing = new Set<number>();
+    const seen = new Set<number>();
     for (const f of fs
       .readdirSync(dir)
       .filter((x) => /^result-\d+\.json$/.test(x))
@@ -148,7 +151,8 @@ type Found = {
       const out: any[] = [];
       for (const r of Array.isArray(arr) ? arr : []) {
         if (!Number.isInteger(r?.order) || !items[r.order]) continue;
-        const why = checkFindItem(r, visits);
+        seen.add(r.order);
+        const why = checkFindItem(r);
         if (why.length) {
           bad.set(r.order, why);
           out.push({ ...r, 받지않은이유: why });
@@ -166,7 +170,8 @@ type Found = {
         );
       }
     }
-    return bad;
+    for (const x of items) if (!seen.has(x.order)) missing.add(x.order);
+    return { bad, missing };
   };
   const rejected = await auditWithRetry({
     audit,
@@ -176,7 +181,7 @@ type Found = {
   });
   for (const [o, why] of rejected)
     console.log(
-      `  ✘ order ${o} ${items[o].name_en}: 판단 순서 위반 2번 = ${why.join(" · ")}`,
+      `  ✘ order ${o} ${items[o].name_en}: 끝내 못 받은 행 = ${why.join(" · ")}`,
     );
   const failed = rejected.size ? 1 : 0;
   const found = items.filter(
@@ -244,10 +249,8 @@ type Found = {
       longitude: n.lng,
       address: n.address ?? null,
       googleMapsUri: uri,
-      priceEur: decidePrice({
-        geminiPrice: n.avgPrice ?? null,
-        pageOpened: false,
-      }).price,
+      priceEur: decidePrice({ base: true, geminiPrice: n.price }),
+      distanceKmFromCenter: n.distanceKm ?? null,
       selectionReasonKo: ko?.summary || null,
       shortformKo: ko?.editorial || null,
       categoryTags: [n.cat],
@@ -306,7 +309,6 @@ type Found = {
         [cityId, r2PrefixOf(process.env.R2_PUBLIC_URL), made],
       )
     ).rows;
-    const priceCtx = await loadPriceCtx(c, cityId);
     const browser = await launchBrowser(chromium);
     try {
       await verifyPidRows({
@@ -320,7 +322,6 @@ type Found = {
         client: c,
         cityId,
         apply: true,
-        writeCtx: { ...priceCtx },
         onResult: (x: any) =>
           console.log(
             `  ${x.gate} #${x.id} ${x.name_en} rc=${x.rc_page ?? "-"} ${x.photo_url ? "사진" : "사진없음"} ${x.upsert || ""}`,

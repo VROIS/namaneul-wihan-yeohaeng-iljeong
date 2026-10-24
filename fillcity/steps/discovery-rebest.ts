@@ -1,8 +1,9 @@
 // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 앞 도시 다시 정제(--rebest) = ③ 앞에서 그 도시 베스트 번호를 비우고(옛 판이 잘못 붙인 표로 부풀려진 것 제거 · 비우기 전 값은 보고서 폴더에 남김), ③ 뒤에서 흡수할 행의 번역 중 남는 무리 언어 밖 것을 지운다(잘못 붙었던 가게 설명). 그다음 ④ 가 받아 둔 제미니 원본으로 다시 입힌다 = 제미니 재호출 0 (정본 §)
 import fs from "fs";
 import path from "path";
+import { reportDirOf } from "../../worker/lib/services/shared/local-paths";
 import { fileURLToPath } from "url";
-import { latestVersioned } from "../../worker/lib/services/shared/raw-filename";
+import { DIFF_SECTIONS, latestReport } from "./common";
 
 const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -32,7 +33,7 @@ const apply = argv["apply"] === "true";
     console.error("Usage: --city-id=<N> --step=reset|clean-tr [--apply]");
     process.exit(1);
   }
-  const dir = path.join(ROOT, "docs", "b1-reports", String(cityId));
+  const dir = reportDirOf(cityId);
   const pg = await import("pg");
   const c = new (pg as any).default.Client({
     connectionString: process.env.SUPA_URL || process.env.DATABASE_URL,
@@ -67,21 +68,14 @@ const apply = argv["apply"] === "true";
       console.log(`  비우기 전 값 = ${file}`);
     }
   } else {
-    const files = fs.existsSync(dir)
-      ? fs
-          .readdirSync(dir)
-          .filter((f) => /_b1-discovery-diff(_\d+)?\.json$/.test(f))
-      : [];
-    if (!files.length) {
+    const chosen = latestReport(cityId, "b1-discovery-diff");
+    if (!chosen) {
       console.error(`✗ ${dir} 에 산출표 없음`);
       process.exit(1);
     }
-    const latest = files.sort().reverse()[0];
-    const chosen =
-      latestVersioned(dir, latest.replace(/_\d+\.json$/, ".json")) || latest;
-    const rep = JSON.parse(fs.readFileSync(path.join(dir, chosen), "utf-8"));
+    const rep = JSON.parse(fs.readFileSync(chosen, "utf-8"));
     let n = 0;
-    for (const k of ["landmarks", "restaurants"])
+    for (const k of DIFF_SECTIONS)
       for (const x of rep.report[k].confirm) {
         const keep = [...new Set(x.copies.map((cp: any) => cp.lang))].filter(
           (l) => l !== "ko",

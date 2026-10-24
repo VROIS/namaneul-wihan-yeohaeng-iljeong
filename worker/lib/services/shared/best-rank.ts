@@ -49,11 +49,14 @@ export function bestRankUnion(
   return bestRankWithOrdinal(code, ordinal);
 }
 
-// ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = best_rank 쓰기 트랜잭션 절차(SELECT..FOR UPDATE → bestRankUnion →
-export async function writeBestRankUnion(
-  client: { query: (sql: string, params?: any[]) => Promise<{ rows: any[] }> },
+// ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = best_rank 쓰기 절차 1벌(SELECT FOR UPDATE → 계산 → 달라지면 UPDATE) = 언어 합치기와 순위 앞자리 쓰기가 같이 쓴다 (정본 §2026-10-23)
+type Client = {
+  query: (sql: string, params?: any[]) => Promise<{ rows: any[] }>;
+};
+async function writeBestRank(
+  client: Client,
   rowId: number,
-  code: number | null,
+  next: (cur: number | null) => number | null,
 ): Promise<{ cur: number | null; result: number | null }> {
   const cur: number | null =
     (
@@ -62,7 +65,7 @@ export async function writeBestRankUnion(
         [rowId],
       )
     ).rows[0]?.best_rank ?? null;
-  const result = bestRankUnion(cur, code);
+  const result = next(cur);
   if (result !== cur) {
     await client.query(
       `UPDATE place_seed_raw SET best_rank = $1, updated_at = NOW() WHERE id = $2`,
@@ -70,6 +73,28 @@ export async function writeBestRankUnion(
     );
   }
   return { cur, result };
+}
+
+// ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = best_rank 쓰기 트랜잭션 절차(SELECT..FOR UPDATE → bestRankUnion →
+export async function writeBestRankUnion(
+  client: Client,
+  rowId: number,
+  code: number | null,
+): Promise<{ cur: number | null; result: number | null }> {
+  return writeBestRank(client, rowId, (cur) => bestRankUnion(cur, code));
+}
+
+// ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 순위 앞자리 쓰기 1벌 = 언어코드(뒤 7자리)는 그대로 두고 앞자리만 그 도시 최신 산출표 순위로 바꾼다 · 베스트가 아닌 행(언어코드 없음)은 쓰지 않는다 (정본 §2026-10-23)
+export async function writeBestRankOrdinal(
+  client: Client,
+  rowId: number,
+  ordinal: number,
+): Promise<{ cur: number | null; result: number | null }> {
+  return writeBestRank(
+    client,
+    rowId,
+    (cur) => bestRankWithOrdinal(bestRankLangCode(cur), ordinal) ?? cur,
+  );
 }
 
 export function bestRankLangCount(v: number | null | undefined): number {

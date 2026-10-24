@@ -1,6 +1,7 @@
 // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 후처리 가격 호출도 입력에 우리 시드 분류(seed_category)를 같이 보낸다 = 2차 보강과 같은 입력 1벌 (정본 §)
 import fs from "fs";
 import path from "path";
+import { reportDirOf } from "../shared/local-paths";
 import { fileURLToPath } from "url";
 import { cardPrice, priceText } from "./gmaps-pid-identity/page-reader";
 import {
@@ -54,17 +55,24 @@ const CID_PRICED = `city_id=$1 AND status='active' AND seed_category='restaurant
     ])
   ).rows[0];
   const eurPer = await loadEurPer(c, argv["fx"]);
+  // ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = 한 행이 막히면(중복 차단 등) 그 행만 건너뛰고 나머지 가격은 다 넣는다 = 멈추지 않는다 (정본 §2026-10-24)
   const write = async (id: number, name: string, eur: number, tag: string) => {
-    const r = await upsertPlace({
-      targetRowId: id,
-      cityId,
-      seedCategory: "restaurant",
-      nameEn: name,
-      priceEur: eur,
-      phaseTags: [tag],
-    });
-    if (r.action !== "updated")
-      throw new Error(`쓰기 안 됨 #${id}: ${r.reason ?? r.action}`);
+    try {
+      const r = await upsertPlace({
+        targetRowId: id,
+        cityId,
+        seedCategory: "restaurant",
+        nameEn: name,
+        priceEur: eur,
+        phaseTags: [tag],
+      });
+      if (r.action !== "updated")
+        throw new Error(`쓰기 안 됨: ${r.reason ?? r.action}`);
+    } catch (e: any) {
+      console.log(
+        `  ✘ #${id} ${name} 가격 건너뜀 = ${String(e?.message || e).slice(0, 120)}`,
+      );
+    }
   };
   const finish = async (code = 0) => {
     await c.end();
@@ -214,7 +222,7 @@ const CID_PRICED = `city_id=$1 AND status='active' AND seed_category='restaurant
       })),
     );
 
-  const dir = path.join(ROOT, "docs", "b1-reports", String(cityId));
+  const dir = reportDirOf(cityId);
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `${fileStamp()}_price-gemini.json`);
   fs.writeFileSync(

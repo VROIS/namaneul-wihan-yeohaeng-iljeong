@@ -1,8 +1,14 @@
 // ⚠️ 수정금지(승인필요) 2026-10-05 사장님 결정 = v3.2 최적화 (정본 §)
 import fs from "fs";
 import path from "path";
+import { reportDirOf } from "../worker/lib/services/shared/local-paths";
 import { fileURLToPath } from "url";
-import { EXIT_LIMITED, notifyHuman, runTsx, stampOf } from "./steps/common";
+import {
+  EXIT_LIMITED,
+  runTsx,
+  stampOf,
+  waitHumanCleared,
+} from "./steps/common";
 import { LANGS } from "../worker/lib/services/shared/language-instruction";
 
 const SKILL = path.dirname(fileURLToPath(import.meta.url));
@@ -34,13 +40,13 @@ const runDiscover = argv["discover"] === "true" || auto; // ② 제미니 7콜/�
 const geminiFill = argv["gemini-fill"] === "true" || auto; // ⑤ 제미니 보충 호출
 const runGemini = argv["gemini"] === "true"; // ⑤ 가격 몰아 묻기(120곳/콜)
 const rebestMode = argv["rebest"] === "true";
-const onlyArg = argv["only"]
+const onlyGiven = argv["only"]
   ? String(argv["only"])
       .split(",")
       .map((s) => s.trim())
   : null;
-// ⚠️ 수정금지(승인필요) 2026-10-08 사장님 결정 = 이어 돌기 = 최종 점검표(final-check-*/final-table.json)가 나오면 그 판은 끝 = 그 전에 죽거나 멈춘 판만 진행 장부(…_progress.json)로 남은 단계부터 이어 돌고, 점검표가 나온 뒤 다시 치면 그때 상태에서 처음부터 새로 돈다 (정본 §)
-const REPORT_DIR = path.join(ROOT, "docs", "b1-reports", String(cityId));
+// ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = 이어받기 대원칙 = 유료 호출이 있으므로 처음부터 다시 시작은 없다 = 어떤 경우든(끝난 판 · 멈춘 판 · --only) 마지막 판의 시작 시각을 이어받아 그 뒤에 저장된 발굴·2차 응답을 다시 쓴다(이중 호출 0) · 멈춘 판(이 시도 시각 뒤 최종 점검표 없음 · 적은 단계를 다 못 끝냄)을 다시 돌리면 그 판의 단계 목록(--only)과 끝난 단계를 그대로 이어받아 남은 단계부터 = 신호 파일이 죽은 판에 소비돼도 전체로 돌지 않는다 · 진행 장부는 판 시작 때 바로 쓴다(첫 단계에서 죽어도 이어받음) · 보고 폴더 = reportDirOf 1벌 (정본 §2026-10-24)
+const REPORT_DIR = reportDirOf(cityId);
 const finalTableSince = (runStart: string) =>
   fs.existsSync(REPORT_DIR) &&
   fs
@@ -52,30 +58,47 @@ const finalTableSince = (runStart: string) =>
         fs.existsSync(path.join(REPORT_DIR, x, "final-table.json")),
     );
 const prevRun = (() => {
-  if (argv["since"] || onlyArg || !fs.existsSync(REPORT_DIR)) return null;
+  if (argv["since"] || !fs.existsSync(REPORT_DIR)) return null;
   const f = fs
     .readdirSync(REPORT_DIR)
     .filter((x) => x.endsWith("_progress.json"))
     .sort()
     .pop();
-  if (!f) return null;
-  const j = JSON.parse(fs.readFileSync(path.join(REPORT_DIR, f), "utf-8"));
-  return j.finished || finalTableSince(String(j.runStart)) ? null : j;
+  return f
+    ? JSON.parse(fs.readFileSync(path.join(REPORT_DIR, f), "utf-8"))
+    : null;
 })();
+const prevOpen =
+  !!prevRun &&
+  !prevRun.finished &&
+  !finalTableSince(String(prevRun.startedAt ?? prevRun.runStart));
 // ⚠️ 수정금지(승인필요) 2026-10-01 사장님 결정 = 이어 읽기 = --since=시각 을 주면 그 시각 뒤에 읽은 행은 건너뛰고 멈춘 자리부터 이어 읽는다 (정본 §)
 const RUN_START = argv["since"]
   ? new Date(String(argv["since"])).toISOString()
   : prevRun
     ? String(prevRun.runStart)
     : new Date().toISOString();
-const done = new Set<string>(prevRun?.done ?? []);
+const resumeOnly =
+  prevOpen && !onlyGiven && Array.isArray(prevRun.only) ? prevRun.only : null;
+const onlyArg: string[] | null = onlyGiven ?? resumeOnly;
+const done = new Set<string>(prevOpen && !onlyGiven ? prevRun.done : []);
+const STARTED: string = prevOpen
+  ? String(prevRun.startedAt ?? RUN_START)
+  : new Date().toISOString();
 const PROGRESS = path.join(REPORT_DIR, `${stampOf(RUN_START)}_progress.json`);
 const saveProgress = (finished = false) => {
   fs.mkdirSync(REPORT_DIR, { recursive: true });
   fs.writeFileSync(
     PROGRESS,
     JSON.stringify(
-      { cityId, runStart: RUN_START, done: [...done], finished },
+      {
+        cityId,
+        runStart: RUN_START,
+        startedAt: STARTED,
+        only: onlyArg,
+        done: [...done],
+        finished,
+      },
       null,
       2,
     ),
@@ -86,11 +109,10 @@ const langs: string[] = argv["langs"]
       .split(",")
       .map((s) => s.trim())
   : [...LANGS];
-const WAIT_MIN = Math.max(1, Number(argv["wait-min"] || 1)); // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 인증 대기 1분(사람이 풀어야 하니 더 기다릴 이유가 없다) (정본 §)
 
 if (!cityId) {
   console.error(
-    "Usage: --city-id=<N> [--auto=true = 한 번에 전부(쓰기·외부 호출·에이전트)] [--apply] [--review-apply=<판정 JSON>] [--drop-ids=1,2,3] [--rebest=true] [--discover=true] [--gemini=true] [--only=review,clean,lists,select,refine,lists-insert,align,discover,merge-diff,insert,find-best,read2,scan,agent,gtarget,price,final-check,report,verify] [--fx=KES:0.0068] [--langs=ko,en,...]",
+    "Usage: --city-id=<N> [--auto=true = 한 번에 전부(쓰기·외부 호출·에이전트)] [--apply] [--review-apply=<판정 JSON>] [--drop-ids=1,2,3] [--rebest=true] [--discover=true] [--gemini=true] [--only=review,clean,lists,select,refine,lists-insert,align,discover,merge-diff,insert,find-best,best-ordinal,read2,scan,agent,gtarget,price,final-check,report,verify] [--fx=KES:0.0068] [--langs=ko,en,...]",
   );
   process.exit(1);
 }
@@ -99,7 +121,6 @@ if (!cityId) {
 const VERSION = "v3.2 완성본 (2026-10-06)";
 const P = (rel: string) => path.join(ROOT, rel);
 const failures: string[] = [];
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const runOnce = (script: string, args: string[]) => runTsx(P(script), args);
 // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 단계 실행 = 공용 runTsx 1벌 + 재시도 + 사람 인증 대기 (정본 §)
 async function run(
@@ -110,24 +131,18 @@ async function run(
   refresh?: { script: string; args: string[] },
 ): Promise<boolean> {
   console.log(`\n━━━━━━ ${label} ━━━━━━`);
-  let waitedMin = 0;
+  let unheld = 0;
   for (let attempt = 0; attempt <= retries; attempt++) {
     if (attempt > 0) console.log(`  ↻ 재시도 ${attempt}/${retries} (${label})`);
     const code = await runOnce(script, args);
     if (code === 0) return true;
     if (code === EXIT_LIMITED) {
-      // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 사람 인증이 뜨면 이 PC 알림(토스트 + 소리) → 1분 기다려 같은 단계를 남은 행만 다시 시도 → 아직 안 풀렸으면 알림을 다시 보내고 또 기다린다 = 사장님이 풀어 줄 때까지 판을 멈추지 않고 그 자리에서 이어받는다(리옹 실측 2026-10-06: 사람이 안 풀면 재시도는 안 뚫리고, 풀면 남은 행만 이어 읽힌다) (정본 §)
-      waitedMin += WAIT_MIN;
-      console.error(
-        `⛔ 사람 인증 필요 — ${label} = 구글맵 제한 보기 = 크롬에서 인증을 풀어 주시면 ${WAIT_MIN}분 안에 같은 단계가 남은 행부터 이어서 돈다(기다린 지 ${waitedMin}분)`,
-      );
-      notifyHuman(
-        "필시티: 구글 사람 인증 필요",
-        `${label} — 화면에 띄운 구글맵 창에서 "로봇이 아닙니다"를 풀어 주세요. 풀면 ${WAIT_MIN}분 안에 남은 행부터 이어서 돕니다(기다린 지 ${waitedMin}분).`,
-      );
-      await sleep(WAIT_MIN * 60000);
+      // ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 사람 인증이 뜨면 전용 크롬을 화면 앞에 띄우고 알림 → 풀릴 때까지 기다린다(waitHumanCleared 1벌) → 같은 단계를 남은 행부터 다시 = 판을 멈추지 않고 그 자리에서 이어받는다 · 구글이 안 막혔는데 또 제한 보기면(그 장소만 막힘) 3번째부터 보통 재시도로 센다 (정본 §2026-10-23)
+      if (await waitHumanCleared(label)) {
+        unheld = 0;
+        attempt--;
+      } else if (++unheld < 3) attempt--;
       if (refresh) await runOnce(refresh.script, refresh.args);
-      attempt--;
     }
   }
   console.error(`✗ ${label} = ${retries}회 재시도 후 실패 = 건너뜀`);
@@ -274,7 +289,7 @@ async function trackB() {
   );
   if (prevRun)
     console.log(
-      `↪ 이어 돌기 = 안 끝난 판(시작 ${RUN_START})의 장부에서 끝난 단계 ${done.size}개 건너뜀 = ${[...done].join(",") || "없음"} → 남은 단계부터`,
+      `↪ 이어받기 = 마지막 판 시작 ${RUN_START} 뒤에 저장된 유료 응답은 다시 쓴다(이중 호출 0)${prevOpen && !onlyGiven ? ` · 멈춘 판(${STARTED}) 이어 돌기${resumeOnly ? ` = 그 판의 단계 목록 ${resumeOnly.join(",")}` : ""} · 끝난 단계 ${done.size}개 건너뜀 = ${[...done].join(",") || "없음"} → 남은 단계부터` : ""}`,
     );
   saveProgress();
 
@@ -352,6 +367,15 @@ async function trackB() {
       0,
     );
   });
+
+  // ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 필시티가 끝나면 베스트 순위까지 나온다 = 베스트를 넣는 두 단계(④ 입력 · 못 찾은 베스트) 뒤에 그 도시 최신 산출표 등수로 best_rank 앞자리를 쓴다 (정본 §2026-10-23)
+  await step("best-ordinal", () =>
+    run(
+      "④ 베스트 순위(산출표 등수 → best_rank 앞자리)",
+      "fillcity/steps/best-ordinal.ts",
+      [`--city-id=${cityId}`, ...applyArg],
+    ),
+  );
 
   await step("read2", () =>
     runSeq(
@@ -488,10 +512,23 @@ async function trackB() {
     return run(
       "⑤ 최종 점검(에이전트 4명, 점검표까지)",
       "fillcity/steps/final-check.ts",
-      [`--city-id=${cityId}`],
+      [`--city-id=${cityId}`, ...applyArg],
       0,
     );
   });
+
+  // ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = 사장님 결정값(보고 폴더 *_boss-fix.json)이 정답 = 일꾼·제미니·페이지 다시 읽기 누가 덮어도 판정 전에 다시 넣는다 (정본 §2026-10-24)
+  if (apply && fs.existsSync(REPORT_DIR))
+    for (const f of fs
+      .readdirSync(REPORT_DIR)
+      .filter((x) => x.endsWith("_boss-fix.json"))
+      .sort())
+      await run(
+        `⑥ 사장님 결정값 다시 넣기 = ${f}`,
+        "fillcity/steps/llm-review.ts",
+        [`--city-id=${cityId}`, `--apply=${path.join(REPORT_DIR, f)}`],
+        0,
+      );
 
   await step("report", () =>
     run("⑥ 손님상 검수", "fillcity/steps/serving-report.ts", [
@@ -516,8 +553,12 @@ async function trackB() {
     0,
   );
 
-  // ⚠️ 수정금지(승인필요) 2026-10-08 사장님 결정 = 장부 닫기 = 최종 점검표가 나왔거나 최종 점검을 안 묻는 판이면 끝 = 판정 불통과·일꾼 검사 오류는 결과이지 중단이 아니다 (정본 §)
-  saveProgress(!asked("final-check") || finalTableSince(RUN_START));
+  // ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = 장부 닫기 = 이 시도 뒤 최종 점검표가 나왔거나 · 최종 점검을 안 묻는 판이거나 · 적은 단계(--only)를 다 끝냈으면 끝 = 판정 불통과·일꾼 검사 오류는 결과이지 중단이 아니다 (정본 §2026-10-24)
+  saveProgress(
+    !asked("final-check") ||
+      finalTableSince(STARTED) ||
+      (!!onlyArg && onlyArg.every((n) => done.has(n))),
+  );
   await anchor?.close();
   if (failures.length) {
     console.log(`\n⚠️ 실패한 단계(재시도 후) = ${failures.join(", ")}`);
@@ -525,14 +566,14 @@ async function trackB() {
   } else {
     console.log("\n✅ 전 단계 완료(건너뛴 유료 단계 제외)");
   }
-  // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = ⑦ AI 최종 검수 = 의무 단계 = 이 판을 돌린 AI 가 지시문대로 페이지를 직접 열어 걸린 행을 채우고 판정 통과를 본 뒤에만 보고한다(지시문 = 자연어지만 코드와 같다) (정본 §)
+  // ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = ⑦ 최종 검수 = 최종 보고 → 승인 명령 → 손으로 채움 = 최종 완성 (정본 §2026-10-24)
   console.log(
     [
       "",
-      "━━━━━━ ⑦ AI 최종 검수(의무 · 사장님께 보고하기 전) ━━━━━━",
+      "━━━━━━ ⑦ 최종 검수 = 최종 보고 → 승인 명령 → 손으로 채움 = 최종 완성 ━━━━━━",
       "지시문 = fillcity/prompts/09-ai-final-review/instruction.txt — 처음부터 끝까지 읽고 그대로 한다.",
-      `걸린 행 명단 = docs/b1-reports/${cityId}/*_final-todo.json(가장 나중 파일) · 최종 점검표 = docs/b1-reports/${cityId}/final-check-*/final-table.json`,
-      `끝 = npx tsx fillcity/status.ts --city-id=${cityId} --judge=true 가 "통과"를 낸 뒤에만 보고한다. 이 단계 없이 "끝났다"고 하면 거짓 보고다.`,
+      `최종 점검표 = ${reportDirOf(cityId)}/final-check-*/final-table.json · 넣은 기록 = ${reportDirOf(cityId)}/*_llm-review-deleted.json · 사장님 결정값 = ${reportDirOf(cityId)}/*_boss-fix.json`,
+      `끝 = 채운 뒤 npx tsx fillcity/status.ts --city-id=${cityId} --judge=true "통과". 이 단계 없이 "끝났다"고 하면 거짓 보고다.`,
     ].join("\n"),
   );
 })();

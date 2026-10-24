@@ -1,12 +1,14 @@
 // ⚠️ 수정금지(승인필요) 2026-10-05 사장님 결정 = v3.2 최적화 (정본 §)
 import fs from "fs";
 import path from "path";
+import { reportDirOf } from "../../worker/lib/services/shared/local-paths";
 import { fileURLToPath } from "url";
 import { createRequire } from "module";
 import os from "os";
 import { spawn } from "child_process";
 import { foldAccents } from "../../worker/lib/services/shared/text-fold";
 import { fileStamp } from "../../shared/r2-paths";
+import { latestVersioned } from "../../worker/lib/services/shared/raw-filename";
 
 export const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -43,22 +45,6 @@ export async function connectDb() {
   });
   await c.connect();
   return c;
-}
-
-export function lastGoogleLogs(cityId: number): Map<number, any> {
-  const dir = path.join(ROOT, "docs", "raw", String(cityId));
-  const out = new Map<number, any>();
-  if (!fs.existsSync(dir)) return out;
-  const files = fs
-    .readdirSync(dir)
-    .filter((f) => f.includes("_gmaps-page-read-") && f.endsWith(".json"))
-    .sort();
-  for (const f of files) {
-    const rows = JSON.parse(fs.readFileSync(path.join(dir, f), "utf-8"))?.raw
-      ?.rows;
-    for (const r of rows ?? []) out.set(Number(r.id), r);
-  }
-  return out;
 }
 
 export function pageLabel(raw: string): string {
@@ -187,6 +173,13 @@ export function readLedger(cityId: number): Ledger {
   return fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, "utf-8")) : {};
 }
 
+// ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 산출표 두 구역(볼거리·식당)의 확인·신규 항목 펼치기 1벌 (정본 §2026-10-23)
+export const DIFF_SECTIONS = ["landmarks", "restaurants"] as const;
+export const diffSectionItems = (report: any, section: string): any[] => [
+  ...(report?.[section]?.confirm ?? []),
+  ...(report?.[section]?.new ?? []),
+];
+
 // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 구글 사람 인증이 뜨면 이 PC 에 알림(윈도우 토스트 + 소리) = 사장님이 다른 일을 하고 있어도 안다 (정본 §)
 export function notifyHuman(title: string, message: string): void {
   const esc = (s: string) => s.replace(/'/g, "''");
@@ -220,6 +213,73 @@ export const stamp = (): string => fileStamp();
 
 // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 종료 코드 3 = 구글맵 제한 보기(사람 인증) = 지운 것 없이 멈춘다 = 본체가 알림 → 기다림 → 같은 단계 재실행 · 상수는 여기 1벌 (정본 §)
 export const EXIT_LIMITED = 3;
+
+// ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 사람 인증 대기 1벌(엔진 단계·일꾼 단계 공용) = 구글이 막혀 있으면 전용 크롬을 앞으로 띄워 인증 화면을 보여 주고 알림 → 풀릴 때까지 30초마다 그 창을 본다(사람 인증 화면은 새로 고치지 않음 = 풀던 인증이 지워지지 않게 · 제한 보기 화면만 1분마다 새로 고침) → 풀리면 돌아가 같은 자리에서 이어 돈다 · 막혀 있지 않으면 바로 돌아간다 · 브라우저는 구글맵 읽기와 같은 launchBrowser 1벌(전용 크롬 GMAPS_CDP) = 전용 크롬 없이 도는 판은 사람이 풀 화면이 없으므로 기다리지 않는다 (정본 §2026-10-23)
+export async function waitHumanCleared(label: string): Promise<boolean> {
+  const { chromium } = await import("playwright");
+  const { LIMITED_VIEW_RE, launchBrowser, openWindow, showWindow } =
+    await import(
+      "../../worker/lib/services/fill/gmaps-pid-identity/page-reader"
+    );
+  if (!process.env.GMAPS_CDP) {
+    console.error(
+      `⛔ ${label} = 전용 크롬(GMAPS_CDP) 없이 도는 판 = 사람 인증을 풀 화면이 없다 = scripts/fillcity-run.mjs 로 돌린다`,
+    );
+    return false;
+  }
+  const browser = await launchBrowser(chromium);
+  const win = await openWindow(browser).catch(async (e: any) => {
+    console.error(
+      `  ⚠️ ${label} = 인증 확인 창을 못 열었다(${String(e?.message || e).slice(0, 80)}) = 그대로 다시 돈다`,
+    );
+    await browser.close().catch(() => {});
+    return null;
+  });
+  if (!win) return false;
+  const page = win.page;
+  const SORRY_RE = /google\.[a-z.]+\/sorry\//;
+  const blocked = async () =>
+    SORRY_RE.test(page.url()) ||
+    LIMITED_VIEW_RE.test(
+      await page
+        .locator("body")
+        .innerText({ timeout: 5000 })
+        .catch(() => ""),
+    );
+  let held = false;
+  try {
+    for (const url of [
+      "https://www.google.com/search?q=weather&hl=en",
+      "https://www.google.com/maps/search/restaurant?hl=en",
+    ]) {
+      await page.goto(url, { waitUntil: "domcontentloaded" }).catch(() => {});
+      await page.waitForTimeout(3000);
+      let waited = 0;
+      while (await blocked()) {
+        held = true;
+        if (waited % 300 === 0) {
+          await showWindow(page);
+          console.error(
+            `⛔ 사람 인증 필요 — ${label} = 전용 크롬을 화면 앞에 띄웠다 = 인증을 풀어 주시면 그 자리에서 이어서 돈다(기다린 지 ${Math.round(waited / 60)}분)`,
+          );
+          notifyHuman(
+            "필시티: 구글 사람 인증 필요",
+            `${label} — 화면 앞에 띄운 전용 크롬에서 "로봇이 아닙니다"를 풀어 주세요. 풀면 그 자리에서 이어서 돕니다.`,
+          );
+        }
+        await page.waitForTimeout(30_000);
+        waited += 30;
+        if (!SORRY_RE.test(page.url()) && waited % 60 === 0)
+          await page.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
+      }
+    }
+    if (held) console.log(`✅ 사람 인증 풀림 — ${label} = 이어서 돈다`);
+    return held;
+  } finally {
+    await win.close();
+    await browser.close().catch(() => {});
+  }
+}
 
 // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 동시 호출 뒤 실패한 몫 되살리기 1벌(발굴 7언어·2차 4분할) = 몫마다 recover(저장된 응답이 있으면 그것으로, 없으면 그 몫만 한 번 더) → 끝내 실패한 몫 목록 (정본 §)
 export async function retryFailed<K>(
@@ -257,9 +317,56 @@ export function runTsx(
   });
 }
 
-// ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 일꾼 띄우기 1벌 = 몫마다 동시에, 결과 파일이 없으면 한 번 더(최대 2번) · 검토·정제·분류·찾기·최종 점검 다섯 단계가 전부 이것을 부른다 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = 헌법 1벌(fillcity/prompts/00-constitution.txt) = 모든 일꾼 지시문 맨 앞에 붙는다 · 읽었는가 = {"읽음": true|false} 하나뿐 · false 거나 없으면 결과를 받지 않는다 · true 인데 지시문대로 하지 않은 결과는 검문이 버린다 (정본 §2026-10-24)
+const CONSTITUTION_FILE = path.join(
+  ROOT,
+  "fillcity/prompts/00-constitution.txt",
+);
+const normText = (s: string) => s.replace(/\r\n/g, "\n").trim();
+export const constitution = () =>
+  normText(fs.readFileSync(CONSTITUTION_FILE, "utf-8"));
+export const BOKMYEONG_FORMAT = `{"읽음": true}`;
+export function bokmyeongOk(file: string): boolean {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf-8"))?.["읽음"] === true;
+  } catch {
+    return false;
+  }
+}
+
+// ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = 일꾼 띄우기 1벌 = 몫마다 동시에, 결과 파일이 없거나 읽음({"읽음": true})이 없으면 한 번 더(최대 2번) · 검토·정제·분류·찾기·최종 점검 다섯 단계가 전부 이것을 부른다 (정본 §2026-10-24)
 type AgentRange = { k: number; from: number; to: number };
 export async function runAgents(a: {
+  label: string;
+  instruction: string;
+  ranges: AgentRange[];
+  promptOf: (j: AgentRange) => string;
+  doneOf: (j: AgentRange) => boolean;
+  dir: string;
+  readDb?: boolean;
+}): Promise<{ k: number; ok: boolean }[]> {
+  // ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = 일꾼이 전용 크롬에 연 탭은 일꾼이 끝나면 필시티가 닫는다(일꾼 단계 시작 때 없던 탭만) = 묵은 탭이 쌓여 크롬이 멈추던 것(92번 첫 판 · 64번 탭 15개) (정본 §2026-10-24)
+  const before = new Set((await cdpPages()).map((t) => t.id));
+  try {
+    return await runAgentJobs(a);
+  } finally {
+    for (const t of await cdpPages())
+      if (!before.has(t.id))
+        await fetch(`${process.env.GMAPS_CDP}/json/close/${t.id}`).catch(
+          () => {},
+        );
+  }
+}
+const cdpPages = async (): Promise<{ id: string }[]> => {
+  if (!process.env.GMAPS_CDP) return [];
+  const list: any[] = await fetch(`${process.env.GMAPS_CDP}/json/list`, {
+    signal: AbortSignal.timeout(5000),
+  })
+    .then((r) => r.json())
+    .catch(() => []);
+  return list.filter((t) => t?.type === "page");
+};
+function runAgentJobs(a: {
   label: string;
   instruction: string;
   ranges: AgentRange[];
@@ -272,36 +379,50 @@ export async function runAgents(a: {
     a.ranges.map(async (j) => {
       const t0 = Date.now();
       let ok = false;
+      let sworn = false;
+      const bok = path.join(a.dir, `bokmyeong-${a.label}-${j.k}.json`);
       for (let attempt = 0; attempt < 2 && !ok; attempt++) {
+        fs.rmSync(bok, { force: true });
         const code = await runClaudeAgent(
-          `${a.instruction} 를 처음부터 끝까지 읽고, 그 지시문대로 일하라.\n\n${a.promptOf(j)}`,
+          `${constitution()}\n\n${a.instruction} 를 처음부터 끝까지 읽는다. 다 읽었으면 ${bok} 에 ${BOKMYEONG_FORMAT} 를 Write 로 쓴다(읽지 않았으면 {"읽음": false} = 네 결과는 받지 않는다). 읽은 지시문 그대로만 일하라 = 읽었다고 쓰고 지시문과 다르게 한 결과는 검문이 버린다.\n\n${a.promptOf(j)}`,
           path.join(a.dir, `${a.label}-${j.k}-report.txt`),
           a.readDb,
         );
-        ok = code === 0 && a.doneOf(j);
+        sworn = bokmyeongOk(bok);
+        ok = code === 0 && a.doneOf(j) && sworn;
         console.log(
-          `  ${ok ? "✅" : "⚠️"} ${a.label} 일꾼 ${j.k}/${a.ranges.length} (순서 ${j.from}~${j.to}) 종료 ${code} · ${Math.round((Date.now() - t0) / 1000)}초${ok ? "" : attempt === 0 ? " = 한 번 더" : ""}`,
+          `  ${ok ? "✅" : "⚠️"} ${a.label} 일꾼 ${j.k}/${a.ranges.length} (순서 ${j.from}~${j.to}) 종료 ${code} · ${Math.round((Date.now() - t0) / 1000)}초${sworn ? "" : " · 읽음 없음"}${ok ? "" : attempt === 0 ? " = 한 번 더" : ""}`,
         );
       }
+      if (!sworn)
+        throw new Error(
+          `${a.label} 일꾼 ${j.k} = 두 번 다 지시문을 읽었다는 답({"읽음": true})이 없다 = 이 단계는 진행하지 않는다(${bok})`,
+        );
       return { k: j.k, ok };
     }),
   );
 }
 
 export function reportDir(cityId: number): string {
-  const dir = path.join(ROOT, "docs", "b1-reports", String(cityId));
+  const dir = reportDirOf(cityId);
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
 
-export function latestReport(cityId: number, suffix: string): string | null {
-  const dir = reportDir(cityId);
-  const f = fs
-    .readdirSync(dir)
-    .filter((x) => x.endsWith(`_${suffix}.json`))
-    .sort()
-    .pop();
-  return f ? path.join(dir, f) : null;
+// ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 최신 보고서 고르기 1벌 = 그 도시 보고 폴더의 {시각}_{이름}.json 중 가장 나중(같은 이름이면 가장 큰 버전 번호) · 산출표는 b1-discovery-diff 이름만 읽는다(2026-09-08) · 읽기만 = 폴더를 만들지 않는다 (정본 §2026-10-23)
+export function latestReport(
+  cityId: number,
+  suffix: string,
+  keep: (file: string) => boolean = () => true,
+): string | null {
+  const dir = reportDirOf(cityId);
+  if (!fs.existsSync(dir)) return null;
+  const re = new RegExp(`_${suffix}(_\\d+)?\\.json$`);
+  const files = fs.readdirSync(dir).filter((f) => re.test(f) && keep(f));
+  if (!files.length) return null;
+  const latestFile = files.sort().reverse()[0];
+  const stem = latestFile.replace(/_\d+\.json$/, ".json");
+  return path.join(dir, latestVersioned(dir, stem) || latestFile);
 }
 
 export function nameTokens(s: string | null | undefined): string[] {

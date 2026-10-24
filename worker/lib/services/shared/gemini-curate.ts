@@ -1,6 +1,7 @@
 // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 제미니 보강 입력에 우리 시드 분류(seed_category) 1칸을 같이 보낸다 = 제미니가 장소 종류를 상상하지 않게 (정본 §)
 import fs from "fs";
 import path from "path";
+import { rawDirOf } from "./local-paths";
 import { fileURLToPath } from "url";
 import { geminiJson } from "./geminiClient";
 
@@ -112,6 +113,29 @@ export async function geminiCurate(
       priceEur: p.price_eur ?? null,
       distanceKmFromCenter: p.distance_km_from_center ?? null,
     });
+  }
+  return out;
+}
+
+// ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 저장된 제미니 2차 응답 읽기 1벌 = docs/raw/{도시}/*_gemini-enrich-after-google-{몫}.json · 이어 돌기(gemini-targets)와 ⑦ 값 검문(procedure-check)이 같이 쓴다 (정본 §2026-10-23)
+export type SavedEnrich = { file: string; part: string; places: any[] };
+export function savedEnrichRaws(
+  cityId: number,
+  since?: string | null,
+): SavedEnrich[] {
+  const dir = rawDirOf(cityId);
+  if (!fs.existsSync(dir)) return [];
+  const out: SavedEnrich[] = [];
+  for (const f of fs.readdirSync(dir).sort()) {
+    const m = f.match(/_gemini-enrich-after-google-(\d+)(?:_\d+)?\.json$/);
+    if (!m || (since && f < since)) continue;
+    let places: any[] = [];
+    try {
+      places =
+        JSON.parse(fs.readFileSync(path.join(dir, f), "utf-8"))?.raw?.parsed
+          ?.places ?? [];
+    } catch {}
+    out.push({ file: path.join(dir, f), part: m[1], places });
   }
   return out;
 }

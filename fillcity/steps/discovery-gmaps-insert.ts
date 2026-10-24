@@ -1,8 +1,8 @@
 // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = v3 ④ = 이 PC 에서 돈다(시드 = 사용자와 무관 = 빠르고 효과적인 쪽 = 창 5개 · 고친 즉시 실증) = B1 산출표를 R2 {도시}/reports 에 올리고 엔진 insertSeedEntries 1벌을 직접 부른다 = "있음"은 안 열고 그 행에 흡수, 신규만 구글맵으로 7요소 갖춰 넣기 → 병합 행 정리. 정제를 먼저 했으므로 후처리(다시 열기) 없음. 워커 큐 경로 폐기 §19 (정본 §)
 import fs from "fs";
 import path from "path";
+import { reportDirOf } from "../../worker/lib/services/shared/local-paths";
 import { fileURLToPath } from "url";
-import { latestVersioned } from "../../worker/lib/services/shared/raw-filename";
 import { cityReportKey } from "../../shared/r2-paths";
 import { crossKind } from "../../worker/lib/services/fill/gmaps-absorb";
 import {
@@ -11,7 +11,14 @@ import {
   type NewEntry,
   type Read,
 } from "../../worker/lib/services/fill/gmaps-shared";
-import { ledgerKey, ledgerPath, readLedger, type Ledger } from "./common";
+import {
+  EXIT_LIMITED,
+  latestReport,
+  ledgerKey,
+  ledgerPath,
+  readLedger,
+  type Ledger,
+} from "./common";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "../..");
@@ -44,25 +51,16 @@ if (!cityId) {
   process.exit(1);
 }
 
-// ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 산출표는 b1-discovery-diff 이름만 읽는다(오늘 같은 폴더의 gmaps-pid-identity 보고서를 잘못 집은 사고).
 function findReportPath(): string {
   if (argv["report"]) return path.resolve(String(argv["report"]));
-  const dir = path.join(ROOT, "docs", "b1-reports", String(cityId));
-  const files = fs.existsSync(dir)
-    ? fs
-        .readdirSync(dir)
-        .filter((f) => /_b1-discovery-diff(_\d+)?\.json$/.test(f))
-    : [];
-  if (!files.length) {
+  const p = latestReport(cityId, "b1-discovery-diff");
+  if (!p) {
     console.error(
-      `✗ docs/b1-reports/${cityId} 에 B1 산출표 없음 = discovery-merge-diff.ts 선행 필요`,
+      `✗ ${reportDirOf(cityId)} 에 B1 산출표 없음 = discovery-merge-diff.ts 선행 필요`,
     );
     process.exit(1);
   }
-  const latestFile = files.sort().reverse()[0];
-  const stem = latestFile.replace(/_\d+\.json$/, ".json");
-  const chosen = latestVersioned(dir, stem) || latestFile;
-  return path.join(dir, chosen);
+  return p;
 }
 
 (async () => {
@@ -111,7 +109,7 @@ function findReportPath(): string {
   );
   for (const n of 신규)
     console.log(
-      `  [${n.langs}] ${n.name} (${n.cat}, best_rank=${codeOf(n.name, n.langs, n.copies)}, avg€${n.avgPrice ?? "-"})`,
+      `  [${n.langs}] ${n.name} (${n.cat}, best_rank=${codeOf(n.name, n.langs, n.copies)}, €${n.price ?? "-"})`,
     );
   if (!apply) {
     console.log(`\n=== DRY (쓰기 0) = --apply 로 흡수·입력 ===`);
@@ -146,7 +144,10 @@ function findReportPath(): string {
   const browser = await launchBrowser(chromium);
   const saveLedger = () =>
     fs.writeFileSync(ledgerPath(cityId), JSON.stringify(ledger, null, 2));
+  // ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 제한 보기로 못 연 곳이 하나라도 있으면 다음 판으로 미루지 않는다 = 종료 코드 3 → 본체가 인증을 기다렸다가 같은 단계를 다시(장부에 넣음·거부로 적힌 곳은 다시 안 엶 = 못 연 곳만) (정본 §2026-10-23)
+  let limited = 0;
   const note = (r: Read) => {
+    if (r.why === LIMITED_WHY) limited++;
     const cid = String(r.d?.mapsUri || "").match(/cid=(\d+)/)?.[1] ?? null;
     if (!r.why)
       ledger[ledgerKey(r.n)] = {
@@ -198,7 +199,15 @@ function findReportPath(): string {
   console.log(
     `\n═══ ④ 끝: 산출표 ${reportKey} · 병합 행 정리 ${purged.purged} ═══`,
   );
+  if (limited) {
+    console.error(
+      `⛔ 제한보기로 못 연 곳 ${limited} = 인증 뒤 이 단계를 다시(못 연 곳만)`,
+    );
+    process.exit(EXIT_LIMITED);
+  }
 })().catch((e) => {
   console.error("ERR", e?.message || e);
-  process.exit(String(e?.message || "").startsWith("제한보기") ? 3 : 1);
+  process.exit(
+    String(e?.message || "").startsWith("제한보기") ? EXIT_LIMITED : 1,
+  );
 });

@@ -1,5 +1,11 @@
-// ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = PID·CID 행 페이지 재확인 루프 1벌 = CLI(gmaps-pid-identity)와 후처리 엔진(gmaps-post = 큐 소비자)이 같은 함수를 부른다. 브라우저는 밖에서 받는다(Node = playwright, Worker = Browser Run). 창 5개 병렬 · 사람 인증이 뜬 창은 닫지 않고 화면 안으로(showWindow) (정본 §)
-import { GMAPS_WINDOWS, openWindow, showWindow } from "./page-reader";
+// ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = PID·CID 행 페이지 재확인 루프 1벌 = CLI(gmaps-pid-identity)와 후처리 엔진(gmaps-post = 큐 소비자)이 같은 함수를 부른다. 브라우저는 밖에서 받는다(Node = playwright, Worker = Browser Run). 창 5개 병렬 · 사람 인증이 뜬 창은 닫지 않고 화면 안으로(showWindow) (정본 §)
+import {
+  GMAPS_WINDOWS,
+  ROW_TIMEOUT_MS,
+  openWindow,
+  showWindow,
+  withTimeout,
+} from "./page-reader";
 import {
   evaluateRow,
   initResult,
@@ -40,7 +46,7 @@ type VerifyPidOpts = {
   parallel?: number; // 창 수(기본 5). 제한 보기가 잦으면 1로 천천히
 };
 
-// ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 세트 단위 = 창이 행 하나씩 동시에 읽고(한 세트) → 그 세트의 원본 JSON 을 도시 폴더에 저장 → 저장 확인 뒤에만 덮어쓰기 → 다음 세트 · 세트 안에 문제(제한 보기·오류·동의창)가 있으면 그 자리에서 멈춘다 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = 세트 단위 = 창이 행 하나씩 동시에 읽고(한 세트) → 그 세트의 원본 JSON 을 도시 폴더에 저장 → 저장 확인 뒤에만 덮어쓰기 → 다음 세트 · 세트 안에 문제(제한 보기·오류·동의창)가 있으면 그 자리에서 멈춘다 · 한 행이 90초 안에 안 끝나면 그 행만 건너뛰고(쓰기 없음) 창을 새로 연다 (정본 §2026-10-24)
 export async function verifyPidRows(o: VerifyPidOpts): Promise<Result[]> {
   const results: Result[] = [];
   const cityStop = nameTokens(o.city.name_en, new Set());
@@ -57,7 +63,20 @@ export async function verifyPidRows(o: VerifyPidOpts): Promise<Result[]> {
     for (let n = 1; queue.length; n++) {
       const set = queue.splice(0, windows);
       const done = await Promise.all(
-        set.map((row, i) => readOne(o, wins[i].page, row, cityStop)),
+        set.map(async (row, i) => {
+          const got = await withTimeout(
+            readOne(o, wins[i].page, row, cityStop),
+          );
+          if (got !== "timeout") return got;
+          console.log(
+            `  ⏱ #${row.id} ${row.name_en} = ${ROW_TIMEOUT_MS / 1000}초 안에 못 읽음 = 건너뜀(다음 판에) · 창 새로`,
+          );
+          await wins[i].close().catch(() => {});
+          wins[i] = await openWindow(o.browser);
+          const r = initResult(row);
+          r.gate = "timeout";
+          return r;
+        }),
       );
       const saved = await savePageLog(o, done, n);
       console.log(
@@ -123,7 +142,7 @@ async function readOne(
 }
 
 async function applyOne(o: VerifyPidOpts, row: Row, r: Result): Promise<void> {
-  if (r.gate === "limited-view") return;
+  if (r.gate === "limited-view" || r.gate === "timeout") return;
   await writeRow(o.upsertPlace, o.cityId, row, r, o.writeCtx);
   const up = String(r.upsert || "");
   if (pageWasRead(r) && !up.startsWith("error") && !up.startsWith("deleted"))

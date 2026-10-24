@@ -1,6 +1,7 @@
 // ⚠️ 수정금지(승인필요) 2026-08-25 사장님 승인 = 02-discover-best20-perlang 실행 진입점
 import fs from "fs";
 import path from "path";
+import { rawDirOf } from "../../../worker/lib/services/shared/local-paths";
 import { fileURLToPath, pathToFileURL } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -169,7 +170,7 @@ const dryRun = argv["dry"] === "true";
     raw: { parsed, text, finishReason, usage },
   });
   console.log(
-    `✓ raw 저장 완료 = docs/raw/${cityId}/${today}_gemini-best20perlang-${lang}.json (+ R2 동일 경로)`,
+    `✓ raw 저장 완료 = ${rawDirOf(cityId)}/${today}_gemini-best20perlang-${lang}.json (+ R2 동일 경로)`,
   );
 
   await c.end();

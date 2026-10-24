@@ -1,11 +1,11 @@
 // ⚠️ 수정금지(승인필요) 2026-10-05 사장님 결정 = v3.2 최적화 (정본 §)
 import fs from "fs";
 import path from "path";
+import { rawDirOf } from "../../worker/lib/services/shared/local-paths";
 import {
   ROOT,
   AGENT_WORKERS,
   connectDb,
-  lastGoogleLogs,
   latestReport,
   loadEnv,
   parseArgs,
@@ -15,10 +15,9 @@ import {
   stamp,
 } from "./common";
 import {
+  type AuditResult,
   auditWithRetry,
   checkCheckRow,
-  chromeVisits,
-  pagePriceOf,
 } from "./procedure-check";
 
 loadEnv();
@@ -52,10 +51,9 @@ const INSTRUCTION = path.join(
   console.log(
     `═══ 에이전트 실행 city ${cityId} = ${total}건 → 에이전트 ${jobs.length}명(${AGENT_WORKERS}명 고정 균등, 동시) → ${path.relative(ROOT, verdictDir)} ═══`,
   );
-  // ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 배정된 모든 행은 단계 파일({도시}-{조}-steps.json)에 판단 순서를 남기고 기계가 크롬 방문 기록과 대조한다 · 어긴 행의 판정은 결과·mismatch 파일에서 빼고 그 행만 이유와 함께 한 번 되돌림 · 두 번째도 어기면 단계 실패 (정본 §2026-10-23)
+  // ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = 배정된 모든 행은 단계 파일({도시}-{조}-steps.json)에 판단 순서를 남기고 기계가 지시문 양식대로 채웠는지만 검문한다(방문 기록 대조 없음) · 어긴 행의 판정은 결과·mismatch 파일에서 빼고 그 행만 이유와 함께 한 번 되돌림 · 못 한 행(인증·중단)은 인증이 풀린 뒤 다 할 때까지(최대 3번) 다시 맡긴다 (정본 §2026-10-24)
   const stepsOf = (k: number) =>
     path.join(verdictDir, `${cityId}-${k}-steps.json`);
-  const t0 = Date.now();
   const run = (
     list: { k: number; from: number; to: number }[],
     retryFile?: string,
@@ -70,7 +68,7 @@ const INSTRUCTION = path.join(
           retryFile
             ? `- 네 몫 = ${retryFile} 의 "${j.k}" 목록(order 값). 이 행들은 아래 이유로 받지 않았다 = 이유를 읽고 지시문 순서대로 다시 한다(도시 번호 ${cityId}, 조 번호 ${j.k})`
             : `- 네게 배정된 순서 = 명단 항목의 order 값이 ${j.from}부터 ${j.to}까지(끝 번호 포함, 도시 번호 ${cityId}, 조 번호 ${j.k})`,
-          `- 구글맵 로그 원본 = ${path.join(ROOT, "docs", "raw", String(cityId))} 안의 *_gmaps-page-read-*.json`,
+          `- 구글맵 로그 원본 = ${rawDirOf(cityId)} 안의 *_gmaps-page-read-*.json`,
           `- 결과 폴더(verdict 폴더) = ${verdictDir}`,
         ].join("\n"),
       doneOf: (j) => fs.existsSync(stepsOf(j.k)),
@@ -79,17 +77,6 @@ const INSTRUCTION = path.join(
   const results = await run(jobs);
   const missing = results.filter((r) => !r.ok).map((r) => r.k);
   const items: any[] = [...s.undecided, ...s.nonPlace, ...s.hotel];
-  const c = await connectDb();
-  const meta = new Map<number, any>(
-    (
-      await c.query(
-        `SELECT id, substring(google_maps_uri from 'cid=([0-9]+)') AS cid, seed_category FROM place_seed_raw WHERE id = ANY($1::int[])`,
-        [items.map((x) => x.id)],
-      )
-    ).rows.map((r: any) => [r.id, r]),
-  );
-  await c.end();
-  const google = lastGoogleLogs(cityId);
   const readJson = (f: string): any[] => {
     try {
       const a = JSON.parse(fs.readFileSync(f, "utf-8"));
@@ -98,8 +85,7 @@ const INSTRUCTION = path.join(
       return [];
     }
   };
-  const audit = (): Map<number, string[]> => {
-    const visits = chromeVisits(t0 - 60_000, Date.now());
+  const audit = (): AuditResult => {
     const steps = new Map<number, any>();
     const files = fs.readdirSync(verdictDir);
     for (const f of files
@@ -108,21 +94,14 @@ const INSTRUCTION = path.join(
       for (const v of readJson(path.join(verdictDir, f)))
         if (Number.isInteger(v?.order)) steps.set(v.order, v);
     const bad = new Map<number, string[]>();
+    const missing = new Set<number>();
     for (const it of items) {
-      const m = meta.get(it.id);
       const v = steps.get(it.order);
-      const why = v
-        ? checkCheckRow(
-            v,
-            {
-              cid: String(m?.cid ?? ""),
-              seed_category: m?.seed_category ?? it.cat,
-              pagePrice: pagePriceOf(google.get(Number(it.id))),
-            },
-            visits,
-            false,
-          )
-        : ["단계 파일에 이 행이 없다"];
+      if (!v) {
+        missing.add(it.order);
+        continue;
+      }
+      const why = checkCheckRow(v);
       if (why.length) bad.set(it.order, why);
     }
     const badIds = new Set(
@@ -153,7 +132,7 @@ const INSTRUCTION = path.join(
         2,
       ),
     );
-    return bad;
+    return { bad, missing };
   };
   const rejected = await auditWithRetry({
     audit,
@@ -162,7 +141,7 @@ const INSTRUCTION = path.join(
     nextK: jobs.length + 1,
   });
   for (const [o, why] of rejected)
-    console.log(`  ✘ order ${o}: 판단 순서 위반 2번 = ${why.join(" · ")}`);
+    console.log(`  ✘ order ${o}: 끝내 못 받은 행 = ${why.join(" · ")}`);
   console.log(
     `═══ 에이전트 실행 끝 = ${jobs.length - missing.length}/${jobs.length}명 단계 파일 있음${missing.length ? ` · 빠진 조 ${missing.sort((a, b) => a - b).join(",")}` : ""} · 두 번 어긴 행 ${rejected.size} ═══`,
   );

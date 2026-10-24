@@ -1,6 +1,7 @@
 // ⚠️ 수정금지(승인필요) 2026-10-15 사장님 결정 = 필시티 에이전트 명단 내보내기 = 표가 못 정하는 행·장소 아님 남음·호텔 페이지를 한 파일로 모으고(CID 가 다르면 다른 장소 = 같은 장소 쌍 없음) 고정 지시문(04-classify-agent)과 조 나누기·적용 명령을 알려 준다(DB 쓰기 없음) (정본 §)
 import fs from "fs";
 import path from "path";
+import { rawDirOf } from "../../worker/lib/services/shared/local-paths";
 import {
   ROOT,
   connectDb,
@@ -75,7 +76,7 @@ const cityId = Number(argv["city-id"] || 0);
       {
         cityId,
         instruction: "fillcity/prompts/04-classify-agent/instruction.txt",
-        logs: `docs/raw/${cityId}/*_gmaps-page-read-N.json`,
+        logs: `${rawDirOf(cityId)}/*_gmaps-page-read-N.json`,
         sections: rows,
       },
       null,

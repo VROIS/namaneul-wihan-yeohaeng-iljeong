@@ -1,6 +1,7 @@
 // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = MIX 저장 단계가 끊긴 실행을 "이미 돈 낸 Gemini raw" 로 되살린다 = 유료호출 0. 알아보는 문으로 창고 행 연결 → 없는 곳은 구글맵 페이지(이름·주소 검색)로 행+사진 → 여정 슬롯에 행·사진 연결. 결과는 순번 파일로 남김(덮어쓰기 0) (정본 §)
 import fs from "fs";
 import path from "path";
+import { reportDirOf } from "../shared/local-paths";
 import { fileURLToPath, pathToFileURL } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "../../../..");
@@ -108,7 +109,7 @@ if (!cityId || !itineraryId || !rawKey) {
       nameKo: p.nameKo || null,
       langs: 1,
       cat: p.seed_category || "attraction",
-      avgPrice: p.price_eur ?? null,
+      price: p.price_eur ?? null,
       avgRank: null,
       copies: [
         {
@@ -232,7 +233,7 @@ if (!cityId || !itineraryId || !rawKey) {
     withImage: beforeImg,
     apply,
   };
-  const outDir = path.join(ROOT, "docs", "b1-reports", String(cityId));
+  const outDir = reportDirOf(cityId);
   const saved = saveVersionedReport(
     outDir,
     `mix-replay_${itineraryId}.json`,
