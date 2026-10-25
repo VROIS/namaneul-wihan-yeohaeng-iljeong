@@ -476,6 +476,7 @@ export async function readAll(
   const PARALLEL = Math.max(1, t.parallel ?? GMAPS_WINDOWS);
   const queue = [...items];
   const reads: Read[] = [];
+  const tries = new Map<NewEntry, number>();
   let limitedRun = 0;
   await Promise.all(
     Array.from({ length: Math.min(PARALLEL, queue.length) }, async () => {
@@ -490,11 +491,15 @@ export async function readAll(
         if (!n) break;
         stat.pageOpens++;
         const got = await withTimeout(readOne(page, n, t));
+        // ⚠️ 수정금지(승인필요) 2026-10-25 사장님 결정 = 시간 초과는 건너뛰지 않는다 = 창을 새로 열고 그 곳을 이 판 안에서 다시 연다(남은 곳 뒤에 붙여 3번까지) · 그래도 못 열면 "오류:시간 초과"로 돌려주고 부르는 쪽이 못 찾은 베스트(find-best)로 넘긴다 = 잃어버리지 않는다 (정본 §2026-10-25)
         if (got === "timeout") {
+          const k = (tries.get(n) ?? 0) + 1;
+          tries.set(n, k);
           console.log(
-            `  ⏱ ${n.name} = ${ROW_TIMEOUT_MS / 1000}초 안에 못 읽음 = 건너뜀(다음 판에) · 창 새로`,
+            `  ⏱ ${n.name} = ${ROW_TIMEOUT_MS / 1000}초 안에 못 읽음 = 창 새로 · ${k < 3 ? `이 판 안에서 다시(${k + 1}번째)` : "3번 다 못 읽음 = 못 찾은 베스트로 넘김"}`,
           );
-          reads.push({ n, d: null, why: "오류:시간 초과" });
+          if (k < 3) queue.push(n);
+          else reads.push({ n, d: null, why: "오류:시간 초과" });
           await closeWin().catch(() => {});
           ({ page, close: closeWin } = await openWindow(
             browser,

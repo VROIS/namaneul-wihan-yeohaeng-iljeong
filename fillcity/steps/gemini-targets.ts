@@ -36,7 +36,7 @@ const isBlank = (x: unknown) => x == null || String(x).trim() === "";
               google_review_count AS rc, price_eur::float8 AS price
          FROM place_seed_raw
         WHERE city_id=$1 AND status='active' AND seed_category NOT LIKE 'bts%' AND seed_category<>'hotel'
-          AND (business_status IS NULL OR business_status NOT IN ('CLOSED_PERMANENTLY','CLOSED_TEMPORARILY'))
+          AND (business_status IS NULL OR business_status <> 'CLOSED_PERMANENTLY')
           AND google_maps_uri LIKE '%cid=%'`,
       [cityId],
     )

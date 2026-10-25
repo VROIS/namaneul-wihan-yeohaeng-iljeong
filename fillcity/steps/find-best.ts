@@ -57,7 +57,9 @@ type Found = {
 
 (async () => {
   if (!cityId) {
-    console.error("Usage: --city-id=<N> [--since=<ISO 시각>] [--apply]");
+    console.error(
+      "Usage: --city-id=<N> [--since=<ISO 시각>] [--apply] [--answers=<어사이드 답 JSON>]",
+    );
     process.exit(1);
   }
   const ledger: Ledger = readLedger(cityId);
@@ -129,8 +131,9 @@ type Found = {
       doneOf: (j) => fs.existsSync(path.join(dir, `result-${j.k}.json`)),
       dir,
     });
-  await run(ranges);
   const byOrder = new Map<number, Found>();
+  // ⚠️ 수정금지(승인필요) 2026-10-25 사장님 결정 = 찾는 일은 어사이드에 맡긴다 = --answers=<어사이드 답 JSON [{name, cid, google_name}]> 이면 일꾼을 띄우지 않고 그 답을 그대로 넣는다(흡수·새 행·베스트 언어 = 일꾼 결과와 같은 길) · 이름 변경·이전·폐업·같은 자리 후속 가게도 어사이드가 준 그대로 (정본 §2026-10-25)
+  const answersFile = argv["answers"] ? String(argv["answers"]) : null;
   const audit = (): AuditResult => {
     byOrder.clear();
     const bad = new Map<number, string[]>();
@@ -173,17 +176,36 @@ type Found = {
     for (const x of items) if (!seen.has(x.order)) missing.add(x.order);
     return { bad, missing };
   };
-  const rejected = await auditWithRetry({
-    audit,
-    retry: run,
-    dir,
-    nextK: ranges.length + 1,
-  });
-  for (const [o, why] of rejected)
-    console.log(
-      `  ✘ order ${o} ${items[o].name_en}: 끝내 못 받은 행 = ${why.join(" · ")}`,
-    );
-  const failed = rejected.size ? 1 : 0;
+  let failed = 0;
+  if (answersFile) {
+    const answers: { name: string; cid?: string; google_name?: string }[] =
+      JSON.parse(fs.readFileSync(answersFile, "utf-8"));
+    for (const x of items) {
+      const a = answers.find((v) => v.name === x.name_en);
+      if (a)
+        byOrder.set(x.order, {
+          order: x.order,
+          name_en: x.name_en,
+          found: /^\d+$/.test(String(a.cid || "")),
+          cid: a.cid,
+          google_name: a.google_name,
+          label: "어사이드",
+        });
+    }
+  } else {
+    await run(ranges);
+    const rejected = await auditWithRetry({
+      audit,
+      retry: run,
+      dir,
+      nextK: ranges.length + 1,
+    });
+    for (const [o, why] of rejected)
+      console.log(
+        `  ✘ order ${o} ${items[o].name_en}: 끝내 못 받은 행 = ${why.join(" · ")}`,
+      );
+    failed = rejected.size ? 1 : 0;
+  }
   const found = items.filter(
     (x) =>
       byOrder.get(x.order)?.found &&

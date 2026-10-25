@@ -20,6 +20,8 @@ import {
   COMPANION_VIBE_CATEGORIES,
 } from "../shared/bts-character-mapping";
 import { normalizeImageUrl } from "../shared/lib/normalize-image-url";
+// ⚠️ 수정금지(승인필요) 2026-10-25 사장님 결정 = 전문가 화면도 손님상 게이트 1벌(servingGateCoreSql) = 영구 폐업만 제외 · 따로 짠 관문 삭제 (정본 §2026-10-25)
+import { servingGateCoreSql } from "./lib/services/shared/pool-radius";
 import type { Db, OpenDb } from "./db-types";
 
 const { cities, expertInquiries, itineraries, placeSeedRaw, users } = schema;
@@ -404,10 +406,6 @@ const PLACE_COLS = {
 
 type PlaceRow = Pick<typeof placeSeedRaw.$inferSelect, keyof typeof PLACE_COLS>;
 
-function servingGateSql() {
-  return sql`(${placeSeedRaw.status} = 'active' AND (COALESCE(${placeSeedRaw.googleReviewCount}, 0) > 0 OR ${placeSeedRaw.bestRank} IS NOT NULL) AND (${placeSeedRaw.googlePlaceId} IS NOT NULL OR ${placeSeedRaw.verifySource} LIKE 'gmaps%') AND (${placeSeedRaw.businessStatus} IS NULL OR ${placeSeedRaw.businessStatus} NOT IN ('CLOSED_PERMANENTLY', 'CLOSED_TEMPORARILY')))`;
-}
-
 function effectiveImage(p: PlaceRow | null | undefined): string | null {
   if (!p) return null;
   return normalizeImageUrl(p.imageUrl || null, 1280);
@@ -582,7 +580,7 @@ function registerBtsRoutes(app: Express, openDb: OpenDb): void {
           .where(
             and(
               cityFilter,
-              servingGateSql(),
+              servingGateCoreSql(),
               sql`(${placeSeedRaw.seedCategory} = ${tag} OR ${placeSeedRaw.categoryTags} && ARRAY[${tag}]::text[])`,
               imageNotNull,
               sql`NOT (${placeSeedRaw.categoryTags} && ARRAY['restaurant']::text[])`,

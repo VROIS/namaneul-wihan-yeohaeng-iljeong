@@ -37,7 +37,7 @@ const cityId = Number(argv["city-id"] || 0);
               substring(google_maps_uri from 'cid=([0-9]+)') AS cid, phase_tags
          FROM place_seed_raw
         WHERE city_id=$1 AND status='active' AND seed_category NOT LIKE 'bts%'
-          AND (business_status IS NULL OR business_status NOT IN ('CLOSED_PERMANENTLY','CLOSED_TEMPORARILY'))`,
+          AND (business_status IS NULL OR business_status <> 'CLOSED_PERMANENTLY')`,
       [cityId],
     )
   ).rows;

@@ -53,12 +53,12 @@ export function poolWhereSql(
   )))`;
 }
 
-// ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 손님상 게이트 1벌 = active + (RC 또는 best_rank) + 확인된 곳(PID 또는 구글맵 검증) + 폐업·임시휴업 제외(창고엔 남기고 풀리면 저절로 복귀) + 가격 있음(NULL = 모름 = 전 분류 손님상 금지, 0 = 확인된 무료) · 가격 조건 앞까지 = servingGateCoreSql(검수가 "가격 없어 못 오른 행"을 세는 데 쓴다) (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-25 사장님 결정 = 손님상 게이트 1벌 = active + (RC 또는 best_rank) + 확인된 곳(PID 또는 구글맵 검증) + 영구 폐업만 제외(임시 휴업은 나간다 = 시즌 장사·언제 다시 열지 모름 · 영구 폐업도 창고엔 남긴다) + 가격 있음(NULL = 모름 = 전 분류 손님상 금지, 0 = 확인된 무료) · 가격 조건 앞까지 = servingGateCoreSql(검수가 "가격 없어 못 오른 행"을 세는 데 쓴다) (정본 §2026-10-25)
 export function servingGateCoreSql(): SQL {
   return sql`(${placeSeedRaw.status} = 'active'
     AND (COALESCE(${placeSeedRaw.googleReviewCount}, 0) > 0 OR ${placeSeedRaw.bestRank} IS NOT NULL)
     AND (${placeSeedRaw.googlePlaceId} IS NOT NULL OR ${placeSeedRaw.verifySource} LIKE 'gmaps%')
-    AND (${placeSeedRaw.businessStatus} IS NULL OR ${placeSeedRaw.businessStatus} NOT IN ('CLOSED_PERMANENTLY', 'CLOSED_TEMPORARILY')))`;
+    AND (${placeSeedRaw.businessStatus} IS NULL OR ${placeSeedRaw.businessStatus} <> 'CLOSED_PERMANENTLY'))`;
 }
 export function servingGateSql(): SQL {
   return sql`(${servingGateCoreSql()} AND ${placeSeedRaw.priceEur} IS NOT NULL)`;

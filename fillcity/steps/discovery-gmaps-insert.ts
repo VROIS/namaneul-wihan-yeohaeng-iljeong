@@ -160,11 +160,8 @@ function findReportPath(): string {
         tier: r.tier ?? null,
         at: new Date().toISOString(),
       };
-    else if (
-      r.why !== LIMITED_WHY &&
-      r.why !== "동의창" &&
-      !r.why.startsWith("오류:")
-    )
+    // ⚠️ 수정금지(승인필요) 2026-10-25 사장님 결정 = 3번 다시 열어도 못 읽은 곳(오류:)도 장부에 거부로 적는다 = 같은 판의 못 찾은 베스트(find-best)가 리서치로 다시 찾는다 = 잃어버리지 않는다 · 제한 보기·동의창은 사람 인증 뒤 이 단계를 다시 돈다 (정본 §2026-10-25)
+    else if (r.why !== LIMITED_WHY && r.why !== "동의창")
       ledger[ledgerKey(r.n)] = {
         name: r.n.name,
         cat: r.n.cat,

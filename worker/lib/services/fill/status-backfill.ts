@@ -63,8 +63,8 @@ const NUMERIC_COLS = new Set([
   "distance_km_from_center",
 ]);
 const ABSORB_TAG = "pid-twin-absorbed";
-// ③ closed 판정용 business_status 값(gmaps-pid-identity.ts 가 쓰는 3값 중 폐업·휴업 2개). 2026-08-28 사장님 확정.
-const CLOSED_BIZ = new Set(["CLOSED_PERMANENTLY", "CLOSED_TEMPORARILY"]);
+// ⚠️ 수정금지(승인필요) 2026-10-25 사장님 결정 = ③ closed 판정용 business_status = 영구 폐업 하나뿐(임시 휴업은 active = 손님상에 나감) (정본 §2026-10-25)
+const CLOSED_BIZ = new Set(["CLOSED_PERMANENTLY"]);
 
 function isEmpty(v: any): boolean {
   if (v === null || v === undefined) return true;
@@ -391,7 +391,7 @@ async function main() {
     } else if (quarSet.has(r.id) || tags.includes("wrong-city-suspect"))
       status = "quarantined";
     else if (tags.includes("영구폐업") || CLOSED_BIZ.has(r.business_status)) {
-      // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 확정 = ③ closed = 영구폐업 태그 ∪ business_status 현재값 CLOSED_*(gmaps-pid-identity 기록).
+      // ⚠️ 수정금지(승인필요) 2026-10-25 사장님 결정 = ③ closed = 영구폐업 태그 ∪ business_status 영구 폐업 = 임시 휴업은 active 로 둔다(손님상에 나감) (정본 §2026-10-25)
       status = "closed";
       if (!CLOSED_BIZ.has(r.business_status)) biz = "CLOSED_PERMANENTLY";
     } else if (holdSet.has(r.id)) status = "hold";
