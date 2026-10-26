@@ -109,7 +109,9 @@ const TAG = `category-align-${new Date().toISOString().slice(0, 10)}`;
     console.log(`  ? 표에 없음 ${n}행: ${g}`);
 
   if (apply) {
-    for (const d of deleted) await deletePlaceRow(d.id);
+    for (const d of deleted)
+      if (!(await deletePlaceRow(d.id)))
+        console.log(`  🛡 #${d.id} ${d.name} 남김(베스트 산출본·영구 폐업 행)`);
     for (const x of changed) {
       const r = await upsertPlace({
         targetRowId: x.id,

@@ -120,8 +120,8 @@ export async function saveNewPlacesToDB(
     place: any,
     orphanImageUrl?: string,
   ) => {
-    await deletePlaceRow(rowId, { alsoDeleteUrl: orphanImageUrl ?? null });
-    delete place.psrRowId;
+    if (await deletePlaceRow(rowId, { alsoDeleteUrl: orphanImageUrl ?? null }))
+      delete place.psrRowId;
   };
 
   // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 알아보는 문(recognizePlace) = 제미니 값만으로 창고에 있는 행을 먼저 찾고, 있으면 그 행으로 직행(새 행·껍데기 0, TS 0). 시드 ③ 과 같은 1벌(§16). 곳마다 독립 = Promise.all 병렬 유지.

@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = ④ 뒤 못 찾은 베스트 = 장부의 거부(제미니 힌트 통째)를 일꾼 4명이 사람처럼 구글맵에서 찾아 CID 를 돌려주면, 창고에 그 CID 행이 있으면 흡수(베스트 언어·번역·제미니 몫) · 없으면 upsertPlace 로 넣고 직행 읽기 엔진이 그 행만 1번 열어 9요소를 채운다 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-25 사장님 결정 = ④ 뒤 못 찾은 베스트 = 베스트 산출본을 직접 읽어 빠진 베스트 전부를 일꾼 4명이 사람처럼 찾아 CID 를 돌려주면, 창고에 그 CID 행이 있으면 흡수(베스트 언어·번역·제미니 몫) · 없으면 upsertPlace 로 넣고 직행 읽기 엔진이 그 행만 1번 열어 9요소를 채운다 · 못 찾음은 결론 (정본 §2026-10-25)
 import fs from "fs";
 import path from "path";
 import {
@@ -14,8 +14,8 @@ import {
   shareRanges,
   stamp,
   type Ledger,
-  type LedgerEntry,
 } from "./common";
+import { MISSING, readBestOutput } from "./best-output";
 import {
   codeOf,
   inTxn,
@@ -26,21 +26,25 @@ import {
 import { absorbInto } from "../../worker/lib/services/fill/gmaps-absorb";
 import { decidePrice } from "../../worker/lib/services/shared/price-eur";
 import { upsertPlace } from "../../worker/lib/services/place-upsert";
+import { CITY_RANGE_KM } from "../../worker/lib/services/shared/geo-distance";
 import {
   type AuditResult,
   auditWithRetry,
   checkFindItem,
+  checkFindItem2,
 } from "./procedure-check";
 
 loadEnv();
 const argv = parseArgs();
 const cityId = Number(argv["city-id"] || 0);
 const apply = argv["apply"] === "true";
-const since = argv["since"] ? Date.parse(String(argv["since"])) : 0;
+// ⚠️ 수정금지(승인필요) 2026-10-25 사장님 결정 = 2차 찾기(--round=2) = 1차가 못 찾음으로 낸 것만 · 지시문·검문만 다르고 넣는 길은 1차와 같다 · 2차의 못 찾음이 최종 결론 (정본 §2026-10-25)
+const round = argv["round"] === "2" ? 2 : 1;
 const INSTRUCTION = path.join(
   ROOT,
-  "fillcity/prompts/07-find-best/instruction.txt",
+  `fillcity/prompts/07-find-best/${round === 2 ? "instruction-2.txt" : "instruction.txt"}`,
 );
+const checkItem = round === 2 ? checkFindItem2 : checkFindItem;
 const TAG = `find-best-${new Date().toISOString().slice(0, 10)}`;
 
 type Found = {
@@ -58,21 +62,56 @@ type Found = {
 (async () => {
   if (!cityId) {
     console.error(
-      "Usage: --city-id=<N> [--since=<ISO 시각>] [--apply] [--answers=<어사이드 답 JSON>]",
+      "Usage: --city-id=<N> [--round=2] [--apply] [--answers=<어사이드 답 JSON>]",
     );
     process.exit(1);
   }
+  // ⚠️ 수정금지(승인필요) 2026-10-25 사장님 결정 = 명단 = 베스트 산출본을 직접 읽어 살아 있는 베스트 행이 없는 것 전부(영구 폐업·못 찾음 결론은 뺀다) = 일꾼 결론은 찾음/못 찾음 하나 (정본 §2026-10-25)
   const ledger: Ledger = readLedger(cityId);
-  const targets: (LedgerEntry & { key: string })[] = Object.entries(ledger)
-    .filter(
-      ([, e]) =>
-        e.verdict === "rejected" && e.entry && Date.parse(e.at) >= since,
+  let c = await connectDb();
+  const best = (await readBestOutput(c, cityId, ledger))?.items ?? [];
+  // ⚠️ 수정금지(승인필요) 2026-10-25 사장님 결정 = 답을 가져오면 있는 번호를 쓴다 = 이 베스트의 자기 행(베스트 값만 빠진 행 · 2차는 1차 못 찾음의 장부 행)이 남아 있으면 그 행에 새 CID 로 덮어쓰고 · 그 CID 행이 따로 있으면 그 행으로 병합(거짓 행은 지움) · 둘 다 없을 때만 새 행 (정본 §2026-10-25)
+  const ownIds = new Set<number>(
+    round === 2
+      ? (
+          await c.query(
+            "SELECT id FROM place_seed_raw WHERE id = ANY($1::int[]) AND best_rank IS NULL AND merged_into IS NULL",
+            [
+              best
+                .filter((x) => x.state === "못 찾음 결론")
+                .map((x) => ledger[x.key]?.rowId)
+                .filter(Boolean),
+            ],
+          )
+        ).rows.map((r: any) => r.id)
+      : [],
+  );
+  const targets = best
+    .filter((x) =>
+      round === 2
+        ? x.state === "못 찾음 결론" && ledger[x.key]?.round !== 2
+        : MISSING.has(x.state),
     )
-    .map(([key, e]) => ({ ...e, key }));
+    .map((x) => {
+      const e = ledger[x.key];
+      return {
+        key: x.key,
+        entry: x.entry,
+        own:
+          x.state === "베스트 값 없음" || x.state === "손님상 아님"
+            ? x.rowId
+            : e?.rowId && ownIds.has(e.rowId)
+              ? e.rowId
+              : null,
+        why: e?.why ? `${x.state} · ${e.why}` : x.state,
+        pageName: e?.pageName ?? null,
+      };
+    });
   if (!targets.length) {
     console.log(
-      `═══ 못 찾은 베스트 city ${cityId} = 장부에 거부 0 = 일꾼 안 띄움 ═══`,
+      `═══ 못 찾은 베스트 ${round}차 city ${cityId} = 산출본 베스트 ${best.length} 중 맡을 것 0 = 일꾼 안 띄움 ═══`,
     );
+    await c.end();
     process.exit(0);
   }
   const dir = path.join(reportDir(cityId), `find-best-${stamp()}`);
@@ -94,20 +133,63 @@ type Found = {
       langs: n.langs,
       what_to_do_ko: ko?.summary ?? null,
       code_tried: t.why,
+      ...(round === 2 ? { round1: ledger[t.key]?.why ?? null } : {}),
       code_page: t.pageName ?? null,
     };
   });
+  const cityRow = (
+    await c.query(
+      "SELECT name_en, latitude::float8 AS lat, longitude::float8 AS lng FROM cities WHERE id=$1",
+      [cityId],
+    )
+  ).rows[0];
+  // ⚠️ 수정금지(승인필요) 2026-10-25 사장님 결정 = 명단에 도시 이름·중심 좌표·범위(100km 내외 = 상한 CITY_RANGE_KM)를 넣는다 = 범위 안이면 마을이 달라도 같은 도시권 (정본 §2026-10-25)
+  const city = {
+    name: cityRow?.name_en ?? null,
+    lat: cityRow?.lat ?? null,
+    lng: cityRow?.lng ?? null,
+    range_km: CITY_RANGE_KM,
+  };
   const listFile = path.join(dir, "list.json");
-  fs.writeFileSync(listFile, JSON.stringify({ cityId, items }, null, 2));
+  fs.writeFileSync(listFile, JSON.stringify({ cityId, city, items }, null, 2));
   const ranges = shareRanges(items.length);
   console.log(
-    `═══ 못 찾은 베스트 city ${cityId} = 장부 거부 ${items.length}곳 → 일꾼 ${ranges.length}명(${AGENT_WORKERS}명 균등, 동시) → ${path.relative(ROOT, dir)} ═══`,
+    `═══ 못 찾은 베스트 ${round}차 city ${cityId} = 산출본에서 맡은 베스트 ${items.length}곳 → 일꾼 ${ranges.length}명(${AGENT_WORKERS}명 균등, 동시) → ${path.relative(ROOT, dir)} ═══`,
   );
   for (const x of items)
     console.log(
       `  [${x.langs}] ${x.name_en} (${x.kind}) · 코드 = ${x.code_tried}`,
     );
+  const existOf = async (cid: string) =>
+    (
+      await c.query(
+        `SELECT id, name_en, seed_category, category_tags, status FROM place_seed_raw WHERE city_id=$1 AND google_maps_uri LIKE $2 AND merged_into IS NULL LIMIT 1`,
+        [cityId, `%cid=${cid}`],
+      )
+    ).rows[0];
+  const planOf = (own: number | null, exist: any) =>
+    own
+      ? exist && exist.id !== own
+        ? `병합 #${own} → #${exist.id}(거짓 행 지움)`
+        : `덮어쓰기 #${own}`
+      : exist
+        ? `흡수 #${exist.id}`
+        : "새 행";
+  const answersFile = argv["answers"] ? String(argv["answers"]) : null;
   if (!apply) {
+    if (answersFile) {
+      const answers: { name: string; cid?: string }[] = JSON.parse(
+        fs.readFileSync(answersFile, "utf-8"),
+      );
+      for (const x of items) {
+        const a = answers.find((v) => v.name === x.name_en);
+        if (!a) continue;
+        const own = targets[x.order].own;
+        console.log(
+          `  답 ${x.name_en} = ${/^\d+$/.test(String(a.cid || "")) ? `CID ${a.cid} → ${planOf(own, await existOf(String(a.cid)))}` : "못 찾음 결론"}`,
+        );
+      }
+    }
     console.log("DRY = --apply 로 일꾼을 띄우고 찾은 CID 를 창고에 넣는다");
     process.exit(0);
   }
@@ -133,7 +215,6 @@ type Found = {
     });
   const byOrder = new Map<number, Found>();
   // ⚠️ 수정금지(승인필요) 2026-10-25 사장님 결정 = 찾는 일은 어사이드에 맡긴다 = --answers=<어사이드 답 JSON [{name, cid, google_name}]> 이면 일꾼을 띄우지 않고 그 답을 그대로 넣는다(흡수·새 행·베스트 언어 = 일꾼 결과와 같은 길) · 이름 변경·이전·폐업·같은 자리 후속 가게도 어사이드가 준 그대로 (정본 §2026-10-25)
-  const answersFile = argv["answers"] ? String(argv["answers"]) : null;
   const audit = (): AuditResult => {
     byOrder.clear();
     const bad = new Map<number, string[]>();
@@ -155,7 +236,7 @@ type Found = {
       for (const r of Array.isArray(arr) ? arr : []) {
         if (!Number.isInteger(r?.order) || !items[r.order]) continue;
         seen.add(r.order);
-        const why = checkFindItem(r);
+        const why = checkItem(r);
         if (why.length) {
           bad.set(r.order, why);
           out.push({ ...r, 받지않은이유: why });
@@ -193,6 +274,8 @@ type Found = {
         });
     }
   } else {
+    // ⚠️ 수정금지(승인필요) 2026-10-25 사장님 결정 = 일꾼이 도는 동안 DB 연결을 닫아 둔다(오래 놀면 끊김 · 최종 점검·LLM 검토와 같은 방식) (정본 §2026-10-25)
+    await c.end();
     await run(ranges);
     const rejected = await auditWithRetry({
       audit,
@@ -205,6 +288,7 @@ type Found = {
         `  ✘ order ${o} ${items[o].name_en}: 끝내 못 받은 행 = ${why.join(" · ")}`,
       );
     failed = rejected.size ? 1 : 0;
+    c = await connectDb();
   }
   const found = items.filter(
     (x) =>
@@ -214,25 +298,79 @@ type Found = {
   console.log(
     `\n일꾼 결과 = ${items.length}곳 중 찾음 ${found.length} · 못 찾음 ${items.length - found.length}`,
   );
-  if (!found.length) process.exit(failed);
-
-  const c = await connectDb();
+  const baseOf = (order: number) => {
+    const n = targets[order].entry;
+    return { name: n.name, cat: n.cat, langs: n.langs };
+  };
+  // ⚠️ 수정금지(승인필요) 2026-10-25 사장님 결정 = 못 찾음 = 그 팀의 결론으로 확정(넘기지 않는다 · 행·산출본은 지우지 않는다) (정본 §2026-10-25)
+  for (const x of items)
+    if (byOrder.has(x.order) && !found.includes(x))
+      ledger[x.key] = {
+        ...ledger[x.key],
+        ...baseOf(x.order),
+        verdict: "not-found",
+        round,
+        rowId: targets[x.order].own ?? ledger[x.key]?.rowId ?? null,
+        why: byOrder.get(x.order)?.note ?? ledger[x.key]?.why,
+        at: new Date().toISOString(),
+      };
   const { writeBestRankUnion } = await import(
     "../../worker/lib/services/shared/best-rank"
   );
   const made: number[] = [];
   for (const x of found) {
     const r = byOrder.get(x.order)!;
-    const n = ledger[x.key].entry;
+    const n = targets[x.order].entry;
     const uri = `https://maps.google.com/?cid=${r.cid}`;
     const code = codeOf(n.name, n.langs, n.copies ?? []);
-    const exist = (
-      await c.query(
-        `SELECT id, name_en, seed_category, category_tags, status FROM place_seed_raw WHERE city_id=$1 AND google_maps_uri LIKE $2 AND merged_into IS NULL LIMIT 1`,
-        [cityId, `%cid=${r.cid}`],
-      )
-    ).rows[0];
+    let exist = await existOf(String(r.cid));
     const ko = (n.copies ?? []).find((t: any) => t.lang === "ko");
+    const own = targets[x.order].own;
+    console.log(`  계획 ${n.name} = ${planOf(own, exist)}`);
+    const settle = async (rowId: number, label: string) => {
+      const br = await inTxn(c, async () => {
+        const b = await writeBestRankUnion(c, rowId, code);
+        await upsertTranslations(c, rowId, n.copies ?? []);
+        return b;
+      });
+      ledger[x.key] = {
+        ...ledger[x.key],
+        ...baseOf(x.order),
+        verdict: "worker-inserted",
+        rowId,
+        cid: String(r.cid),
+        at: new Date().toISOString(),
+      };
+      made.push(rowId);
+      console.log(
+        `  ${label} ← ${n.name} (best_rank ${br.cur} ∪ ${code} → ${br.result})`,
+      );
+    };
+    if (own) {
+      const res = await upsertPlace({
+        targetRowId: own,
+        cityId,
+        seedCategory: n.cat,
+        nameEn: r.google_name || n.name,
+        googleMapsUri: uri,
+        followTriggerDup: true,
+        dupCheckOnWrite: true,
+        phaseTags: [TAG],
+      });
+      if (!res.rowId) {
+        console.log(
+          `  ⚠️ 덮어쓰기 이상(${res.action} ${res.reason ?? ""}): #${own} ${n.name}`,
+        );
+        continue;
+      }
+      if (res.rowId !== own) {
+        console.log(`  🧲 병합 #${own} → #${res.rowId} (${n.name})`);
+        exist = await existOf(String(r.cid));
+      } else {
+        await settle(own, `✎ 덮어쓰기 #${own} ${r.google_name || n.name}`);
+        continue;
+      }
+    }
     if (exist) {
       // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 창고에 그 CID 행이 있으면 흡수 도구 1벌(gmaps-absorb absorbInto)로 합친다 = 제미니 몫·가격 결정·베스트 언어·번역이 ④ 흡수와 같은 길 · gmaps-shared 부품은 정적 import 한 번 (정본 §)
       const stat = newStat();
@@ -246,6 +384,7 @@ type Found = {
             psrName: exist.name_en,
             psrCat: exist.seed_category,
             psrTags: exist.category_tags ?? null,
+            by: `find-best CID ${r.cid}`,
           },
         },
         { cityId, provenanceTag: TAG },
@@ -254,6 +393,7 @@ type Found = {
       if (stat.absorbedHint)
         ledger[x.key] = {
           ...ledger[x.key],
+          ...baseOf(x.order),
           verdict: "worker-absorbed",
           rowId: exist.id,
           cid: String(r.cid),
@@ -284,21 +424,9 @@ type Found = {
       );
       continue;
     }
-    const br = await inTxn(c, async () => {
-      const b = await writeBestRankUnion(c, res.rowId!, code);
-      await upsertTranslations(c, res.rowId!, n.copies ?? []);
-      return b;
-    });
-    ledger[x.key] = {
-      ...ledger[x.key],
-      verdict: "worker-inserted",
-      rowId: res.rowId,
-      cid: String(r.cid),
-      at: new Date().toISOString(),
-    };
-    made.push(res.rowId);
-    console.log(
-      `  ✅ #${res.rowId} ${r.google_name || n.name} ← ${n.name} (${res.action} · 후기 ${r.reviews ?? "-"} · ${r.label ?? "-"} · best_rank ${br.cur} ∪ ${code} → ${br.result})`,
+    await settle(
+      res.rowId,
+      `✅ #${res.rowId} ${r.google_name || n.name} (${res.action} · 후기 ${r.reviews ?? "-"} · ${r.label ?? "-"})`,
     );
   }
   fs.writeFileSync(ledgerPath(cityId), JSON.stringify(ledger, null, 2));
@@ -358,7 +486,7 @@ type Found = {
       `SELECT id, name_en, name_local, seed_category, best_rank, google_review_count rc, google_primary_type gt, status FROM place_seed_raw WHERE id = ANY($1::int[]) ORDER BY id`,
       [
         found
-          .map((x) => ledger[x.key].rowId)
+          .map((x) => ledger[x.key]?.rowId)
           .filter((v): v is number => typeof v === "number"),
       ],
     )

@@ -4,14 +4,17 @@ import path from "path";
 import { rawDirOf } from "../../worker/lib/services/shared/local-paths";
 import { connectDb, loadEnv, parseArgs, reportDir, stamp } from "./common";
 import { labelOfLine, readListRaws } from "./lists-common";
-import { distanceKmFromCoords } from "../../worker/lib/services/shared/geo-distance";
+import {
+  distanceKmFromCoords,
+  CITY_RANGE_KM,
+} from "../../worker/lib/services/shared/geo-distance";
 
 loadEnv();
 const argv = parseArgs();
 const cityId = Number(argv["city-id"] || 0);
 const PER_CAT = Math.max(1, Number(argv["per-cat"] || 20));
 const REST_TARGET = Math.max(1, Number(argv["rest-target"] || 50));
-const RADIUS_KM = Number(argv["radius-km"] || 100);
+const RADIUS_KM = Number(argv["radius-km"] || CITY_RANGE_KM);
 const SIGHTS = [
   "heritage",
   "attraction",

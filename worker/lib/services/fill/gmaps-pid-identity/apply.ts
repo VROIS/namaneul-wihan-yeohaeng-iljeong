@@ -6,7 +6,7 @@ import { type Result, type Row } from "./gates";
 
 // ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = 페이지 값으로 분류까지 확정 = 가격은 페이지로 쓰지 않는다(제미니 값이 정답) · 삭제 함수는 부르는 쪽이 넘긴다 (정본 §2026-10-24)
 export type WriteCtx = {
-  deleteRow?: (rowId: number) => Promise<void>;
+  deleteRow?: (rowId: number) => Promise<boolean>;
 };
 
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 확정 = 두 모드 공통 태그 1벌 = gmaps-pid-verify-<오늘>.
@@ -74,8 +74,9 @@ export async function writeRow(
         )
       : null;
     if (fc?.notPlace && ctx.deleteRow) {
-      await ctx.deleteRow(row.id);
-      r.upsert = `deleted(not-place:${r.category})`;
+      r.upsert = (await ctx.deleteRow(row.id))
+        ? `deleted(not-place:${r.category})`
+        : `kept(not-place:${r.category})`;
       return;
     }
     // ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = 구글맵 페이지는 열어야만 증명되는 것만 덮는다 = 가격은 건드리지 않는다(제미니 값이 정답) · 페이지로 이름이 바뀐 행(ok(page-name)) = 다른 장소이므로 옛 가격·요약을 비운다 (정본 §2026-10-24)

@@ -44,9 +44,16 @@ const FIX_KEYS = new Set([
   "name_ko",
   "google_maps_uri",
 ]);
+// ⚠️ 수정금지(승인필요) 2026-10-26 사장님 결정 = 폐업은 삭제 사유가 아니다 = 이유에 폐업·closed 가 든 삭제 판정은 받지 않는다 = fix.business_status 로 남긴다(영구 폐업 = 행 유지·손님상만 안 나감 · 임시 휴업 = 손님상 가능) (정본 §2026-10-26)
+const CLOSED_RE = /폐업|휴업|문을 닫|closed|ferm[ée]/i;
 export function checkFixShape(v: any): string[] {
   if (v?.keep !== false) return [];
-  if (v.delete === true) return [];
+  if (v.delete === true)
+    return CLOSED_RE.test(String(v.reason ?? ""))
+      ? [
+          "폐업은 삭제가 아니다 = delete 대신 fix.business_status(영구 폐업 CLOSED_PERMANENTLY · 임시 휴업 CLOSED_TEMPORARILY)",
+        ]
+      : [];
   const f = v.fix;
   if (
     !f ||
@@ -59,6 +66,14 @@ export function checkFixShape(v: any): string[] {
   const unknown = Object.keys(f).filter((k) => !FIX_KEYS.has(k));
   return unknown.length ? [`fix 에 없는 칸 = ${unknown.join(", ")}`] : [];
 }
+/** 구글맵 칸을 읽었는가 = url·h1·읽은 문구 10자. */
+const mapsRead = (m: any): boolean =>
+  !!m &&
+  typeof m.url === "string" &&
+  typeof m.h1 === "string" &&
+  typeof m.seen === "string" &&
+  m.seen.trim().length >= 10;
+
 /** 판정 한 행 검문(최종 점검 06 · 일꾼 분류 04) = 위반 이유 목록(빈 목록 = 통과). */
 export function checkCheckRow(v: any): string[] {
   const bad: string[] = [];
@@ -81,20 +96,14 @@ export function checkCheckRow(v: any): string[] {
       bad.push("로그로 답이 안 나왔는데 구글 검색이 없다");
     else if (typeof g["힌트"] !== "string" || g["힌트"].trim().length < 20)
       bad.push("구글검색.힌트 = 받은 글 원문 20자 이상");
-    if (
-      !m ||
-      typeof m.url !== "string" ||
-      typeof m.h1 !== "string" ||
-      typeof m.seen !== "string" ||
-      m.seen.trim().length < 10
-    )
+    if (!mapsRead(m))
       bad.push("로그로 답이 안 나왔는데 구글맵(url·h1·seen 10자) 이 없다");
   }
   return bad;
 }
 
-/** 못 찾은 베스트(07) 항목 검문 = 제미니 힌트 → 구글 검색 → 구글맵 칸을 다 채웠는가 · found=true 면 cid 가 숫자인가. */
-export function checkFindItem(v: any): string[] {
+/** 찾기 항목(1차·2차) 머리 검사 = 애매 · note 8자 · 단계 칸 · 로그 10자 = 단계 칸이 없으면 s = null. */
+function findHead(v: any, order: string): { bad: string[]; s: any } {
   const bad: string[] = [];
   if (/애매/.test(JSON.stringify(v ?? {})))
     bad.push("'애매'는 없다 = 확정해야 한다");
@@ -102,25 +111,62 @@ export function checkFindItem(v: any): string[] {
     bad.push("note = 모든 항목 8자 이상");
   const s = v?.["단계"];
   if (!s || typeof s !== "object")
-    return [...bad, "단계 칸이 없다(제미니 힌트 → 구글 검색 → 구글맵)"];
+    return { bad: [...bad, `단계 칸이 없다(${order})`], s: null };
   if (typeof s["로그"] !== "string" || s["로그"].trim().length < 10)
     bad.push("단계.로그 = 읽은 제미니 힌트 원문 10자 이상");
+  return { bad, s };
+}
+
+/** 못 찾은 베스트(07) 항목 검문 = 제미니 힌트 → 구글 검색 → 구글맵 칸을 다 채웠는가 · found=true 면 cid 가 숫자인가. */
+export function checkFindItem(v: any): string[] {
+  const { bad, s } = findHead(v, "제미니 힌트 → 구글 검색 → 구글맵");
+  if (!s) return bad;
   const g = s["구글검색"];
   const m = s["구글맵"];
   if (!g || typeof g["질문"] !== "string" || !g["질문"].trim())
     bad.push("구글 검색이 없다(구글맵보다 먼저)");
   else if (typeof g["힌트"] !== "string" || g["힌트"].trim().length < 20)
     bad.push("구글검색.힌트 = 받은 글 원문 20자 이상");
-  if (
-    !m ||
-    typeof m.url !== "string" ||
-    typeof m.h1 !== "string" ||
-    typeof m.seen !== "string" ||
-    m.seen.trim().length < 10
-  )
-    return [...bad, "구글맵(url·h1·seen 10자) 이 없다"];
-  if (v.found === true && !/^\d+$/.test(String(v.cid ?? "")))
-    bad.push("found=true 인데 cid 가 숫자가 아니다");
+  if (!mapsRead(m)) return [...bad, "구글맵(url·h1·seen 10자) 이 없다"];
+  return [...bad, ...cidBad(v)];
+}
+
+/** 찾았다면서 cid 가 숫자가 아니면 막는다(1차·2차 공용). */
+const cidBad = (v: any): string[] =>
+  v?.found === true && !/^\d+$/.test(String(v.cid ?? ""))
+    ? ["found=true 인데 cid 가 숫자가 아니다"]
+    : [];
+
+// ⚠️ 수정금지(승인필요) 2026-10-25 사장님 결정 = 2차 찾기 검문 = 구글이 아닌 출처(검색 엔진 결과 화면 제외) 2곳 이상 원문 · 구글 검색 금지 · 찾았으면 구글맵 CID 확인 · 애매 금지 (정본 §2026-10-25)
+const NOT_SOURCE = /(^|\.)(google|bing|duckduckgo)\./i;
+const hostOf = (u: any): string => {
+  try {
+    return new URL(String(u)).hostname;
+  } catch {
+    return "";
+  }
+};
+export function checkFindItem2(v: any): string[] {
+  const { bad, s } = findHead(v, "제미니 힌트 → 다른 출처 → 구글맵 CID");
+  if (!s) return bad;
+  if (s["구글검색"] != null)
+    bad.push("구글 검색은 쓰지 않는다(다른 출처로 찾는다)");
+  const hosts = (Array.isArray(s["출처"]) ? s["출처"] : [])
+    .filter(
+      (x: any) =>
+        typeof x?.["읽은 글"] === "string" && x["읽은 글"].trim().length >= 20,
+    )
+    .map((x: any) => hostOf(x.url))
+    .filter((h: string) => h && !NOT_SOURCE.test(h));
+  if (new Set(hosts).size < 2)
+    bad.push(
+      "단계.출처 = 구글·검색 엔진이 아닌 사이트 2곳 이상(url · 읽은 글 20자)",
+    );
+  if (v?.found === true) {
+    if (!mapsRead(s["구글맵"]))
+      bad.push("찾았으면 구글맵(url·h1·seen 10자)으로 CID 확인");
+  }
+  bad.push(...cidBad(v));
   return bad;
 }
 

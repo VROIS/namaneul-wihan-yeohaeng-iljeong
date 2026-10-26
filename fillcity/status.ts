@@ -6,6 +6,7 @@ import {
   reportDirOf,
 } from "../worker/lib/services/shared/local-paths";
 import { fileURLToPath } from "url";
+import { MISSING, readBestOutput } from "./steps/best-output";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 process.chdir(ROOT);
@@ -351,6 +352,18 @@ if (!cityId) {
     ] as const)
       if (count(w)) fails.push(`${label} ${count(w)}`);
     if (brokenCount) fails.push(`한글 아닌 글자 ${brokenCount}`);
+    // ⚠️ 수정금지(승인필요) 2026-10-25 사장님 결정 = ⑥ 은 베스트 산출본을 직접 읽는다 = 산출본 베스트 중 살아 있는 베스트 행이 없는 것(영구 폐업·못 찾음 결론 빼고)이 1개라도 있으면 불통과 (정본 §2026-10-25)
+    const out = await readBestOutput(c, cityId);
+    if (out) {
+      const lost = out.items.filter((x) => MISSING.has(x.state));
+      if (lost.length) {
+        fails.push(`베스트 누락 ${lost.length}`);
+        for (const x of lost)
+          console.log(
+            `  ✘ 베스트 누락 ${x.section} ${x.ordinal}위 [${x.entry.langs}] ${x.entry.name} = ${x.state}${x.rowId ? ` #${x.rowId}` : ""}`,
+          );
+      }
+    }
     console.log(
       `\n⑥ 판정 = ${fails.length ? `불통과: ${fails.join(" · ")}` : "통과 = 이 도시는 마침표(다시 창고를 볼 일 없음)"}`,
     );

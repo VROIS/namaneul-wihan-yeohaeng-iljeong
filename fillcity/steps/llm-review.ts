@@ -212,7 +212,15 @@ async function applyFile(c: any, file: string): Promise<number> {
         );
         continue;
       }
-      await deletePlaceRow(Number(v.id));
+      // ⚠️ 수정금지(승인필요) 2026-10-26 사장님 결정 = 삭제는 사장님 결정 파일(*_boss-fix.json)로만 = 그 밖의 삭제 판정은 관문이 막고 건너뜀으로 남는다 (정본 §2026-10-26)
+      if (
+        !(await deletePlaceRow(Number(v.id), {
+          boss: /_boss-fix\.json$/.test(file),
+        }))
+      )
+        throw new Error(
+          "외부에서 가져온 행(CID·베스트) = 삭제 금지(결정은 사장님)",
+        );
       done.push({ id: v.id, name: mine.get(Number(v.id)), reason: v.reason });
       console.log(`  🗑 #${v.id} ${mine.get(Number(v.id))} 삭제 = ${v.reason}`);
     } catch (e: any) {
@@ -269,6 +277,7 @@ async function judge(c: any): Promise<string | null> {
   });
   const byId = new Map<number, any>(rows.map((r: any) => [r.id, r]));
   const merged: Verdict[] = [];
+  const candidates: { id: number; name: string; reason: string }[] = [];
   let found = 0;
   for (const j of ranges) {
     const f = path.join(dir, `verdict-${j.k}.json`);
@@ -279,9 +288,15 @@ async function judge(c: any): Promise<string | null> {
       for (const v of Array.isArray(arr) ? arr : []) {
         const r = byId.get(Number(v.id));
         if (!r || r.order < j.from || r.order > j.to) continue;
-        // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 베스트 행·PID 있는 행은 삭제만 막고 고침(가격 비움·분류·이름)은 받는다 (정본 §)
-        if (r.best && !v.fix) continue;
-        if (r.pid && !v.fix && (r.address || (r.rc ?? 0) > 0)) continue;
+        // ⚠️ 수정금지(승인필요) 2026-10-26 사장님 결정 = 베스트 행·CID·PID 있는 행(외부에서 가져온 것)은 삭제 판정을 넣지 않고 삭제 후보로만 남긴다(⑦ 보고 → 사장님 번호 결정) · 고침은 받는다 (정본 §2026-10-26)
+        if ((r.best || r.pid) && !v.fix) {
+          candidates.push({
+            id: Number(v.id),
+            name: r.name_en,
+            reason: String(v.reason || ""),
+          });
+          continue;
+        }
         merged.push({
           id: Number(v.id),
           reason: String(v.reason || ""),
@@ -297,6 +312,16 @@ async function judge(c: any): Promise<string | null> {
     throw new Error(
       `일꾼 ${ranges.length}명 판정 파일 0개 = 검토가 안 됐다(${path.relative(ROOT, dir)})`,
     );
+  if (candidates.length) {
+    fs.writeFileSync(
+      path.join(dir, "delete-candidates.json"),
+      JSON.stringify(candidates, null, 2),
+    );
+    for (const x of candidates)
+      console.log(
+        `  🛡 삭제 후보(사장님 결정) #${x.id} ${x.name} = ${x.reason}`,
+      );
+  }
   const out = path.join(dir, "verdict-merged.json");
   fs.writeFileSync(out, JSON.stringify(merged, null, 2));
   const del = merged.filter((v) => !v.fix).length;

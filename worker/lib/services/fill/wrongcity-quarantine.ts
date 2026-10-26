@@ -53,6 +53,9 @@ const TAG = `city-moved-${new Date().toISOString().slice(0, 10)}`;
     pathToFileURL(path.join(ROOT, "worker/lib/services/shared/geo-distance.ts"))
       .href
   );
+  const { deletePlaceRow } = await import(
+    pathToFileURL(path.join(ROOT, "worker/lib/services/place-upsert.ts")).href
+  );
   const { copyR2Object, deleteFromR2 } = await import(
     pathToFileURL(path.join(ROOT, "worker/lib/services/shared/r2-client.ts"))
       .href
@@ -185,7 +188,11 @@ const TAG = `city-moved-${new Date().toISOString().slice(0, 10)}`;
     // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 붙을 도시가 없는 행 = 삭제(격리로 묻어두지 않는다) · 그 사진도 같이 지운다 (정본 §)
     if (!stay && to.d > MOVE_MAX_KM) {
       try {
-        await c.query("DELETE FROM place_seed_raw WHERE id = $1", [r.id]);
+        // ⚠️ 수정금지(승인필요) 2026-10-25 사장님 결정 = 삭제는 deletePlaceRow 1벌(베스트 산출본 행·영구 폐업 행은 지우지 않는다 · 사진은 다른 행이 쓰는지 보고 따로 지운다) (정본 §2026-10-25)
+        if (!(await deletePlaceRow(r.id, { keepImageUrl: r.image_url }))) {
+          console.log(`  🛡 id=${r.id} "${r.name_en}" 삭제 안 함`);
+          continue;
+        }
         orphan++;
         console.log(
           `  🗑 id=${r.id} "${r.name_en}" 삭제(500km 안에 붙을 도시 없음)`,

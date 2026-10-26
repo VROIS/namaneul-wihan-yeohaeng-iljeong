@@ -253,8 +253,11 @@ export async function runGmapsPost(o: {
     for (const rd of reads) {
       const targetRowId = (rd.n as any).__rowId;
       if (rd.why?.startsWith("장소아님")) {
-        await deleteRow(targetRowId);
-        log(`   🗑 #${targetRowId} ${rd.n.name} 삭제(${rd.why})`);
+        log(
+          (await deleteRow(targetRowId))
+            ? `   🗑 #${targetRowId} ${rd.n.name} 삭제(${rd.why})`
+            : `   🛡 #${targetRowId} ${rd.n.name} 남김(${rd.why})`,
+        );
         continue;
       }
       await writeRead(

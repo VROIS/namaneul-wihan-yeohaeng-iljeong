@@ -154,7 +154,12 @@ export type LedgerEntry = {
   name: string;
   cat: string;
   langs: number;
-  verdict: "inserted" | "rejected" | "worker-inserted" | "worker-absorbed";
+  verdict:
+    | "inserted"
+    | "rejected"
+    | "worker-inserted"
+    | "worker-absorbed"
+    | "not-found";
   rowId?: number | null;
   cid?: string | null;
   tier?: "T1" | "T2" | null;
@@ -162,6 +167,7 @@ export type LedgerEntry = {
   pageName?: string | null;
   at: string;
   entry?: any; // 거부된 곳의 제미니 힌트(NewEntry 그대로)
+  round?: 1 | 2; // 못 찾음 결론을 낸 찾기 차수
 };
 export type Ledger = Record<string, LedgerEntry>;
 export const ledgerKey = (n: { name: string; cat: string }) =>

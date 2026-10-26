@@ -126,7 +126,7 @@ const passing = (why: string) =>
   let removed = 0,
     later = 0;
   const drop = async (id: number, name: string, why: string) => {
-    await deletePlaceRow(id);
+    if (!(await deletePlaceRow(id))) return;
     removed++;
     console.log(`  🗑 #${id} ${name} 삭제(${why})`);
   };

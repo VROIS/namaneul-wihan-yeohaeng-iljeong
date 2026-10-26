@@ -1,5 +1,6 @@
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = §0 700줄 가드 = 폴더 분리(로직 무변경)
 import type { Page } from "playwright";
+import { CITY_RANGE_KM } from "../../shared/geo-distance";
 import { foldAccents, foldName } from "../../shared/text-fold";
 import {
   readPlacePage,
@@ -9,8 +10,8 @@ import {
 
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 지시 = 좌표 관문 2km = 이름 강일치(strong) 행은 초과 시 우리 좌표 오염으로 보고 페이지 좌표로 교정(coord-corrected) / 이름 약일치(weak)·실패 행은 초과 시 딴 장소(coord-mismatch = 안 씀).
 export const COORD_GATE_KM = 2;
-// ⚠️ 수정금지(승인필요) 2026-08-28 사장님 지시 = 페이지 좌표 유효 범위 = 도시 중심 150km 이내. 실측 서울 2행 = 페이지 URL @lat,lng 가 지도 기본(세계) 뷰 = 10,192km/10,224km 떨어진 좌표를 "좌표 교정"으로 써 버림 = 그 밖이면 page-coord-invalid(좌표만 안 씀).
-export const PAGE_COORD_MAX_KM = 150;
+// ⚠️ 수정금지(승인필요) 2026-10-25 사장님 결정 = 페이지 좌표 유효 범위 = 도시 범위 1벌(CITY_RANGE_KM) 안 · 그 밖이면 page-coord-invalid(좌표만 안 씀 = 지도 기본(세계) 뷰 좌표 차단) (정본 §2026-10-25)
+export const PAGE_COORD_MAX_KM = CITY_RANGE_KM;
 // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 지시 = 이름 관문(오매칭 감지) = 우리 name_en 과 페이지 h1 의 토큰 집합에 공통 토큰이 0개면 name-mismatch. 불용어 = 관사·전치사·시설 일반어·도시명(cities.name_en 은 실행 시 추가).
 const NAME_STOP_WORDS = new Set([
   "de",

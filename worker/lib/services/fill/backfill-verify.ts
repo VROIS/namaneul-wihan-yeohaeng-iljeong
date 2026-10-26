@@ -3,6 +3,7 @@ import { loadEurPer, tsPriceDecision } from "../shared/price-eur";
 import fs from "fs";
 import path from "path";
 import { rawDirOf } from "../shared/local-paths";
+import { CITY_RANGE_KM } from "../shared/geo-distance";
 import { fileURLToPath, pathToFileURL } from "url";
 import { relinkStorageImages } from "./storage-image-relink";
 import { placeImageKey } from "../../../../shared/r2-paths";
@@ -447,7 +448,7 @@ async function backfillImages(opts: {
     `✅ 완료: PM ${pmDone}건 저장${pmFail ? ` · PM 실패 ${pmFail}건` : ""} · 구글맵무료 ${gmapsDone}건${gmapsFail ? ` · 무료 실패 ${gmapsFail}건` : ""} · TS ${tsDone}콜${!opts.allowTs && tsTargets.length ? ` · TS필요 ${tsTargets.length}건 보류(--allow-ts)` : ""}`,
   );
 
-  // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = PID 가 정답 = 페이지 좌표가 **자기 도시에서 100km 밖**인 행만 이동 대상(버리지 않고 맞춰 놓는다).
+  // ⚠️ 수정금지(승인필요) 2026-10-25 사장님 결정 = PID 가 정답 = 페이지 좌표가 자기 도시 범위(CITY_RANGE_KM) 밖인 행만 이동 대상(버리지 않고 맞춰 놓는다) (정본 §2026-10-25)
   if (apply && rows.length) {
     const far = (
       await c.query(
@@ -458,8 +459,8 @@ async function backfillImages(opts: {
             AND ci.latitude IS NOT NULL AND ci.longitude IS NOT NULL
             AND sqrt(power((p.latitude::float - ci.latitude::float) * 111320, 2)
                    + power((p.longitude::float - ci.longitude::float) * 111320
-                           * cos(radians((p.latitude::float + ci.latitude::float) / 2)), 2)) > 100000`,
-        [rows.map((x: any) => x.id)],
+                           * cos(radians((p.latitude::float + ci.latitude::float) / 2)), 2)) > $2`,
+        [rows.map((x: any) => x.id), CITY_RANGE_KM * 1000],
       )
     ).rows.map((x: any) => x.id);
     if (far.length) {
@@ -476,7 +477,9 @@ async function backfillImages(opts: {
       );
       if (r.status !== 0) console.warn("  ⚠️ 소속오염 이동 단계 실패");
     } else {
-      console.log("  소속오염(자기 도시 100km 밖) = 0건 = 이동 없음");
+      console.log(
+        `  소속오염(자기 도시 ${CITY_RANGE_KM}km 밖) = 0건 = 이동 없음`,
+      );
     }
   }
   // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 결정 = 관문 탈락 = 우리 행과 PID 가 다른 장소 = 사장님이 눈으로 볼 수 있게 목록으로 낸다.

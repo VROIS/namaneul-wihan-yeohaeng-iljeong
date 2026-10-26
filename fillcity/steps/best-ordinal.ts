@@ -1,23 +1,8 @@
 // ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 베스트 순위 = 필시티가 매 도시 베스트를 넣은 뒤 그 도시 최신 산출표(제미니 산출본) 순서로 best_rank 앞자리를 쓴다 = 동의 언어 수 많은 순 → 제미니 평균 등수 → 이름 · 볼거리·식당 따로 1번부터 · 두 목록에 다 있는 행은 자기 분류 쪽 번호 · 산출표 항목 → 행 = 있음은 짝 힌트 행 · 신규는 장부 행 (정본 §2026-10-23)
-import fs from "fs";
 import path from "path";
-import { reportDirOf } from "../../worker/lib/services/shared/local-paths";
-import {
-  DIFF_SECTIONS,
-  ROOT,
-  connectDb,
-  diffSectionItems,
-  latestReport,
-  ledgerKey,
-  loadEnv,
-  parseArgs,
-  readLedger,
-} from "./common";
-import { crossKind } from "../../worker/lib/services/fill/gmaps-absorb";
-import {
-  inTxn,
-  type NewEntry,
-} from "../../worker/lib/services/fill/gmaps-shared";
+import { ROOT, connectDb, loadEnv, parseArgs } from "./common";
+import { readBestOutput } from "./best-output";
+import { inTxn } from "../../worker/lib/services/fill/gmaps-shared";
 import {
   bestRankOrdinal,
   writeBestRankOrdinal,
@@ -27,61 +12,37 @@ loadEnv();
 const argv = parseArgs();
 const cityId = Number(argv["city-id"] || 0);
 const apply = argv["apply"] === "true";
-const PLACED = new Set(["inserted", "worker-inserted", "worker-absorbed"]);
-
 (async () => {
   if (!cityId) {
     console.error("Usage: --city-id=<N> [--apply]");
     process.exit(1);
   }
-  const reportPath = latestReport(cityId, "b1-discovery-diff");
-  if (!reportPath) {
-    console.error(`✗ ${reportDirOf(cityId)} 에 산출표 없음`);
+  const c = await connectDb();
+  const out = await readBestOutput(c, cityId);
+  if (!out) {
+    console.error(`✗ 도시 ${cityId} 베스트 산출본(산출표) 없음`);
     process.exit(1);
   }
-  const report = JSON.parse(fs.readFileSync(reportPath, "utf-8")).report;
-  const ledger = readLedger(cityId);
+  const { reportPath, items } = out;
   const want = new Map<
     number,
     { section: string; ordinal: number; name: string }[]
   >();
   const unmapped: string[] = [];
-  for (const section of DIFF_SECTIONS) {
-    const items: NewEntry[] = diffSectionItems(report, section).sort(
-      (a, b) =>
-        b.langs - a.langs ||
-        (a.avgRank ?? Number.MAX_SAFE_INTEGER) -
-          (b.avgRank ?? Number.MAX_SAFE_INTEGER) ||
-        String(a.name).localeCompare(String(b.name)),
-    );
-    items.forEach((n, i) => {
-      const e = ledger[ledgerKey(n)];
-      const rowId =
-        n.psrHint && !crossKind(n)
-          ? n.psrHint.psrId
-          : e?.rowId && PLACED.has(e.verdict)
-            ? e.rowId
-            : null;
-      if (!rowId) {
-        unmapped.push(
-          `${section} ${i + 1}위 [${n.langs}] ${n.name} (${e?.verdict ?? "장부 없음"})`,
-        );
-        return;
-      }
-      want.set(rowId, [
-        ...(want.get(rowId) ?? []),
-        { section, ordinal: i + 1, name: n.name },
-      ]);
-    });
+  for (const x of items) {
+    if (!x.rowId) {
+      unmapped.push(
+        `${x.section} ${x.ordinal}위 [${x.entry.langs}] ${x.entry.name} (${x.state})`,
+      );
+      continue;
+    }
+    want.set(x.rowId, [
+      ...(want.get(x.rowId) ?? []),
+      { section: x.section, ordinal: x.ordinal, name: x.entry.name },
+    ]);
   }
-  const c = await connectDb();
   const rows = new Map<number, any>(
-    (
-      await c.query(
-        `SELECT id, name_en, seed_category, best_rank, merged_into FROM place_seed_raw WHERE id = ANY($1::int[])`,
-        [[...want.keys()]],
-      )
-    ).rows.map((r: any) => [r.id, r]),
+    items.filter((x) => x.row).map((x) => [x.rowId!, x.row]),
   );
   console.log(
     `═══ 베스트 순위 city ${cityId} = 산출표 ${path.relative(ROOT, reportPath)} · 짝 행 ${want.size} · 짝 없음 ${unmapped.length} · ${apply ? "APPLY" : "DRY"} ═══`,

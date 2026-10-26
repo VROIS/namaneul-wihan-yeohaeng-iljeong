@@ -249,11 +249,12 @@ async function activeKeeperOf(id: number): Promise<number | null> {
   return cur;
 }
 
-// ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 합침 허용 판정 1벌 = CID 가 같을 때만 허용(사진은 그 CID 페이지에서 잘라 온 것 = CID 가 다르면 다른 장소) · CID·사진이 없는 껍데기 진 행은 허용 · 원행에 CID 가 없으면 불허 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-26 사장님 결정 = 합침 허용 판정 1벌 = CID 가 같을 때만 허용(사진은 그 CID 페이지에서 잘라 온 것 = CID 가 다르면 다른 장소) · 진 행에 새 CID 를 주면(찾기 답·⑦ CID 고침) 그 새 CID 로 본다 · CID·사진이 없는 껍데기 진 행은 허용 · 원행에 CID 가 없고 진 행에 있으면 거꾸로 = CID 행을 남기고 껍데기를 흡수 (정본 §2026-10-26)
 async function absorbAllowed(
   loserId: number,
   keepId: number,
-): Promise<{ ok: boolean; why: string }> {
+  newUri?: string | null,
+): Promise<{ ok: boolean; why: string; reverse?: boolean }> {
   if (!db) return { ok: false, why: "db_unavailable" };
   const rows: any[] =
     (
@@ -265,11 +266,18 @@ async function absorbAllowed(
     String(r?.google_maps_uri ?? "").match(/cid=(\d+)/)?.[1] ?? null;
   const lose = rows.find((r) => Number(r.id) === loserId);
   const keep = rows.find((r) => Number(r.id) === keepId);
-  const loseCid = cidOf(lose);
+  const loseCid = cidOf(newUri ? { google_maps_uri: newUri } : lose);
   const keepCid = cidOf(keep);
   if (!loseCid && !lose?.image_url)
     return { ok: true, why: "껍데기 = CID·사진 없음" };
-  if (!keepCid) return { ok: false, why: "원행에 CID 없음" };
+  if (!keepCid)
+    return loseCid
+      ? {
+          ok: false,
+          reverse: true,
+          why: "원행에 CID 없음 = CID 있는 쪽을 남긴다",
+        }
+      : { ok: false, why: "원행에 CID 없음" };
   if (loseCid === keepCid) return { ok: true, why: "같은 CID" };
   return { ok: false, why: "다른 CID = 다른 장소" };
 }
@@ -353,17 +361,34 @@ export async function purgeMergedRows(
   return { purged: ids.length, ids };
 }
 
-// ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 신분(PID·리뷰) 못 갖춘 새 행은 창고에 남기지 않는다 = 삭제 1벌(번역·R2 사진 포함). MIX 가 TS 오배송·빈 페이지·좌표이탈로 못 채운 행에 쓴다.
+// ⚠️ 수정금지(승인필요) 2026-10-26 사장님 결정 = 삭제 1벌(번역·R2 사진 포함) · 외부에서 가져온 행(CID·PID = 구글맵에서 읽어 온 것 · 베스트 산출본 행)은 지우지 않는다 = 폐업·휴업은 business_status 칸에만 적는다(영구 폐업 = 손님상만 안 나감 · 임시 휴업 = 나감) · 없어지는 길 = 병합(merged_into·merged)뿐 · 삭제 결정은 사장님(boss = *_boss-fix.json) (정본 §2026-10-26)
 export async function deletePlaceRow(
   rowId: number,
-  opts?: { keepImageUrl?: string | null; alsoDeleteUrl?: string | null },
-): Promise<void> {
-  if (!db) return;
+  opts?: {
+    keepImageUrl?: string | null;
+    alsoDeleteUrl?: string | null;
+    merged?: boolean;
+    boss?: boolean;
+  },
+): Promise<boolean> {
+  if (!db) return false;
   const r: any = (
     await db.execute(
-      sql`SELECT image_url FROM place_seed_raw WHERE id = ${rowId}`,
+      sql`SELECT image_url, best_rank, merged_into, google_maps_uri, google_place_id FROM place_seed_raw WHERE id = ${rowId}`,
     )
   ).rows?.[0];
+  const merging = !r || r.merged_into || opts?.merged || opts?.boss;
+  const keep = merging
+    ? null
+    : r.best_rank != null
+      ? "베스트 산출본 행"
+      : /cid=\d+/.test(String(r.google_maps_uri ?? "")) || r.google_place_id
+        ? "외부에서 가져온 행(CID)"
+        : null;
+  if (keep) {
+    console.log(`[UPSERT] 🛡 삭제 안 함 = #${rowId} ${keep}(결정은 사장님)`);
+    return false;
+  }
   await db.transaction(async (tx) => {
     await tx.execute(
       sql`DELETE FROM place_translations WHERE place_id = ${rowId}`,
@@ -371,6 +396,7 @@ export async function deletePlaceRow(
     await tx.execute(sql`DELETE FROM place_seed_raw WHERE id = ${rowId}`);
   });
   await deleteR2Photos([r?.image_url, opts?.alsoDeleteUrl], opts?.keepImageUrl);
+  return true;
 }
 
 // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 주소 → R2 키 되돌리기 1벌(§16) = getR2PublicUrl 이 `${base}/${key}` 로 인코딩 없이 붙이므로 되돌릴 때도 그냥 자른다(디코딩하면 Café 같은 키가 어긋나 삭제가 조용히 빗나감).
@@ -433,8 +459,28 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
               return r;
             });
           } else {
-            // ⚠️ 수정금지(승인필요) 2026-10-15 사장님 결정 = CID 가 같은 행끼리만 합친다(다르면 다른 장소라 합치지 않고 둘 다 남김) · 합치면 진 행 파일은 지우고 원행 사진 한 장만 남긴다 (정본 §)
-            const gate = await absorbAllowed(p.targetRowId, dupId);
+            // ⚠️ 수정금지(승인필요) 2026-10-26 사장님 결정 = CID 가 같은 행끼리만 합친다(다르면 다른 장소라 합치지 않고 둘 다 남김 · 새 CID 를 받은 행은 새 CID 로 본다 · 원행이 CID 없는 껍데기면 CID 행이 남는다) · 합치면 진 행 파일은 지우고 원행 사진 한 장만 남긴다 (정본 §2026-10-26)
+            const gate = await absorbAllowed(
+              p.targetRowId,
+              dupId,
+              p.googleMapsUri,
+            );
+            if (gate.reverse) {
+              await moveBelongingsTo(p.targetRowId, dupId);
+              const keepImg: any = (
+                await db.execute(
+                  sql`SELECT image_url FROM place_seed_raw WHERE id = ${p.targetRowId}`,
+                )
+              ).rows?.[0]?.image_url;
+              await deletePlaceRow(dupId, {
+                merged: true,
+                keepImageUrl: keepImg ?? null,
+              });
+              console.log(
+                `[UPSERT] 🧲 CID 없는 쌍둥이 흡수 = #${dupId} → CID 행 #${p.targetRowId} (껍데기 삭제)`,
+              );
+              return upsertPlace({ ...p, dupCheckOnWrite: true });
+            }
             if (!gate.ok) {
               console.log(
                 `[UPSERT] ⏸ 합침 안 함 = #${p.targetRowId} ↔ #${dupId} (${gate.why}) = 둘 다 남김`,
@@ -455,6 +501,7 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
             await moveBelongingsTo(dupId, p.targetRowId);
             await deletePlaceRow(p.targetRowId, {
               keepImageUrl: absorbed.enriched?.imageUrl ?? null,
+              merged: true,
             });
             console.log(
               `[UPSERT] 🧲 PID 쌍둥이 흡수 = #${p.targetRowId} → 원행 #${dupId} (진 행 삭제)`,

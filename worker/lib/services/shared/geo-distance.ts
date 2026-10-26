@@ -48,3 +48,6 @@ export const distanceMetersFromCoords = (
   latB: number,
   lngB: number,
 ): number => Math.round(distanceKmFromCoords(latA, lngA, latB, lngB) * 1000);
+
+// ⚠️ 수정금지(승인필요) 2026-10-25 사장님 결정 = 필시티 도시 범위 = 100km 내외 = 상한 200km 1벌(미국·캐나다·호주 감안 · 주변 도시를 다 덮는다) (정본 §2026-10-25)
+export const CITY_RANGE_KM = 200;

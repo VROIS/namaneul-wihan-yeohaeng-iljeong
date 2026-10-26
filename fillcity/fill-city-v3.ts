@@ -352,7 +352,7 @@ async function trackB() {
     ),
   );
 
-  // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = ④ 뒤 = 코드가 못 찾은 베스트(장부의 거부)를 일꾼 4명이 제미니 힌트로 사람처럼 찾아 CID 로 넣는다(그 행만 1번 열어 9요소) · 이어 돌기 장부 단계 (정본 §)
+  // ⚠️ 수정금지(승인필요) 2026-10-25 사장님 결정 = ④ 뒤 = 베스트 산출본에서 빠진 베스트 전부를 일꾼 4명이 제미니 힌트로 사람처럼 찾아 CID 로 넣는다(그 행만 1번 열어 9요소) → 1차 못 찾음만 2차(다른 출처 · 구글맵은 CID 확인만) · 2차 못 찾음이 최종 결론 (정본 §2026-10-25)
   await step("find-best", async () => {
     if (!asked("find-best")) {
       console.log(
@@ -360,11 +360,21 @@ async function trackB() {
       );
       return false;
     }
-    return run(
-      "④ 못 찾은 베스트(일꾼 4명 · CID 직접 입력)",
-      "fillcity/steps/find-best.ts",
-      [`--city-id=${cityId}`, `--since=${RUN_START}`, ...applyArg],
-      0,
+    return runSeq(
+      () =>
+        run(
+          "④ 못 찾은 베스트 1차(일꾼 4명 · CID 직접 입력)",
+          "fillcity/steps/find-best.ts",
+          [`--city-id=${cityId}`, ...applyArg],
+          0,
+        ),
+      () =>
+        run(
+          "④ 못 찾은 베스트 2차(1차 못 찾음만 · 다른 출처 · 구글맵은 CID 확인만)",
+          "fillcity/steps/find-best.ts",
+          [`--city-id=${cityId}`, "--round=2", ...applyArg],
+          0,
+        ),
     );
   });
 

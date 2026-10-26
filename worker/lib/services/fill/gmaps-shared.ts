@@ -25,6 +25,7 @@ import { upsertTranslationWith } from "../place-upsert";
 import {
   distanceKmFromCoords,
   distanceMetersFromCoords,
+  CITY_RANGE_KM,
 } from "../shared/geo-distance";
 import {
   coversName,
@@ -194,9 +195,9 @@ const popRank = (n: NewEntry, x: Candidate) =>
   n.aliases?.length && (n.noXY || distM(n, x) <= 2000)
     ? -(x.reviewCount ?? 0)
     : 0;
-// ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 받기 = T1 이름이 같으면 받음 · T2 이름이 달라도(번역·줄임·음역) 구글이 CID 있는 등록을 주고 후기가 있고 제미니 좌표 1km 안이고 분류칩이 호환이면 그곳이다(사람이 지도 마크로 알아보는 방식, 거부 27건 재생 = 맞는 곳 14 받음) · 베스트(제미니 별칭 있는 시드)는 분류가 달라도 거부하지 않고 구글 분류를 따른다 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-25 사장님 결정 = 받기 = 랜드마크 거리 = 도시 범위(CITY_RANGE_KM) · T1 이름이 같으면 받음 · T2 이름이 달라도(번역·줄임·음역) 구글이 CID 있는 등록을 주고 후기가 있고 제미니 좌표 1km 안이고 분류칩이 호환이면 그곳이다(사람이 지도 마크로 알아보는 방식, 거부 27건 재생 = 맞는 곳 14 받음) · 베스트(제미니 별칭 있는 시드)는 분류가 달라도 거부하지 않고 구글 분류를 따른다 (정본 §2026-10-25)
 const T2_MAX_KM = 1;
-const T1_MAX_KM = 100; // 랜드마크 = 거점 100km(제미니 좌표가 있을 때)
+const T1_MAX_KM = CITY_RANGE_KM; // 랜드마크 = 도시 범위(제미니 좌표가 있을 때)
 const HARD_MAX_KM = 25; // 식당·쇼핑 = 가게는 좌표 가까이(푸켓 실측 = 같은 이름 식당이 106km 밖 다른 도에 있었다)
 const isHard = (cat: string) => cat === "restaurant" || cat === "shopping";
 function gateVerdict(
