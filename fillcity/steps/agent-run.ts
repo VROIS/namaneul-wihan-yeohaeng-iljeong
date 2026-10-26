@@ -1,7 +1,10 @@
 // ⚠️ 수정금지(승인필요) 2026-10-05 사장님 결정 = v3.2 최적화 (정본 §)
 import fs from "fs";
 import path from "path";
-import { rawDirOf } from "../../worker/lib/services/shared/local-paths";
+import {
+  lastGoogleLogs,
+  rawDirOf,
+} from "../../worker/lib/services/shared/local-paths";
 import {
   ROOT,
   AGENT_WORKERS,
@@ -14,10 +17,12 @@ import {
   shareRanges,
   stamp,
 } from "./common";
+import { insertNewRows } from "./new-rows";
 import {
   type AuditResult,
   auditWithRetry,
   checkCheckRow,
+  missedShops,
 } from "./procedure-check";
 
 loadEnv();
@@ -45,7 +50,10 @@ const INSTRUCTION = path.join(
     console.log(`═══ 에이전트 실행 city ${cityId} = 명단 0건 = 건너뜀 ═══`);
     process.exit(0);
   }
-  const verdictDir = path.join(reportDir(cityId), `verdict-${stamp()}`);
+  // --resume=<이 판 결과 폴더> = 일꾼 첫 몫은 다시 돌리지 않고 검문·되돌림·새 식당 넣기부터(최종 점검과 같은 길)
+  const verdictDir = argv["resume"]
+    ? path.resolve(String(argv["resume"]))
+    : path.join(reportDir(cityId), `verdict-${stamp()}`);
   fs.mkdirSync(verdictDir, { recursive: true });
   const jobs = shareRanges(total);
   console.log(
@@ -74,7 +82,9 @@ const INSTRUCTION = path.join(
       doneOf: (j) => fs.existsSync(stepsOf(j.k)),
       dir: verdictDir,
     });
-  const results = await run(jobs);
+  const results = argv["resume"]
+    ? jobs.map((j) => ({ k: j.k, ok: fs.existsSync(stepsOf(j.k)) }))
+    : await run(jobs);
   const missing = results.filter((r) => !r.ok).map((r) => r.k);
   const items: any[] = [...s.undecided, ...s.nonPlace, ...s.hotel];
   const readJson = (f: string): any[] => {
@@ -85,6 +95,7 @@ const INSTRUCTION = path.join(
       return [];
     }
   };
+  const logs = lastGoogleLogs(cityId);
   const audit = (): AuditResult => {
     const steps = new Map<number, any>();
     const files = fs.readdirSync(verdictDir);
@@ -95,6 +106,18 @@ const INSTRUCTION = path.join(
         if (Number.isInteger(v?.order)) steps.set(v.order, v);
     const bad = new Map<number, string[]>();
     const missing = new Set<number>();
+    // ⚠️ 수정금지(승인필요) 2026-10-26 사장님 결정 = 로그 "At this place" 에 이름이 나온 식당을 new-rows 에 안 적은 시설 행은 받지 않는다(규칙 10 · 되돌림) (정본 §2026-10-26)
+    const written: string[] = [];
+    const catOf = new Map<number, string>();
+    for (const f of files) {
+      if (/^new-rows-\d+\.json$/.test(f))
+        for (const n of readJson(path.join(verdictDir, f)))
+          written.push(String(n?.["이름"] ?? ""));
+      if (new RegExp(`^${cityId}-\\d+\\.json$`).test(f))
+        for (const x of readJson(path.join(verdictDir, f)))
+          if (x?.fix?.seed_category)
+            catOf.set(Number(x.id), x.fix.seed_category);
+    }
     for (const it of items) {
       const v = steps.get(it.order);
       if (!v) {
@@ -102,6 +125,15 @@ const INSTRUCTION = path.join(
         continue;
       }
       const why = checkCheckRow(v);
+      const missed = missedShops(
+        logs.get(Number(it.id))?.rawText,
+        catOf.get(Number(it.id)) ?? it.cat,
+        written,
+      );
+      if (missed.length)
+        why.push(
+          `로그 "At this place" 에 이름이 나온 식당을 new-rows 에 적지 않았다 = ${missed.join(", ")} (규칙 10)`,
+        );
       if (why.length) bad.set(it.order, why);
     }
     const badIds = new Set(
@@ -142,6 +174,10 @@ const INSTRUCTION = path.join(
   });
   for (const [o, why] of rejected)
     console.log(`  ✘ order ${o}: 끝내 못 받은 행 = ${why.join(" · ")}`);
+  // ⚠️ 수정금지(승인필요) 2026-10-26 사장님 결정 = 분류 일꾼이 찾은 시설 안 새 식당은 이 단계에서 바로 넣는다(넣기 1벌 = new-rows.ts) (정본 §2026-10-26)
+  const db = await connectDb();
+  await insertNewRows(db, cityId, verdictDir, "분류 일꾼 새 식당 후보");
+  await db.end();
   console.log(
     `═══ 에이전트 실행 끝 = ${jobs.length - missing.length}/${jobs.length}명 단계 파일 있음${missing.length ? ` · 빠진 조 ${missing.sort((a, b) => a - b).join(",")}` : ""} · 두 번 어긴 행 ${rejected.size} ═══`,
   );

@@ -73,7 +73,7 @@ interface UpsertResult {
   };
 }
 
-// ⚠️ 수정금지(승인필요) 2026-10-01 사장님 결정 = 직행 UPDATE SQL 1벌(§16)에 태그 빼기 추가 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-26 사장님 결정 = 직행 UPDATE SQL 1벌(§16) · 태그 빼기 · 좌표는 numeric 그대로(real 은 6자리로 잘림) (정본 §2026-10-26)
 function buildDirectUpdateSql(p: UpsertPayload, targetId: number) {
   const catTags =
     p.categoryTags && p.categoryTags.length > 0
@@ -93,8 +93,8 @@ function buildDirectUpdateSql(p: UpsertPayload, targetId: number) {
         name_en       = ${p.preserveExistingNames ? sql`COALESCE(NULLIF(name_en, ''), ${p.nameEn ?? null}, name_en)` : sql`COALESCE(${p.nameEn ?? null}, name_en)`},
         name_ko       = ${p.preserveExistingNames ? sql`COALESCE(NULLIF(name_ko, ''), ${p.nameKo ?? null}, name_ko)` : sql`COALESCE(${p.nameKo ?? null}, name_ko)`},
         name_local    = ${p.preserveExistingNames ? sql`COALESCE(NULLIF(name_local, ''), ${p.nameLocal ?? null}, name_local)` : sql`COALESCE(${p.nameLocal ?? null}, name_local)`},
-        latitude      = ${p.preserveExistingCoords ? sql`COALESCE(NULLIF(latitude, 0), ${p.latitude ?? null}::real, latitude)` : sql`COALESCE(${p.latitude ?? null}::real, latitude)`},
-        longitude     = ${p.preserveExistingCoords ? sql`COALESCE(NULLIF(longitude, 0), ${p.longitude ?? null}::real, longitude)` : sql`COALESCE(${p.longitude ?? null}::real, longitude)`},
+        latitude      = ${p.preserveExistingCoords ? sql`COALESCE(NULLIF(latitude, 0), ${p.latitude ?? null}::numeric, latitude)` : sql`COALESCE(${p.latitude ?? null}::numeric, latitude)`},
+        longitude     = ${p.preserveExistingCoords ? sql`COALESCE(NULLIF(longitude, 0), ${p.longitude ?? null}::numeric, longitude)` : sql`COALESCE(${p.longitude ?? null}::numeric, longitude)`},
         address       = COALESCE(${p.address ?? null}, address),
         google_place_id = COALESCE(${p.googlePlaceId ?? null}, google_place_id),
         google_review_count = COALESCE(${p.googleReviewCount ?? null}::integer, google_review_count),

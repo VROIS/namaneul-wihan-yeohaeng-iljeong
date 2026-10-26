@@ -99,7 +99,52 @@ export function checkCheckRow(v: any): string[] {
     if (!mapsRead(m))
       bad.push("로그로 답이 안 나왔는데 구글맵(url·h1·seen 10자) 이 없다");
   }
+  // ⚠️ 수정금지(승인필요) 2026-10-26 사장님 결정 = 로그로 답이 나왔는데 구글 검색·구글맵을 열었으면 받지 않는다 (정본 §2026-10-26)
+  if (s["로그로_답"] === true && (g || m))
+    bad.push(
+      "로그로 답이 나왔는데 구글 검색·구글맵을 열었다 = 로그로 답이 나오는 행은 열지 않는다",
+    );
   return bad;
+}
+
+// ⚠️ 수정금지(승인필요) 2026-10-26 사장님 결정 = 로그 "At this place" 에 이름이 나온 식당·카페·바(폐업 표시 뺌) 뽑기 1벌 = 시설 행에서 일꾼이 new-rows 에 빠뜨린 가게가 있으면 검문이 그 행을 받지 않는다 · 행 자체가 식당이면 안 본다(규칙 10) (정본 §2026-10-26)
+const RATING_LINE_RE = /^\d\.\d\([\d,]+\)/;
+const EAT_TYPE_RE =
+  /\b(restaurant|cafe|café|coffee shop|bar|pub|bistro|bakery|brasserie|food court|eatery|tea house|dessert shop|ice cream shop|hawker stall|steak house|pizzeria|diner|tavern|gastropub|izakaya|patisserie)\b/i;
+export function namedShopsAt(rawText: string): string[] {
+  const at = rawText.indexOf("\nAt this place\n");
+  if (at < 0) return [];
+  const L = rawText
+    .slice(at + "\nAt this place\n".length)
+    .split(/\n\s*(?:View all|Review summary)\s*\n/)[0]
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const out: string[] = [];
+  for (let j = 1; j + 1 < L.length; j++)
+    if (
+      RATING_LINE_RE.test(L[j]) &&
+      EAT_TYPE_RE.test(L[j + 1]) &&
+      !/permanently closed|temporarily closed/i.test(L[j + 2] ?? "")
+    )
+      out.push(L[j - 1]);
+  return out;
+}
+const nameKey = (s: any) =>
+  String(s ?? "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]/gu, "");
+export function missedShops(
+  rawText: string | null | undefined,
+  finalCat: string,
+  written: string[],
+): string[] {
+  if (!rawText || finalCat === "restaurant") return [];
+  const keys = written.map(nameKey).filter(Boolean);
+  return namedShopsAt(rawText).filter((shop) => {
+    const k = nameKey(shop);
+    return !keys.some((w) => w.includes(k) || k.includes(w));
+  });
 }
 
 /** 찾기 항목(1차·2차) 머리 검사 = 애매 · note 8자 · 단계 칸 · 로그 10자 = 단계 칸이 없으면 s = null. */

@@ -7,12 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 process.chdir(ROOT);
-const city = Number(process.argv[2]);
-if (!Number.isInteger(city) || city <= 0) {
-  console.error("사용법: /fillcity <도시번호>");
-  process.exit(1);
-}
-// ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 전용 크롬 = 포트 9333(Aside 9222 와 안 겹침) · 응답이 없으면 필시티가 같은 프로필의 옛 전용 크롬을 닫고 최소화로 새로 켠다(로그인은 프로필에 남음 · 화면을 가로채지 않음) · 켜도 응답 없을 때만 멈춤 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-26 사장님 결정 = 전용 크롬 = 포트 9333(Aside 9222 와 안 겹침) · 판마다 같은 프로필의 옛 전용 크롬을 닫고 최소화로 새로 켜고(로그인은 프로필에 남음 · 화면을 가로채지 않음) 판이 끝나면 닫는다 = 탭·메모리가 판을 넘어 쌓이지 않음 · ⑦ 페이지 확인 = --chrome 으로 새로 켬 · 켜도 응답 없을 때만 멈춤 (정본 §2026-10-26)
 const CDP = "http://127.0.0.1:9333";
 const cdpUp = async () => {
   try {
@@ -24,8 +19,7 @@ const cdpUp = async () => {
     return false;
   }
 };
-if (!(await cdpUp())) {
-  console.log("🟡 전용 크롬이 꺼져 있어 켭니다(최소화).");
+const closeChrome = () =>
   spawnSync(
     "powershell",
     [
@@ -35,6 +29,8 @@ if (!(await cdpUp())) {
     ],
     { stdio: "ignore", windowsHide: true },
   );
+const freshChrome = async () => {
+  closeChrome();
   await new Promise((r) => setTimeout(r, 1500));
   spawn(
     "cmd",
@@ -58,8 +54,18 @@ if (!(await cdpUp())) {
     console.error(`⛔ 전용 크롬(${CDP})을 켰지만 응답이 없다.`);
     process.exit(2);
   }
-  console.log("✅ 전용 크롬 켜짐 = 작업 표시줄에 최소화.");
+  console.log("✅ 전용 크롬 새로 켜짐 = 작업 표시줄에 최소화.");
+};
+if (process.argv[2] === "--chrome") {
+  await freshChrome();
+  process.exit(0);
 }
+const city = Number(process.argv[2]);
+if (!Number.isInteger(city) || city <= 0) {
+  console.error("사용법: /fillcity <도시번호> · 전용 크롬만 새로 켜기 = --chrome");
+  process.exit(1);
+}
+await freshChrome();
 const stamp = () =>
   new Date().toISOString().slice(0, 19).replace("T", "_").replaceAll(":", "");
 const dir = path.join(ROOT, "docs", "b1-reports", String(city));
@@ -114,6 +120,10 @@ const run = spawnSync(
     env: { ...process.env, GMAPS_CDP: CDP },
   },
 );
+closeChrome();
+console.log(
+  "✅ 전용 크롬 닫음 = 다음 판은 새로 켠다 · ⑦ 페이지 확인 = node scripts/fillcity-run.mjs --chrome",
+);
 
 const afterFile = path.join(dir, `${stamp()}_after-status.txt`);
 const after = status(afterFile);
@@ -136,8 +146,8 @@ for (const l of before.split("\n"))
 for (const l of after.split("\n"))
   if (l.trim() && !a.has(l)) console.log(`+ ${l}`);
 console.log(`═══ 실행 후 상태표 저장 = ${afterFile}`);
-// ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = ⑦ AI 최종 검수(의무) = 이 출력을 받은 AI 는 fillcity/prompts/09-ai-final-review/instruction.txt 대로 페이지를 직접 열어 걸린 행을 채우고 판정 통과를 본 뒤에만 사장님께 보고한다 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-26 사장님 결정 = ⑦ AI 최종 검수(의무) = 이 출력을 받은 AI 는 전용 크롬을 --chrome 으로 새로 켜고 fillcity/prompts/09-ai-final-review/instruction.txt 대로 페이지를 직접 열어 걸린 행을 채우고 판정 통과를 본 뒤에만 사장님께 보고한다 (정본 §2026-10-26)
 console.log(
-  `\n⑦ AI 최종 검수(의무) = fillcity/prompts/09-ai-final-review/instruction.txt 를 읽고 그대로 한 뒤, status.ts --city-id=${city} --judge=true 통과를 확인하고 나서 보고한다. 그 전의 "끝났다"는 거짓 보고다.`,
+  `\n⑦ AI 최종 검수(의무) = 전용 크롬을 node scripts/fillcity-run.mjs --chrome 으로 새로 켜고 fillcity/prompts/09-ai-final-review/instruction.txt 를 읽고 그대로 한 뒤, status.ts --city-id=${city} --judge=true 통과를 확인하고 나서 보고한다. 그 전의 "끝났다"는 거짓 보고다.`,
 );
 process.exit(run.status ?? 1);

@@ -2,7 +2,6 @@
 import fs from "fs";
 import path from "path";
 import { rawDirOf } from "../../worker/lib/services/shared/local-paths";
-import { distanceKmFromCoords } from "../../worker/lib/services/shared/geo-distance";
 import {
   ROOT,
   AGENT_WORKERS,
@@ -15,6 +14,7 @@ import {
   shareRanges,
   stamp,
 } from "./common";
+import { insertNewRows } from "./new-rows";
 import { validateRefine } from "./refine-validate";
 import {
   type AuditResult,
@@ -193,16 +193,7 @@ const INSTRUCTION = path.join(
   }
   // 통과한 판정은 그 자리에서 넣는다 = 고침·삭제(fix / delete) → llm-review --apply · 새 식당 후보 → discovery-lists-insert --report → 일꾼이 적은 한글 이름·요약·묘사·가격을 그 행에 넣기
   const db = await connectDb();
-  const city = (
-    await db.query(
-      "SELECT latitude::float8 AS lat, longitude::float8 AS lng FROM cities WHERE id=$1",
-      [cityId],
-    )
-  ).rows[0];
   const fixes: any[] = [];
-  const picks: any[] = [];
-  const texts = new Map<string, any>();
-  const seenCid = new Set<string>();
   const readArr = (f: string): any[] => {
     try {
       const a = JSON.parse(fs.readFileSync(path.join(dir, f), "utf-8"));
@@ -232,42 +223,6 @@ const INSTRUCTION = path.join(
           else if (Object.keys(fix ?? {}).length)
             fixes.push({ id: it.id, fix, reason: x.reason });
         }
-    if (/^new-rows-\d+\.json$/.test(f))
-      for (const n of readArr(f))
-        if (
-          /^\d+$/.test(String(n?.cid ?? "")) &&
-          !seenCid.has(String(n.cid)) &&
-          !byCid.has(String(n.cid)) &&
-          String(n["영업상태"] ?? "OPERATIONAL") === "OPERATIONAL"
-        ) {
-          seenCid.add(String(n.cid));
-          picks.push({
-            cat: "restaurant",
-            name: n["이름"],
-            cid: String(n.cid),
-            lat: n["위도"],
-            lng: n["경도"],
-            rv: n["후기수"],
-            km: city
-              ? Math.round(
-                  distanceKmFromCoords(
-                    Number(n["위도"]),
-                    Number(n["경도"]),
-                    city.lat,
-                    city.lng,
-                  ) * 10,
-                ) / 10
-              : 0,
-            photospotTag: false,
-          });
-          texts.set(String(n.cid), {
-            name_ko: n["한글이름"] ?? null,
-            summary_ko: n["요약"] ?? null,
-            editorial_summary: n["묘사"] ?? null,
-            price_eur:
-              typeof n["가격_유로"] === "number" ? n["가격_유로"] : null,
-          });
-        }
   }
   if (fixes.length) {
     const file = path.join(dir, "final-fix-worker.json");
@@ -289,59 +244,7 @@ const INSTRUCTION = path.join(
       );
     }
   }
-  if (picks.length) {
-    const file = path.join(dir, "new-rows-select.json");
-    fs.writeFileSync(
-      file,
-      JSON.stringify(
-        {
-          generatedAt: new Date().toISOString(),
-          source: "최종 점검 일꾼 새 식당 후보",
-          picks,
-        },
-        null,
-        2,
-      ),
-    );
-    const code = await runTsx(
-      path.join(ROOT, "fillcity/steps/discovery-lists-insert.ts"),
-      [`--city-id=${cityId}`, "--apply=true", `--report=${file}`],
-    );
-    console.log(`새 식당 넣기 = ${picks.length}곳 (종료 ${code})`);
-    const rows = (
-      await db.query(
-        `SELECT id, substring(google_maps_uri from 'cid=([0-9]+)') AS cid, price_eur FROM place_seed_raw WHERE city_id=$1 AND merged_into IS NULL AND substring(google_maps_uri from 'cid=([0-9]+)') = ANY($2::text[])`,
-        [cityId, picks.map((p) => p.cid)],
-      )
-    ).rows;
-    const textFixes = rows
-      .map((r: any) => {
-        const t = texts.get(String(r.cid)) ?? {};
-        const fix: any = {};
-        for (const k of ["name_ko", "summary_ko", "editorial_summary"])
-          if (typeof t[k] === "string" && t[k].trim()) fix[k] = t[k];
-        if (r.price_eur == null && t.price_eur != null)
-          fix.price_eur = t.price_eur;
-        return Object.keys(fix).length
-          ? {
-              id: r.id,
-              fix,
-              reason:
-                "최종 점검 일꾼 새 식당 = 한글 이름·요약·묘사·(머리줄 없으면) 가격",
-            }
-          : null;
-      })
-      .filter(Boolean);
-    if (textFixes.length) {
-      const tf = path.join(dir, "new-rows-fix.json");
-      fs.writeFileSync(tf, JSON.stringify(textFixes, null, 2));
-      const c2 = await runTsx(path.join(ROOT, "fillcity/steps/llm-review.ts"), [
-        `--city-id=${cityId}`,
-        `--apply=${tf}`,
-      ]);
-      console.log(`새 식당 글·가격 넣기 = ${textFixes.length}행 (종료 ${c2})`);
-    }
-  }
+  await insertNewRows(db, cityId, dir, "최종 점검 일꾼 새 식당 후보");
   await db.end();
   process.exit(v.errs.length ? 1 : 0);
 })().catch((e) => {
