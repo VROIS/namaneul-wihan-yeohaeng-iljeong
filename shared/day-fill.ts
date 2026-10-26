@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-10-21 사장님 결정 = 인기 명소 여정 하루 계산 1벌(목록 화면 · 수정 화면 · 서버 공용) = 활동 체류(매트릭스 · 입장료 없으면 60) + 이동 + 점심·저녁(기본 60 · 수정 화면에서 30분 단위로 늘리고 줄임 · 자리는 고정) · 점심 = 11:30~14:00 안 활동 사이(12:45 에 가장 가까운 자리) · 저녁 = 마지막 활동 바로 뒤 · 한 곳 4시간 이상 = 점심 없음 · 8시간 이상 = 저녁도 없음 · 체크한 순서대로 그날이 차면 다음 날 · 다 차면 더 못 담음 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-26 사장님 결정 = 인기 명소 여정 하루 계산 1벌(수정 화면 · 서버 공용) = 활동 체류(매트릭스 · 입장료 없으면 60) + 이동 + 점심·저녁(기본 60 · 수정 화면에서 30분 단위로 늘리고 줄임 · 자리는 고정) · 점심 = 11:30~14:00 안 활동 사이(12:45 에 가장 가까운 자리) · 저녁 = 마지막 활동 바로 뒤 · 한 곳 4시간 이상 = 점심 없음 · 8시간 이상 = 저녁도 없음 · 목록 화면 날 나누기 = 고른 순서대로 하루 1~6곳 · 7번째부터 또는 "다음 날" 자리에서 다음 날 · 날 수 제한 없음 (정본 §2026-10-26)
 import { haversineKm } from "./geo";
 import { moveMinKm } from "./day-retime";
 
@@ -100,27 +100,19 @@ export function planPickedDay<T extends FillPlace>(
   return { items: best!.items, end: best!.end, lunchAfter: best!.li || null };
 }
 
-export function assignPickedDays<T extends FillPlace>(
-  ordered: T[],
-  windows: FillWindow[],
-  cfg: FillConfig,
-): { days: T[][]; rest: T[] } {
-  const days: T[][] = windows.map(() => []);
-  const rest: T[] = [];
-  let d = 0;
-  for (const p of ordered) {
-    let placed = false;
-    while (d < windows.length) {
-      const trial = [...days[d], p];
-      if (planPickedDay(trial, windows[d], cfg).end <= windows[d].endMin) {
-        days[d].push(p);
-        placed = true;
-        break;
-      }
-      if (days[d].length === 0) break;
-      d++;
+const PICKED_DAY_MAX = 6;
+export const PICKED_DAY_BREAK = -1; // 고른 순서 안의 "다음 날" 자리
+// 맨 끝 날은 비어 있을 수 있다("다음 날"을 누른 뒤 = 열린 새 날) · 빈 날이 중간에 생기지 않는다
+export function assignPickedDays(ids: number[]): number[][] {
+  const days: number[][] = [[]];
+  for (const id of ids) {
+    const cur = days[days.length - 1];
+    if (id === PICKED_DAY_BREAK) {
+      if (cur.length) days.push([]);
+      continue;
     }
-    if (!placed) rest.push(p);
+    if (cur.length >= PICKED_DAY_MAX) days.push([]);
+    days[days.length - 1].push(id);
   }
-  return { days, rest };
+  return days;
 }

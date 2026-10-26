@@ -16,18 +16,15 @@ import ItineraryMap from "@/components/ItineraryMap";
 import SlotThumbnail from "./components/SlotThumbnail";
 import { displayCityName } from "@/lib/display-city-name";
 import { haptic } from "@/screens/bts/place-cart/utils";
-import { assignPickedDays } from "@shared/day-fill";
-import { toMin } from "@shared/day-retime";
+import { assignPickedDays, PICKED_DAY_BREAK } from "@shared/day-fill";
 import type { PlannerApi } from "./hooks/useTripPlanner";
 import type { BestListPlace } from "./hooks/useBestList";
-import { shortDate } from "./utils";
+import { addDays, shortDate } from "./utils";
 
 const CARD_H = 56;
 const THUMB = 48;
 
-type Pick = BestListPlace & { stay: number };
-
-// ⚠️ 수정금지(승인필요) 2026-10-21 사장님 결정 = 인기 명소 목록 = 위 지도(출발 깃발 항상 + 고른 곳만 날짜색 번호 마커 · 마커가 깃발 위) + 아래 하나의 목록 · 머리글 = 도시 + 여행 날짜 · 처음엔 체크 0 · 누른 카드가 위로 올라가 고른 순서대로 쌓임(블록 쌓기 · Reanimated LinearTransition) · 날짜 = 시간 기준 자동 배정(shared/day-fill) · 그날이 차면 구분선 뒤 다음 날 · 번호 배지 = 지도 마커와 같은 번호·날짜색(3색 순환) · 한 번 더 누르면 풀림(뒤 카드가 당겨짐) · 안 고른 카드 = 아래 순위순 · 다 차면 흐림 · 완료 = 날마다 1곳 이상 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-26 사장님 결정 = 인기 명소 목록 = 위 지도(출발 깃발 항상 + 고른 곳만 날짜색 번호 마커 · 마커가 깃발 위) + 아래 하나의 목록 · 머리글 = 도시 + 여행 날짜(여는 날부터 담은 날까지) · 처음엔 체크 0 · 누른 카드가 위로 올라가 고른 순서대로 쌓임(블록 쌓기 · Reanimated LinearTransition) · 날 나누기 = 하루 1~6곳(shared/day-fill) · 7번째부터 또는 "다음 날"을 누른 자리에서 구분선(실제 날짜) 뒤 다음 날 · 날 수 제한 없음 · 번호 배지 = 지도 마커와 같은 번호·날짜색(3색 순환) · 한 번 더 누르면 풀림(뒤 카드가 당겨짐) · 안 고른 카드 = 아래 순위순 · 완료 = 1곳 이상 = 담은 날만큼 여정 (정본 §2026-10-26)
 export default function BestListStep({ planner }: { planner: PlannerApi }) {
   const {
     theme,
@@ -53,35 +50,16 @@ export default function BestListStep({ planner }: { planner: PlannerApi }) {
     bestList?.center ??
     bestForm?.destinationCoords ??
     null;
-  const cfg = useMemo(
-    () => ({ center: center ?? { lat: 0, lng: 0 }, mult: bestList?.mult ?? 2 }),
-    [center, bestList?.mult],
-  );
-  const windows = useMemo(
-    () =>
-      (bestList?.days ?? []).map((d) => ({
-        startMin: toMin(d.startTime),
-        endMin: toMin(d.endTime),
-      })),
-    [bestList?.days],
-  );
   const byId = useMemo(
     () => new Map((bestList?.places ?? []).map((p) => [p.id, p])),
     [bestList?.places],
   );
-  const assign = (ids: number[]) =>
-    assignPickedDays(
-      ids
-        .map((id) => byId.get(id))
-        .filter((p): p is BestListPlace => !!p)
-        .map((p): Pick => ({ ...p, stay: p.stayMin })),
-      windows,
-      cfg,
-    );
-  const { days } = useMemo(
-    () => assign(bestPicked.ids),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [bestPicked.ids, byId, windows, cfg],
+  const days = useMemo(
+    () =>
+      assignPickedDays(bestPicked.ids).map((d) =>
+        d.map((id) => byId.get(id)).filter((p): p is BestListPlace => !!p),
+      ),
+    [bestPicked.ids, byId],
   );
   const slotOf = useMemo(() => {
     const m = new Map<number, { day: number; n: number }>();
@@ -90,21 +68,6 @@ export default function BestListStep({ planner }: { planner: PlannerApi }) {
     );
     return m;
   }, [days]);
-  // 더 담을 수 있는 카드 = 지금 고른 순서 뒤에 붙여도 날짜 창 안에 들어가는 것
-  const addable = useMemo(
-    () =>
-      new Set(
-        (bestList?.places ?? [])
-          .filter(
-            (p) =>
-              !slotOf.has(p.id) &&
-              assign([...bestPicked.ids, p.id]).rest.length === 0,
-          )
-          .map((p) => p.id),
-      ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [bestList?.places, slotOf, bestPicked.ids, byId, windows, cfg],
-  );
   const mapPlaces = useMemo(
     () =>
       days.flatMap((d, di) =>
@@ -124,30 +87,35 @@ export default function BestListStep({ planner }: { planner: PlannerApi }) {
   if (!bestList || !bestForm) return null;
 
   const pick = (id: number) => {
-    if (slotOf.has(id)) {
-      haptic("light");
-      setBestPicked((prev) => ({
-        ...prev,
-        ids: prev.ids.filter((x) => x !== id),
-      }));
-      return;
-    }
-    if (!addable.has(id)) {
-      haptic("medium");
-      return;
-    }
     haptic("light");
-    setBestPicked((prev) => ({ ...prev, ids: [...prev.ids, id] }));
+    setBestPicked((prev) => ({
+      ...prev,
+      ids: slotOf.has(id)
+        ? prev.ids.filter((x) => x !== id)
+        : [...prev.ids, id],
+    }));
   };
-  const ready = days.every((d) => d.length > 0);
+  const filled = days.filter((d) => d.length > 0);
+  const ready = filled.length > 0;
+  const canNext = days[days.length - 1].length > 0;
+  const nextDay = () => {
+    if (!canNext) return;
+    haptic("light");
+    setBestPicked((prev) => ({
+      ...prev,
+      ids: [...prev.ids, PICKED_DAY_BREAK],
+    }));
+  };
+  const dateOf = (di: number) => addDays(bestForm.startDate, di);
 
-  // ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 목록 화면은 인기 명소 고정값(bestForm)으로 보이고 완료 요청에도 그대로 싣는다 · 입력 화면 값은 안 씀 (정본 §)
+  // ⚠️ 수정금지(승인필요) 2026-10-26 사장님 결정 = 목록 화면은 인기 명소 고정값(bestForm)으로 보이고 완료 요청에도 그대로 싣는다 · 끝 날짜만 담은 날 수로(여는 날 + 날 수 − 1) · 입력 화면 값은 안 씀 (정본 §2026-10-26)
   const done = async () => {
     if (!ready || busy) return;
     setBusy(true);
     const ok = await handleGenerate({
       ...bestForm,
-      pickedDays: days.map((d) => d.map((p) => p.id)),
+      endDate: dateOf(filled.length - 1),
+      pickedDays: filled.map((d) => d.map((p) => p.id)),
     });
     setBusy(false);
     if (ok) {
@@ -162,9 +130,9 @@ export default function BestListStep({ planner }: { planner: PlannerApi }) {
     | { kind: "line"; day: number };
   const rows: Row[] = [
     ...days.flatMap((d, di): Row[] =>
-      d.length
+      d.length || di > 0
         ? [
-            ...(di > 0 ? [{ kind: "line" as const, day: di + 1 }] : []),
+            { kind: "line" as const, day: di + 1 },
             ...d.map((p, i) => ({
               kind: "card" as const,
               p,
@@ -220,7 +188,8 @@ export default function BestListStep({ planner }: { planner: PlannerApi }) {
             {t("trip.bestListTitle", { city: displayCityName(bestForm) })}
             <Text style={[s.date, { color: theme.textSecondary }]}>
               {"  "}
-              {shortDate(bestForm.startDate)} ~ {shortDate(bestForm.endDate)}
+              {shortDate(bestForm.startDate)} ~{" "}
+              {shortDate(dateOf(Math.max(filled.length, 1) - 1))}
             </Text>
           </Text>
           <Text
@@ -267,14 +236,15 @@ export default function BestListStep({ planner }: { planner: PlannerApi }) {
                 style={s.line}
               >
                 <View style={[s.lineBar, { backgroundColor: color }]} />
-                <Text style={[s.lineText, { color }]}>Day {r.day}</Text>
+                <Text style={[s.lineText, { color }]}>
+                  {shortDate(dateOf(r.day - 1))}
+                </Text>
                 <View style={[s.lineBar, { backgroundColor: color }]} />
               </Animated.View>
             );
           }
           const { p } = r;
           const on = r.day != null;
-          const dim = !on && !addable.has(p.id);
           const color = on ? dayColor(r.day!) : Brand.primary;
           return (
             <Animated.View
@@ -294,12 +264,11 @@ export default function BestListStep({ planner }: { planner: PlannerApi }) {
                       : selectedId === String(p.id)
                         ? Brand.primary
                         : theme.border,
-                    opacity: dim ? 0.4 : 1,
                   },
                 ]}
                 onPress={() => pick(p.id)}
                 accessibilityRole="checkbox"
-                accessibilityState={{ checked: on, disabled: dim }}
+                accessibilityState={{ checked: on }}
               >
                 <SlotThumbnail
                   place={p}
@@ -355,6 +324,21 @@ export default function BestListStep({ planner }: { planner: PlannerApi }) {
           },
         ]}
       >
+        <Pressable
+          style={[
+            s.nextBtn,
+            { borderColor: Brand.primary, opacity: canNext && !busy ? 1 : 0.4 },
+          ]}
+          onPress={nextDay}
+          disabled={!canNext || busy}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !canNext || busy }}
+        >
+          <Icon name="calendar" size={18} color={Brand.primary} />
+          <Text style={[s.nextText, { color: Brand.primary }]}>
+            {t("trip.nextDay")}
+          </Text>
+        </Pressable>
         <Pressable
           style={[s.doneBtn, { opacity: ready && !busy ? 1 : 0.4 }]}
           onPress={done}
@@ -443,11 +427,25 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   footer: {
+    flexDirection: "row",
+    gap: Spacing.sm,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     borderTopWidth: 1,
   },
+  nextBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+  },
+  nextText: { fontSize: 16, fontFamily: Fonts.bold },
   doneBtn: {
+    flex: 1,
     height: 48,
     borderRadius: BorderRadius.md,
     backgroundColor: Brand.primary,

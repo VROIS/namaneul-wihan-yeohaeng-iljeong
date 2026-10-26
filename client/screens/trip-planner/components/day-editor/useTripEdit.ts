@@ -20,6 +20,7 @@ import {
   type PickedLayoutItem,
 } from "@shared/day-fill";
 import type { BestListPlace } from "../../hooks/useBestList";
+import { addDays } from "../../utils";
 
 const anchorOf = (d: DayPlan, accs: PlannerApi["dayAccommodations"]) => {
   const f = finalOfDay(d.places);
@@ -162,7 +163,7 @@ export function useTripEdit(planner: PlannerApi, day: DayPlan) {
       );
     return s;
   }, [itinerary, drafts, baseDrafts]);
-  // 보관함 후보 = 그 여정 도시의 인기 명소 목록 전체(수정 화면을 열 때마다 그 여정 거점 번호로 받는다 · 무료)
+  // ⚠️ 수정금지(승인필요) 2026-10-26 사장님 결정 = 보관함 후보 = 그 여정 도시의 인기 명소 목록 전체(목록 화면과 같은 3일치 = 여정 시작일부터 3일 · 여정 날 수와 상관없음) − 여정에 든 것 · 수정 화면을 열 때마다 그 여정 거점 번호로 받는다 · 무료 (정본 §2026-10-26)
   const [listed, setListed] = useState<BestListPlace[]>([]);
   useEffect(() => {
     if (!autoMeals || !itinerary) return;
@@ -171,7 +172,7 @@ export function useTripEdit(planner: PlannerApi, day: DayPlan) {
       cityId: (itinerary as any).cityId,
       destination: itinerary.destination,
       startDate: itinerary.startDate,
-      endDate: itinerary.endDate,
+      endDate: addDays(itinerary.startDate, 2),
       travelStyle: itinerary.travelStyle,
       mobilityStyle: itinerary.mobilityStyle,
       language: i18n.language || "ko",
@@ -229,9 +230,12 @@ export function useTripEdit(planner: PlannerApi, day: DayPlan) {
         mealMin: { lunch: lunch?.stay, dinner: x.dinner?.stay },
       },
     );
+    // ⚠️ 수정금지(승인필요) 2026-10-26 사장님 결정 = 식사 칸 종류 = 시간표 자리대로(맨 마지막 = 저녁) · 서버 칸이 들고 온 종류로 글자를 찍지 않는다 (정본 §2026-10-26)
     const meal = (kind: "lunch" | "dinner", stay: number): EditSlot => {
       const own = kind === "lunch" ? lunch : x.dinner;
-      return own ? { ...own, stay } : mealSlot(kind, stay);
+      return own
+        ? { ...own, place: { ...own.place, mealType: kind }, stay }
+        : mealSlot(kind, stay);
     };
     const slots = plan.items.map(
       (it): EditSlot =>

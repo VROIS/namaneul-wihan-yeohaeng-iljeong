@@ -34,6 +34,13 @@ export function parseDate(dateStr: string): Date {
   return new Date(year, month - 1, day);
 }
 
+// "YYYY-MM-DD" + n일 = "YYYY-MM-DD"(현지 날짜 · 달이 바뀌어도 맞음)
+export function addDays(dateStr: string, n: number): string {
+  const d = parseDate(dateStr);
+  d.setDate(d.getDate() + n);
+  return formatDate(d);
+}
+
 export function parseTime(timeStr: string): Date {
   const [hours, minutes] = timeStr.split(":").map(Number);
   const date = new Date();

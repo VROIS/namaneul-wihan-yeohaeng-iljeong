@@ -125,6 +125,7 @@
     "editLate": "Arrives {{m}} min after the show starts",
     "editItinerary": "Edit",
     "editDone": "Done",
+    "nextDay": "Next day",
     "editHowTo": "Long-press to move a place\nand adjust its time\nMove to/add from storage",
     "editBucket": "Temp\nstorage",
     "bestListTitle": "Top spots - {{city}}",
