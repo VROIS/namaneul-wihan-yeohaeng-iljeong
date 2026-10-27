@@ -8,9 +8,18 @@ import {
 
 export type { PlaceAutoSelection };
 
+// ⚠️ 수정금지(승인필요) 2026-10-27 사장님 결정 = 여정 목적지 검색 = 도시·숙소·주소·건물·역 5종만 보인다 = 나라·도(道)·지역은 목록에 안 나옴 (정본 §2026-10-27)
+export const CITY_LEVEL_TYPES = [
+  "locality",
+  "lodging",
+  "street_address",
+  "premise",
+  "transit_station",
+];
+
 type Props = {
   onSelect: (place: PlaceAutoSelection) => void;
-  includedPrimaryTypes?: string;
+  includedPrimaryTypes?: string[];
   cityPrefix?: string;
   placeholder?: string;
   language?: string;
@@ -68,9 +77,7 @@ function PlaceAutocompleteWeb({
         const { PlaceAutocompleteElement } =
           await google.maps.importLibrary("places");
         const ac = new PlaceAutocompleteElement(
-          includedPrimaryTypes
-            ? { includedPrimaryTypes: [includedPrimaryTypes] }
-            : {},
+          includedPrimaryTypes?.length ? { includedPrimaryTypes } : {},
         );
         try {
           if (placeholder) (ac as any).placeholder = placeholder;
@@ -83,7 +90,7 @@ function PlaceAutocompleteWeb({
         (ac as any).style.width = "100%";
         host.innerHTML = "";
         host.appendChild(ac);
-        // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 위젯이 나라 코드(ISO-2)를 같이 받아 서버로 보낸다 = 같은 나라 거점 우선 (정본 §)
+        // ⚠️ 수정금지(승인필요) 2026-10-27 사장님 결정 = 위젯이 구글 종류·주소 조각(나라 포함)을 받아 서버로 보낸다 = 나라 코드 한 벌 · 같은 나라 거점 우선 · 서버가 도시를 잘라 낸다 (정본 §2026-10-27)
         ac.addEventListener("gmp-select", async (ev: any) => {
           try {
             const pred = ev.placePrediction;
@@ -94,6 +101,7 @@ function PlaceAutocompleteWeb({
                 "formattedAddress",
                 "location",
                 "addressComponents",
+                "types",
               ],
             });
             const loc = place.location;
@@ -101,10 +109,12 @@ function PlaceAutocompleteWeb({
               placeId: place.id || pred.placeId || "",
               name: place.displayName || "",
               address: place.formattedAddress || "",
-              countryCode:
-                (place.addressComponents || []).find((c: any) =>
-                  (c.types || []).includes("country"),
-                )?.shortText || "",
+              types: place.types || [],
+              components: (place.addressComponents || []).map((c: any) => ({
+                longText: c.longText,
+                shortText: c.shortText,
+                types: c.types || [],
+              })),
               coords: {
                 lat: typeof loc.lat === "function" ? loc.lat() : loc.lat,
                 lng: typeof loc.lng === "function" ? loc.lng() : loc.lng,
@@ -187,7 +197,8 @@ function PlaceAutocompleteNative({
           placeId: data.placeId,
           name: data.name,
           address: data.address,
-          countryCode: data.countryCode,
+          types: data.types,
+          components: data.components,
           coords: data.coords,
         });
       } else if (data.type === "error")

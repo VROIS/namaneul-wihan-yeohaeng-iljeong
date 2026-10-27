@@ -183,195 +183,211 @@ export async function step2_enrichAndBuild(
     }),
   );
 
-  // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 출력 언어를 ag3 저장에 전달 = ko 면 PSR 한국어 컬럼, 그 외 언어는 place_translations (정본 §)
-  await saveNewPlacesToDB(finalPlaces, preloaded.cityId, {
-    deferPersist: true,
-    language: formData.language,
-  }).catch((e) =>
-    console.error(
-      "[V3-Step2] ⚠️ saveNewPlacesToDB(await fetch) 실패:",
-      e?.message || e,
-    ),
-  );
-
-  // 🗑️ 2026-07-08 사장님 = 폐업 슬롯 splice 완전삭제 = 슬롯은 그 무엇도 줄일 권한 없음(무단 감소 로직) §19. 슬롯 = scheduleMap = Gemini 곳수 항상 보존.
-
-  const finalPlaceMap = new Map<string, PlaceResult>();
-  for (const fp of finalPlaces) {
-    finalPlaceMap.set(fp.id, fp);
-  }
-
-  const days: any[] = [];
-  let totalTripCostEur = 0;
-
-  for (let d = 1; d <= dayCount; d++) {
-    const { dayResult, dailyPerPersonEur } = await buildDayResult(d, {
-      formData,
-      preloaded,
-      geminiDays,
-      scheduleMap,
-      finalPlaceMap,
-      daySlotsConfig,
-      paceConfig,
-      companionCount,
-      dayCount,
-      isGuideCategory,
-      transportPrice,
-      availableHours,
-    });
-    totalTripCostEur += dailyPerPersonEur;
-    days.push(dayResult);
-  }
-
-  const totalPerPersonEur = round2(totalTripCostEur);
-  const perPersonPerDay =
-    dayCount > 0 ? round2(totalPerPersonEur / dayCount) : 0;
-
-  console.log(`[V3-Step2] ✅ 완료 (${Date.now() - _t0}ms): ${days.length}일`);
-  console.log(`[V3-Step2] 💰 1인 총 비용: €${totalPerPersonEur}`);
-  console.log(`[V3-Step2] 💰 1인 1일 평균: €${perPersonPerDay}`);
-
-  // ⚠️ 2026-07-08 사장님 SSOT = 개수보존 3자대조(발각 전용, 보정·삭제 없음) = Gemini 원본 곳수 = scheduleMap = FE days 총합.
-  const geminiPlaceCount = geminiDays.reduce(
-    (s, gd) => s + (gd.places?.length || 0),
-    0,
-  );
-  const feDayPlaceCount = days.reduce(
-    (s: number, d: any) => s + d.places.length,
-    0,
-  );
-  let assemblyLoss: { gemini: number; schedule: number; fe: number } | null =
-    null;
-  if (
-    geminiPlaceCount !== scheduleMap.length ||
-    scheduleMap.length !== feDayPlaceCount
-  ) {
-    assemblyLoss = {
-      gemini: geminiPlaceCount,
-      schedule: scheduleMap.length,
-      fe: feDayPlaceCount,
-    };
-    console.error(
-      `[V3-Step2] ⚠️ _assemblyLoss 감지: gemini=${geminiPlaceCount} schedule=${scheduleMap.length} fe=${feDayPlaceCount}`,
+  // ⚠️ 수정금지(승인필요) 2026-10-27 사장님 결정 = 출력 언어를 ag3 저장에 전달(ko = PSR 한국어 컬럼, 그 외 = place_translations) · 창고 저장 + 날 짜기 = 한 벌(persist·finish) · 폴더가 없는 새 도시는 저장을 미루고 라우트가 성공 판정 뒤 폴더를 만들어 __persistNewCity(폴더 번호)로 저장하고 날을 다시 짠다 (정본 §2026-10-27)
+  const persist = (cityId: number) =>
+    saveNewPlacesToDB(finalPlaces, cityId, {
+      deferPersist: true,
+      language: formData.language,
+    }).catch((e) =>
+      console.error(
+        "[V3-Step2] ⚠️ saveNewPlacesToDB(await fetch) 실패:",
+        e?.message || e,
+      ),
     );
-  }
 
-  // ⚠️ 수정금지(승인필요) 2026-05-09 = saveNewPlacesToDB = 위로 이동 (= days 빌드 전) = 중복 호출 X
+  const finish = async () => {
+    // 🗑️ 2026-07-08 사장님 = 폐업 슬롯 splice 완전삭제 = 슬롯은 그 무엇도 줄일 권한 없음(무단 감소 로직) §19. 슬롯 = scheduleMap = Gemini 곳수 항상 보존.
 
-  const paceLabel =
-    travelPace === "Packed"
-      ? "빡빡하게"
-      : travelPace === "Normal"
-        ? "보통"
-        : "여유롭게";
+    const finalPlaceMap = new Map<string, PlaceResult>();
+    for (const fp of finalPlaces) {
+      finalPlaceMap.set(fp.id, fp);
+    }
 
-  const transportTotalEur = round2(
-    days.reduce(
-      (s: number, d: any) => s + (d.dailyCost?.breakdown?.transportEur || 0),
+    const days: any[] = [];
+    let totalTripCostEur = 0;
+
+    for (let d = 1; d <= dayCount; d++) {
+      const { dayResult, dailyPerPersonEur } = await buildDayResult(d, {
+        formData,
+        preloaded,
+        geminiDays,
+        scheduleMap,
+        finalPlaceMap,
+        daySlotsConfig,
+        paceConfig,
+        companionCount,
+        dayCount,
+        isGuideCategory,
+        transportPrice,
+        availableHours,
+      });
+      totalTripCostEur += dailyPerPersonEur;
+      days.push(dayResult);
+    }
+
+    const totalPerPersonEur = round2(totalTripCostEur);
+    const perPersonPerDay =
+      dayCount > 0 ? round2(totalPerPersonEur / dayCount) : 0;
+
+    console.log(`[V3-Step2] ✅ 완료 (${Date.now() - _t0}ms): ${days.length}일`);
+    console.log(`[V3-Step2] 💰 1인 총 비용: €${totalPerPersonEur}`);
+    console.log(`[V3-Step2] 💰 1인 1일 평균: €${perPersonPerDay}`);
+
+    // ⚠️ 2026-07-08 사장님 SSOT = 개수보존 3자대조(발각 전용, 보정·삭제 없음) = Gemini 원본 곳수 = scheduleMap = FE days 총합.
+    const geminiPlaceCount = geminiDays.reduce(
+      (s, gd) => s + (gd.places?.length || 0),
       0,
-    ),
-  );
-  const transportAvgPerDay =
-    dayCount > 0 ? round2(transportTotalEur / dayCount) : 0;
-  const transportSummary = transportPrice
-    ? (() => {
-        if (transportPrice.category === "guide") {
-          const gp = transportPrice as GuidePriceResult;
-          return {
-            category: "guide" as const,
-            perPersonPerDay: transportAvgPerDay, // 날짜별 요금 평균(대표값)
-            perPersonTotal: transportTotalEur, // 일별 합(정확)
-            vehicleDescription: gp.vehicleDescription,
-            availableHours: gp.availableHours,
-            includes200km: gp.includes200km,
-            segmentLabel: gp.segmentLabel,
-            notes: gp.notes,
-          };
-        } else {
-          const tp = transportPrice as TransitPriceResult;
-          return {
-            category: "transit" as const,
-            perPersonPerDay: transportAvgPerDay,
-            perPersonTotal: transportTotalEur,
-            method: tp.method,
-            details: tp.details,
-            guideUpsell: {
-              perPersonPerDay: tp.guideUpsell.perPersonPerDay,
-              vehicleDescription: tp.guideUpsell.vehicleDescription,
-              clickable: true,
-            },
-            notes: tp.notes,
-          };
-        }
-      })()
-    : null;
+    );
+    const feDayPlaceCount = days.reduce(
+      (s: number, d: any) => s + d.places.length,
+      0,
+    );
+    let assemblyLoss: { gemini: number; schedule: number; fe: number } | null =
+      null;
+    if (
+      geminiPlaceCount !== scheduleMap.length ||
+      scheduleMap.length !== feDayPlaceCount
+    ) {
+      assemblyLoss = {
+        gemini: geminiPlaceCount,
+        schedule: scheduleMap.length,
+        fe: feDayPlaceCount,
+      };
+      console.error(
+        `[V3-Step2] ⚠️ _assemblyLoss 감지: gemini=${geminiPlaceCount} schedule=${scheduleMap.length} fe=${feDayPlaceCount}`,
+      );
+    }
 
-  const result = {
-    title: `${formData.destination} ${dayCount}일 여행`,
-    destination: formData.destination,
-    startDate: formData.startDate,
-    endDate: formData.endDate,
-    startTime: formData.startTime || DEFAULT_START_TIME,
-    endTime: formData.endTime || DEFAULT_END_TIME,
-    days,
-    vibeWeights,
-    companionType: formData.companionType,
-    companionCount,
-    travelStyle: formData.travelStyle,
-    mobilityStyle: formData.mobilityStyle,
-    totalCost: {
-      perPersonEur: totalPerPersonEur,
-      perPersonPerDay: perPersonPerDay,
-      currency: "EUR",
-    },
-    budget: {
-      travelStyle: formData.travelStyle || "Reasonable",
-      dailyBreakdowns: days.map((day: any) => ({
-        day: day.day,
-        perPersonEur: day.dailyCost?.perPersonEur || 0,
-        breakdown: day.dailyCost?.breakdown || {},
-      })),
-      totals: {
-        perPersonTotal: totalPerPersonEur,
-        perPersonPerDay: perPersonPerDay,
-        transport: days.reduce(
-          (sum: number, d: any) =>
-            sum + (d.dailyCost?.breakdown?.transportEur || 0),
-          0,
-        ),
-        meals: days.reduce(
-          (sum: number, d: any) => sum + (d.dailyCost?.breakdown?.mealEur || 0),
-          0,
-        ),
-        entranceFees: days.reduce(
-          (sum: number, d: any) =>
-            sum + (d.dailyCost?.breakdown?.entranceEur || 0),
-          0,
-        ),
-      },
-    },
-    transportSummary,
-    metadata: {
-      travelStyle: formData.travelStyle,
-      travelPace,
-      travelPaceLabel: paceLabel,
-      slotDurationMinutes: paceConfig.slotDurationMinutes,
-      totalPlaces: finalPlaces.length,
-      mobilityStyle: formData.mobilityStyle,
+    // ⚠️ 수정금지(승인필요) 2026-05-09 = saveNewPlacesToDB = 위로 이동 (= days 빌드 전) = 중복 호출 X
+
+    const paceLabel =
+      travelPace === "Packed"
+        ? "빡빡하게"
+        : travelPace === "Normal"
+          ? "보통"
+          : "여유롭게";
+
+    const transportTotalEur = round2(
+      days.reduce(
+        (s: number, d: any) => s + (d.dailyCost?.breakdown?.transportEur || 0),
+        0,
+      ),
+    );
+    const transportAvgPerDay =
+      dayCount > 0 ? round2(transportTotalEur / dayCount) : 0;
+    const transportSummary = transportPrice
+      ? (() => {
+          if (transportPrice.category === "guide") {
+            const gp = transportPrice as GuidePriceResult;
+            return {
+              category: "guide" as const,
+              perPersonPerDay: transportAvgPerDay, // 날짜별 요금 평균(대표값)
+              perPersonTotal: transportTotalEur, // 일별 합(정확)
+              vehicleDescription: gp.vehicleDescription,
+              availableHours: gp.availableHours,
+              includes200km: gp.includes200km,
+              segmentLabel: gp.segmentLabel,
+              notes: gp.notes,
+            };
+          } else {
+            const tp = transportPrice as TransitPriceResult;
+            return {
+              category: "transit" as const,
+              perPersonPerDay: transportAvgPerDay,
+              perPersonTotal: transportTotalEur,
+              method: tp.method,
+              details: tp.details,
+              guideUpsell: {
+                perPersonPerDay: tp.guideUpsell.perPersonPerDay,
+                vehicleDescription: tp.guideUpsell.vehicleDescription,
+                clickable: true,
+              },
+              notes: tp.notes,
+            };
+          }
+        })()
+      : null;
+
+    const result = {
+      title: `${formData.destination} ${dayCount}일 여행`,
+      destination: formData.destination,
+      startDate: formData.startDate,
+      endDate: formData.endDate,
+      startTime: formData.startTime || DEFAULT_START_TIME,
+      endTime: formData.endTime || DEFAULT_END_TIME,
+      days,
+      vibeWeights,
       companionType: formData.companionType,
       companionCount,
-      transportCategory: isGuideCategory ? "guide" : "transit",
-      availableHours,
-      curationFocus: formData.curationFocus,
-      generatedAt: new Date().toISOString(),
-      pipelineVersion: "v3-2step",
-      _matched: finalPlaces.filter((p: any) => p.googlePlaceId).length,
-      _unmatched: finalPlaces.filter((p: any) => !p.googlePlaceId).length,
-      // ⚠️ 2026-07-08 사장님 SSOT = 개수보존 3자대조 결과. null = 정상(보존). 있으면 조립단계 무언손실 = 즉시발각(은폐0).
-      _assemblyLoss: assemblyLoss,
-    },
+      travelStyle: formData.travelStyle,
+      mobilityStyle: formData.mobilityStyle,
+      totalCost: {
+        perPersonEur: totalPerPersonEur,
+        perPersonPerDay: perPersonPerDay,
+        currency: "EUR",
+      },
+      budget: {
+        travelStyle: formData.travelStyle || "Reasonable",
+        dailyBreakdowns: days.map((day: any) => ({
+          day: day.day,
+          perPersonEur: day.dailyCost?.perPersonEur || 0,
+          breakdown: day.dailyCost?.breakdown || {},
+        })),
+        totals: {
+          perPersonTotal: totalPerPersonEur,
+          perPersonPerDay: perPersonPerDay,
+          transport: days.reduce(
+            (sum: number, d: any) =>
+              sum + (d.dailyCost?.breakdown?.transportEur || 0),
+            0,
+          ),
+          meals: days.reduce(
+            (sum: number, d: any) =>
+              sum + (d.dailyCost?.breakdown?.mealEur || 0),
+            0,
+          ),
+          entranceFees: days.reduce(
+            (sum: number, d: any) =>
+              sum + (d.dailyCost?.breakdown?.entranceEur || 0),
+            0,
+          ),
+        },
+      },
+      transportSummary,
+      metadata: {
+        travelStyle: formData.travelStyle,
+        travelPace,
+        travelPaceLabel: paceLabel,
+        slotDurationMinutes: paceConfig.slotDurationMinutes,
+        totalPlaces: finalPlaces.length,
+        mobilityStyle: formData.mobilityStyle,
+        companionType: formData.companionType,
+        companionCount,
+        transportCategory: isGuideCategory ? "guide" : "transit",
+        availableHours,
+        curationFocus: formData.curationFocus,
+        generatedAt: new Date().toISOString(),
+        pipelineVersion: "v3-2step",
+        _matched: finalPlaces.filter((p: any) => p.googlePlaceId).length,
+        _unmatched: finalPlaces.filter((p: any) => !p.googlePlaceId).length,
+        // ⚠️ 2026-07-08 사장님 SSOT = 개수보존 3자대조 결과. null = 정상(보존). 있으면 조립단계 무언손실 = 즉시발각(은폐0).
+        _assemblyLoss: assemblyLoss,
+      },
+    };
+
+    // ⚠️ 수정금지(승인필요) 2026-05-20 = Verifier 완전 폐기 (= 사용자 SSOT = Gemini 0 강제)
+    return result;
   };
 
-  // ⚠️ 수정금지(승인필요) 2026-05-20 = Verifier 완전 폐기 (= 사용자 SSOT = Gemini 0 강제)
-  return result;
+  if (preloaded.cityId) {
+    await persist(preloaded.cityId);
+    return finish();
+  }
+  const pre: any = await finish();
+  pre.__persistNewCity = async (cityId: number) => {
+    preloaded.cityId = cityId;
+    await persist(cityId);
+    return finish();
+  };
+  return pre;
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { ScrollView, useColorScheme, Platform } from "react-native";
+import { Alert, ScrollView, useColorScheme, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -220,7 +220,7 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     setFormData((prev) => ({
       ...prev,
       accommodationCoords: undefined,
-      destinationCountryCode: undefined,
+      destinationPlace: undefined,
       accommodationName: undefined,
       accommodationAddress: undefined,
       accommodationPlaceId: undefined,
@@ -240,7 +240,7 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     setFormData((prev) => ({
       ...prev,
       accommodationCoords: undefined,
-      destinationCountryCode: undefined,
+      destinationPlace: undefined,
       accommodationName: undefined,
       accommodationAddress: undefined,
       accommodationPlaceId: undefined,
@@ -312,6 +312,19 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
         const data = await res.json();
         const raw = data?.rawData;
         if (!raw || !raw.days) {
+          // ⚠️ 수정금지(승인필요) 2026-10-27 사장님 결정 = 날 목록 없는 실패 여정(관리자만 보는 카드) = 조용히 입력 화면으로 보내지 않고 실패 사유·목적지·날짜를 띄운다 (정본 §2026-10-27)
+          if (data?.status === "failed") {
+            const title = t("trip.failedTripTitle");
+            const msg = [
+              raw?.error,
+              raw?.destination || data.title,
+              `${String(data.startDate || "").slice(0, 10)} ~ ${String(data.endDate || "").slice(0, 10)}`,
+            ]
+              .filter(Boolean)
+              .join("\n");
+            if (Platform.OS === "web") window.alert(`${title}\n\n${msg}`);
+            else Alert.alert(title, msg);
+          }
           console.warn(
             "[TripPlanner] 저장여정 복원 실패: rawData 없음",
             targetId,
@@ -360,7 +373,7 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
         setScreen("Input"); // Loading에 갇히지 않도록 복귀
       }
     },
-    [],
+    [t],
   );
 
   // ⚠️ 2026-08-03 사장님 지적 실증 = **같은 여정을 다시 열면 먹통**(도시카드 [코스] 1회는 뜨고 2회째 무반응,

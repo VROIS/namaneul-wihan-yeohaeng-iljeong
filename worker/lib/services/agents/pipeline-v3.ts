@@ -12,11 +12,11 @@ import {
   calculateSlotsForDay,
   getCompanionCount,
 } from "./types";
-import { preloadCityData } from "./ag3-seed-loader";
-import { db } from "../../db";
-import { createHubAfterSuccess } from "../shared/city-hub";
+import { preloadCityData, loadSeedRawMap } from "./ag3-seed-loader";
+import { pickedCountryCode } from "../shared/city-hub";
 // 🧠 2026-07-06 사장님 SSOT = MIX Gemini raw = 도시id 폴더 + {meta,rawResponse,parsedPlaces}(사장님 예시형식) 저장 = saveCollectedRaw 단일 헬퍼(§18 2곳). 옛 saveRaw(runtime 봉투) 폐기 §19.
 import { saveCollectedRaw } from "../shared/save-collected-raw";
+import { itineraryContext } from "../../../../shared/r2-paths";
 import { buildDayConfig } from "../transport/day-config";
 import { step1_geminiItinerary } from "./pipeline-v3-step1-gemini";
 import { step2_enrichAndBuild } from "./pipeline-v3-step2-build";
@@ -27,7 +27,7 @@ export async function runPipelineV3(formData: TripFormData): Promise<any> {
   const cityCheck = await isCityReady(
     formData.destination,
     (formData as any).accommodationCoords ?? formData.destinationCoords,
-    (formData as any).destinationCountryCode,
+    pickedCountryCode((formData as any).destinationPlace),
   );
   // ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 핀·베스트·준비됨 갈림은 라우트(routes-itinerary-generate-db.ts)가 먼저 판정한다 = 이 함수는 MIX 만 받는다 (정본 §)
   console.log(
@@ -114,24 +114,16 @@ async function runPipelineMix(
     preloadCityData(
       formData.destination,
       (formData as any).accommodationCoords ?? formData.destinationCoords,
-      (formData as any).destinationCountryCode,
+      pickedCountryCode((formData as any).destinationPlace),
     ),
   ]);
 
-  // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 100km 안에 거점이 없을 때만 새 거점 = 일정(step1)이 성공한 뒤, 잠금 안에서 한 번 (정본 §)
-  const startCoords =
-    (formData as any).accommodationCoords ?? formData.destinationCoords;
-  if (!preloaded.cityId && startCoords) {
-    const hub = await createHubAfterSuccess(db, {
-      input: formData.destination,
-      coords: startCoords,
-      countryCode: (formData as any).destinationCountryCode,
-    });
-    if (hub) {
-      preloaded.cityId = hub.cityId;
-      preloaded.cityName = hub.nameEn;
-      preloaded.cityCoords = { lat: hub.latitude, lng: hub.longitude };
-    }
+  // ⚠️ 수정금지(승인필요) 2026-10-27 사장님 결정 = 100km 안에 거점이 없는 새 도시 = 폴더는 만들지 않는다(라우트가 성공 뒤) · 잘라 낸 도심 좌표 100km 안의 창고 행을 다 끌어와 재활용 (정본 §2026-10-27)
+  const newCity = (formData as any)._newCity;
+  if (!preloaded.cityId && newCity) {
+    preloaded.cityName = newCity.meta.nameEn;
+    preloaded.cityCoords = newCity.center;
+    preloaded.seedRawMap = await loadSeedRawMap(null, newCity.center);
   }
 
   _mark("step1_parallel");
@@ -139,11 +131,10 @@ async function runPipelineMix(
     `[V3-MIX] Step1 완료 (${_timings["step1_parallel"]}ms): Gemini ${geminiDays.length}일, seed ${preloaded.seedRawMap?.size ?? 0}키`,
   );
 
-  // 🧠 2026-07-06 사장님 SSOT = MIX Gemini raw 저장(§18) = 도시id 폴더 + {meta,rawResponse,parsedPlaces}(사장님 예시형식).
-  //   ⚠️ 2026-07-06 근본수정 = 옛 fire-and-forget(void..catch) = 배포서버서 응답 후 PUT 완료전 잘림 = raw 미저장(비용증발 §18) 근본.
-  //     → step2 와 병렬 await 로 전환(§18 자산보장). raw 저장(수백ms) ⊂ step2(수십초) = FE 응답 지연 0(속도 유지) + 배포서버서 안 잘림.
+  // ⚠️ 수정금지(승인필요) 2026-10-27 사장님 결정 = MIX 제미니 원본 = 도시 폴더(폴더 전 새 도시는 여정 자리 itinerary-{번호}) · step2 와 병렬 await = 응답 전 저장 완료 (정본 §2026-10-27)
+  const rawCtx = itineraryContext(preloaded.cityId, (formData as any)._draftId);
   const geminiRawSave = (async () => {
-    if (!preloaded.cityId) return;
+    if (!rawCtx) return;
     const rawText = (geminiDays as any).__rawText || "";
     const finishReason = (geminiDays as any).__finishReason || "unknown";
     // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = parsedPlaces = step1 복원 결과(geminiDays = SLIM_KEYS 원명 복원 완료)에서 구성.
@@ -152,14 +143,14 @@ async function runPipelineMix(
       for (const p of dd.places || [])
         parsedPlaces.push({ day: dd.day, theme: dd.theme, ...p });
     await saveCollectedRaw({
-      cityId: preloaded.cityId,
+      cityId: rawCtx,
       stepNum: 90,
       stepName: "mix-gemini",
       content: "step1",
       hashKey: "rawResponse",
       body: {
         meta: {
-          cityId: preloaded.cityId,
+          cityId: rawCtx,
           destination: formData.destination,
           finishReason,
           parsedCount: parsedPlaces.length,
@@ -220,6 +211,21 @@ async function runPipelineMix(
   };
 
   (result as any).cityId = preloaded.cityId ?? null;
+
+  // ⚠️ 수정금지(승인필요) 2026-10-27 사장님 결정 = 새 도시 = 라우트가 성공 판정 뒤 폴더 번호를 주면 창고 저장 + 날 다시 짜기 · 이 판의 측정 기록(metadata)은 그대로 두고 매칭 수만 새로 (정본 §2026-10-27)
+  const persistStep2 = (result as any).__persistNewCity;
+  if (persistStep2)
+    (result as any).__persistNewCity = async (cityId: number) => {
+      const fresh = await persistStep2(cityId);
+      const metadata = {
+        ...result.metadata,
+        _matched: fresh.metadata._matched,
+        _unmatched: fresh.metadata._unmatched,
+      };
+      Object.assign(result, fresh, { metadata, cityId });
+      delete (result as any).__persistNewCity;
+      return result;
+    };
 
   console.log(`[V3] ===== Pipeline V3 완료 (${Date.now() - _t0}ms) =====`);
   console.log(`[V3]   Step1(Gemini+DB): ${_timings["step1_parallel"]}ms`);

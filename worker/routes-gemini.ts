@@ -361,7 +361,7 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
           endDate: itinerary.endDate as string,
           companionType: itinerary.companionType as string,
           companionCount: itinerary.companionCount as number,
-          curationFocus: meta.curationFocus as string | undefined,
+          meta,
           vibeWeights: (itinerary.vibeWeights || []).map((v) => ({
             vibe: v.vibe,
             weight: v.weight,

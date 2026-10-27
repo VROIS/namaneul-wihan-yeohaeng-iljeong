@@ -18,6 +18,7 @@ import {
   MOBILITY_STYLE_OPTIONS,
 } from "@/types/trip";
 import PlaceAutocompleteWidget, {
+  CITY_LEVEL_TYPES,
   type PlaceAutoSelection as PlaceSelection,
 } from "@/components/PlaceAutocompleteWidget";
 import { inputStyles as styles } from "./styles/input";
@@ -57,7 +58,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
 
   // ⌨️ 2026-08-13 사장님 확정 = AOS 숙소·도시 검색 = 독립 전체화면 모달(CitySearchAndroid, ResultStep 숙소 Modal 과 같은 검증 구조).
   const searchPlaceholder = t("trip.searchPlaceholder");
-  // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 위젯이 나라 코드(ISO-2)를 같이 받아 서버로 보낸다 = 같은 나라 거점 우선 (정본 §)
+  // ⚠️ 수정금지(승인필요) 2026-10-27 사장님 결정 = 위젯이 준 구글 종류·주소 조각(destinationPlace, 나라 포함)을 서버로 보낸다 = 나라 코드 한 벌 · 서버가 도시를 잘라 새 폴더를 판정 (정본 §2026-10-27)
   const handlePlaceSelect = (place: PlaceSelection) => {
     setFormData((prev) => ({
       ...prev,
@@ -65,7 +66,10 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
       accommodationName: place.name,
       accommodationAddress: place.address,
       accommodationCoords: place.coords,
-      destinationCountryCode: place.countryCode || undefined,
+      destinationPlace: {
+        types: place.types ?? [],
+        components: place.components ?? [],
+      },
       accommodationPlaceId: place.placeId,
     }));
   };
@@ -90,11 +94,11 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
   // 도시 칩 = 그 도시를 목적지로 잡고 **항상** 카드를 띄운다(2026-08-02 사장님 지시 = 옛 "대표여정 없으면 안 띄움" 폐기 §19).
   const handleCityPress = async (city: ReadyCity) => {
     lastCityRef.current = city.id;
-    // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 가장 최근 선택이 최우선 = 도시 칩을 누르면 앞서 고른 숙소(좌표·이름·주소·장소 번호·나라 코드)를 지우고 도시 중심으로 (정본 §)
+    // ⚠️ 수정금지(승인필요) 2026-10-27 사장님 결정 = 가장 최근 선택이 최우선 = 도시 칩을 누르면 앞서 고른 숙소(좌표·이름·주소·장소 번호·구글 조각)를 지우고 도시 중심으로 (정본 §2026-10-27)
     setFormData((prev) => ({
       ...prev,
       destination: city.nameEn,
-      destinationCountryCode: undefined,
+      destinationPlace: undefined,
       accommodationCoords: undefined,
       accommodationName: undefined,
       accommodationAddress: undefined,
@@ -260,6 +264,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
             <PlaceAutocompleteWidget
               placeholder={searchPlaceholder}
               language={i18n.language || "ko"}
+              includedPrimaryTypes={CITY_LEVEL_TYPES}
               cityPrefix={
                 formData.destination ? `${formData.destination} ` : undefined
               }

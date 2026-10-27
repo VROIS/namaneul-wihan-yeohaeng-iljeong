@@ -10,6 +10,12 @@ import { listBest, runPipelinePicked } from "./routes-itinerary-best";
 // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = DB 올리 전환 기준 미달 도시 = 운영 엔진(pipeline-v3 = MIX) 그대로, 연결만 withEngineDb (정본 §)
 import { withEngineDb } from "./lib/db";
 import { runPipelineV3 } from "./lib/services/agents/pipeline-v3";
+import {
+  createHubAfterSuccess,
+  cutCity,
+  pickedCountryCode,
+  verifyNewCity,
+} from "./lib/services/shared/city-hub";
 import type { Sql } from "postgres";
 import { ensureKeys } from "./keys";
 import { getUserIdFromReq } from "./auth-user";
@@ -97,7 +103,7 @@ export function registerItineraryGenerateDbRoutes(
             db,
             formData.destination,
             formData.accommodationCoords ?? formData.destinationCoords,
-            formData.destinationCountryCode,
+            pickedCountryCode(formData.destinationPlace),
           );
       if (!cityCheck.cityId)
         return res.status(404).json({ error: "도시 없음" });
@@ -186,11 +192,11 @@ export function registerItineraryGenerateDbRoutes(
             (isFinal ? enrichedFormData.finalDays[0]?.anchor : null) ??
               enrichedFormData.accommodationCoords ??
               enrichedFormData.destinationCoords,
-            enrichedFormData.destinationCountryCode,
+            pickedCountryCode(enrichedFormData.destinationPlace),
           );
 
       console.log(
-        `[CityHub] 조회: "${enrichedFormData.destination}" cc=${enrichedFormData.destinationCountryCode ?? "-"} → 거점=${cityCheck.cityId ?? "없음"} 준비=${cityCheck.ready} 풀=${cityCheck.count}`,
+        `[CityHub] 조회: "${enrichedFormData.destination}" cc=${pickedCountryCode(enrichedFormData.destinationPlace) || "-"} → 거점=${cityCheck.cityId ?? "없음"} 준비=${cityCheck.ready} 풀=${cityCheck.count}`,
       );
 
       if (isPinnedDbOnly && !cityCheck.cityId) {
@@ -217,12 +223,61 @@ export function registerItineraryGenerateDbRoutes(
 
       const isMix = !isPinnedDbOnly && !isBest && !isFinal && !cityCheck.ready;
 
+      // ⚠️ 수정금지(승인필요) 2026-10-27 사장님 결정 = 도시 폴더가 없으면 고른 곳에서 도시를 잘라 내고 그 도시가 맞는지 확인한다 · 못 자르거나 확인 못 하면 시작 전에 멈춘다(일정 제미니·차감·여정 행 0) · 폴더는 아직 만들지 않는다 (정본 §2026-10-27)
+      const pickedAt =
+        enrichedFormData.accommodationCoords ??
+        enrichedFormData.destinationCoords;
+      const cut = cityCheck.cityId
+        ? null
+        : cutCity(
+            enrichedFormData.destinationPlace,
+            pickedAt,
+            enrichedFormData.accommodationAddress,
+          );
+      if (!cityCheck.cityId && !cut)
+        return res.status(400).json({ error: "pick_city" });
+
       if (
         !isPinnedDbOnly &&
         !isFinal &&
         !(await precheckFeature(db, res, payerId, "route_generate"))
       )
         return; // 402 는 위에서 이미 보냈다(§9 금지 4번 = 헤더 나가기 전).
+
+      if (cut) {
+        await loadAllKeys(openSql);
+        const newCity = await verifyNewCity(cut, pickedAt);
+        if (!newCity) return res.status(400).json({ error: "pick_city" });
+        enrichedFormData._newCity = newCity;
+      }
+
+      // ⚠️ 수정금지(승인필요) 2026-10-27 사장님 결정 = 실패도 관리자에게는 카드로 보인다 = 실패 사유 + 만들어진 것(빈 날·빈 슬롯 그대로) + 손님이 넣은 값 · 손님에게는 failed 로 숨김 · 새 도시 이름은 확인된 영어 이름(카드 = 알파벳) (정본 §2026-10-27)
+      const cardName: string =
+        enrichedFormData._newCity?.meta.nameEn ??
+        String(enrichedFormData.destination || "여정");
+      const failedRaw = (error: string, made?: any) => ({
+        ...(made ?? {}),
+        destination:
+          enrichedFormData._newCity?.meta.nameEn ??
+          made?.destination ??
+          enrichedFormData.destination,
+        error,
+        failedInput: {
+          destination: enrichedFormData.destination,
+          startDate: enrichedFormData.startDate,
+          endDate: enrichedFormData.endDate,
+          accommodationName: enrichedFormData.accommodationName ?? null,
+          accommodationCoords: enrichedFormData.accommodationCoords ?? null,
+          pickedTypes: enrichedFormData.destinationPlace?.types ?? null,
+          newCity: enrichedFormData._newCity
+            ? {
+                query: enrichedFormData._newCity.query,
+                nameEn: enrichedFormData._newCity.meta.nameEn,
+                countryCode: enrichedFormData._newCity.countryCode,
+              }
+            : null,
+        },
+      });
 
       let draftId: number | null = overwriteId;
       if (payerId && !overwriteId) {
@@ -231,7 +286,7 @@ export function registerItineraryGenerateDbRoutes(
             .insert(itineraries)
             .values({
               userId: payerId,
-              title: String(enrichedFormData.destination || "여정"),
+              title: cardName,
               startDate: new Date(enrichedFormData.startDate),
               endDate: new Date(enrichedFormData.endDate),
               ...(cityCheck.cityId != null ? { cityId: cityCheck.cityId } : {}),
@@ -239,6 +294,7 @@ export function registerItineraryGenerateDbRoutes(
             } as any)
             .returning({ id: itineraries.id });
           draftId = row?.id ?? null;
+          enrichedFormData._draftId = draftId;
         } catch (e) {
           console.error(
             "[Routes] '만드는 중' 자리 생성 실패(생성은 계속):",
@@ -266,7 +322,7 @@ export function registerItineraryGenerateDbRoutes(
             .update(itineraries)
             .set({
               status: "failed",
-              rawData: { error: String((genErr as Error)?.message || genErr) },
+              rawData: failedRaw(String((genErr as Error)?.message || genErr)),
               updatedAt: new Date(),
             } as any)
             .where(eq(itineraries.id, draftId))
@@ -279,7 +335,7 @@ export function registerItineraryGenerateDbRoutes(
         0,
       );
 
-      // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 빈 일정은 절대 내보내지 않는다(장소 0곳, 또는 3시간 이상인 날이 비면 실패 = 앱은 입력 화면으로 복귀·크레딧 차감 없음) (정본 §)
+      // ⚠️ 수정금지(승인필요) 2026-10-27 사장님 결정 = 빈 일정은 손님에게 절대 내보내지 않는다(장소 0곳, 또는 3시간 이상인 날이 비면 실패 = 앱은 입력 화면으로 복귀·크레딧 차감 없음) · 만들어진 것은 실패 카드로 관리자에게 남긴다 (정본 §2026-10-27)
       const minutesOf = (t: any) => {
         const m = /^(\d{1,2}):(\d{2})/.exec(String(t || ""));
         return m ? Number(m[1]) * 60 + Number(m[2]) : null;
@@ -296,12 +352,19 @@ export function registerItineraryGenerateDbRoutes(
             .update(itineraries)
             .set({
               status: "failed",
-              rawData: { error: empty.message },
+              rawData: failedRaw(empty.message, itinerary),
               updatedAt: new Date(),
             } as any)
             .where(eq(itineraries.id, draftId))
             .catch(() => {});
         throw empty;
+      }
+
+      // ⚠️ 수정금지(승인필요) 2026-10-27 사장님 결정 = 새 도시 폴더 = 여정이 끝까지 성공한 이 자리에서만 만든다 → 그 폴더로 창고 저장 + 날 다시 짜기 = 엔진 DB(withEngineDb) 안에서 (정본 §2026-10-27)
+      const persistNewCity = itinerary.__persistNewCity;
+      if (persistNewCity) {
+        const hub = await createHubAfterSuccess(db, enrichedFormData._newCity);
+        itinerary = await withEngineDb(() => persistNewCity(hub.cityId));
       }
 
       // ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 여정은 아이디 하나 = 완료 덮어쓰기는 원래 여정(만든 길·취향·동행·요약 표시·날마다 숙소)을 그대로 두고 날·비용·동선 기록만 새 계산으로 바꾼다 (정본 §)

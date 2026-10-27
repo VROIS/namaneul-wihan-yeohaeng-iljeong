@@ -8,6 +8,17 @@ import type { PlannerApi } from "../hooks/useTripPlanner";
 
 // 🧠 2026-07-04 사장님 SSOT = AI 의견 1회 호출 = 5크레딧 차감(10유로 충전=20회). 결과 하단에만 조용히 표시.
 const AI_OPINION_CREDIT_COST = 5;
+// ⚠️ 수정금지(승인필요) 2026-10-28 사장님 결정 = 예약 칸 3가지 = 예약 필수 → 예약 권장 → 현장 예약 순서·색 (정본 §2026-10-27)
+const NEED_ORDER: Record<string, number> = {
+  required: 0,
+  recommended: 1,
+  walk_in: 2,
+};
+const NEED_COLOR: Record<string, string> = {
+  required: "#ef4444",
+  recommended: "#f59e0b",
+  walk_in: "#64748B",
+};
 
 export default function AiOpinionSheet({ planner }: { planner: PlannerApi }) {
   const {
@@ -19,6 +30,12 @@ export default function AiOpinionSheet({ planner }: { planner: PlannerApi }) {
     aiOpinionError,
     aiOpinionData,
   } = planner;
+  const bookings = (aiOpinionData?.bookings || [])
+    .filter((b: any) => b.need in NEED_ORDER)
+    .sort(
+      (a: any, b: any) =>
+        a.day - b.day || NEED_ORDER[a.need] - NEED_ORDER[b.need],
+    );
   // ⚠️ 사장님 SSOT 2026-07-14 = AI 의견 오버레이 = 전문가와 완전 동일한 SnapSheet(첫노출 half + 드래그 + 스크롤). 옛 고정 Modal(fade, 88%) 폐기 §19.
   return (
     <SnapSheet
@@ -77,6 +94,60 @@ export default function AiOpinionSheet({ planner }: { planner: PlannerApi }) {
           <View
             style={[styles.aiOpinionDivider, { backgroundColor: theme.border }]}
           />
+
+          {/* ⚠️ 수정금지(승인필요) 2026-10-28 사장님 결정 = 예약 칸 = 실현 가능성 바로 밑 · 날짜 순, 같은 날은 필수 → 권장 → 현장 · 3가지 · 날 글자 = i18n · 버튼·링크 없음 · 없으면 칸 숨김 (정본 §2026-10-27) */}
+          {bookings.length > 0 && (
+            <>
+              <View style={styles.aiOpinionSection}>
+                <Text
+                  style={[styles.aiOpinionSectionTitle, { color: theme.text }]}
+                >
+                  {t("aiOpinion.bookings")}
+                </Text>
+                {bookings.map((b: any, idx: number) => (
+                  <View key={`booking-${idx}`} style={{ marginTop: 10 }}>
+                    <View style={styles.aiOpinionPriceRow}>
+                      <Text
+                        style={[
+                          styles.aiOpinionSubheading,
+                          { color: theme.text, marginTop: 0, flex: 1 },
+                        ]}
+                      >
+                        {t("common.dayCount", { count: b.day })} · {b.place}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.aiOpinionSubheading,
+                          {
+                            marginTop: 0,
+                            color: NEED_COLOR[b.need],
+                          },
+                        ]}
+                      >
+                        {t(`aiOpinion.need.${b.need}`)}
+                      </Text>
+                    </View>
+                    {!!b.open_rule && (
+                      <Text
+                        style={[
+                          styles.aiOpinionBody,
+                          { color: theme.textSecondary, marginTop: 2 },
+                        ]}
+                      >
+                        {b.open_rule}
+                      </Text>
+                    )}
+                  </View>
+                ))}
+              </View>
+              <View
+                style={[
+                  styles.aiOpinionDivider,
+                  { backgroundColor: theme.border },
+                ]}
+              />
+            </>
+          )}
 
           {/* 2. 동선 점검 */}
           <View style={styles.aiOpinionSection}>

@@ -35,7 +35,10 @@ export interface TripFormData {
   curationFocus: CurationFocus;
   destination: string;
   destinationCoords?: { lat: number; lng: number };
-  destinationCountryCode?: string; // 위젯이 준 나라 코드(ISO-2) = 같은 나라 거점 우선
+  destinationPlace?: {
+    types: string[];
+    components: { longText: string; shortText: string; types: string[] }[];
+  }; // 위젯이 준 구글 종류·주소 조각(나라 포함) = 같은 나라 거점 우선 · 서버가 도시를 잘라 낸다
   startDate: string;
   startTime: string;
   endDate: string;

@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Icon } from "@/components/Icon";
 import { Brand, Fonts } from "@/constants/theme";
 import PlaceAutocompleteWidget, {
+  CITY_LEVEL_TYPES,
   type PlaceAutoSelection as PlaceSelection,
 } from "@/components/PlaceAutocompleteWidget";
 
@@ -99,6 +100,7 @@ export default function CitySearchAndroid({
                 placeholder={placeholder}
                 language={language}
                 height={360}
+                includedPrimaryTypes={CITY_LEVEL_TYPES}
                 cityPrefix={cityPrefix}
                 onSelect={(place) => {
                   onSelect(place);

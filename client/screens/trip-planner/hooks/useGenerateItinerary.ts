@@ -147,7 +147,7 @@ export function useGenerateItinerary({
       setFormData((prev) => ({
         ...prev,
         accommodationCoords: undefined,
-        destinationCountryCode: undefined,
+        destinationPlace: undefined,
         accommodationName: undefined,
         accommodationAddress: undefined,
         accommodationPlaceId: undefined,
@@ -169,7 +169,9 @@ export function useGenerateItinerary({
       }
       const detail = message.includes("일정 검증")
         ? t("trip.validationFailed")
-        : t("trip.retryHint");
+        : message.includes("pick_city")
+          ? t("trip.pickCity")
+          : t("trip.retryHint");
       Alert.alert(t("trip.generateFailed"), detail, [
         { text: t("common.confirm") },
       ]);

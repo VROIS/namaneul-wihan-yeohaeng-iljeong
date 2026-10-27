@@ -15,7 +15,8 @@ import { openGuideForPlace } from "@/components/tripis/openGuide";
 import { resultStyles as styles } from "../styles/result";
 import TransitPill from "./TransitPill";
 import SlotThumbnail from "./SlotThumbnail";
-import { isMealPlace, slotPriceLabel } from "./slot-price";
+import { isMealPlace, slotPriceAmount, slotPriceLabel } from "./slot-price";
+import { fitTextPropsSingleLine } from "../utils";
 import type { PlannerApi } from "../hooks/useTripPlanner";
 
 // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = [점심]/[저녁] 텍스트 프리픽스 폐기(식당명 노출공간
@@ -29,6 +30,17 @@ const slotStyles = StyleSheet.create({
     justifyContent: "space-between",
     gap: Spacing.sm,
   },
+  reserve: {
+    width: 48,
+    height: 18,
+    marginTop: 3,
+    borderRadius: 9,
+    backgroundColor: Brand.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 2,
+  },
+  reserveText: { color: "#FFFFFF", fontSize: 11, fontWeight: "700" },
 });
 
 export default function PlaceSlotCard({
@@ -79,6 +91,7 @@ export default function PlaceSlotCard({
   const hasTransit = index < places.length - 1;
 
   const priceLabel = slotPriceLabel(place, isMeal, t);
+  const canReserve = (slotPriceAmount(place, !!isMeal) ?? 0) > 0;
   return (
     <View
       onLayout={(e) => {
@@ -146,19 +159,28 @@ export default function PlaceSlotCard({
           <View style={styles.placeCardContent}>
             {/* 🎙️ 2026-08-03 사장님 지시 = 썸네일(위) + 칸 맨 아래 [해설 듣기] 세로칸(치수 = slotStyles). */}
             <View style={slotStyles.thumbColumn}>
-              {/* 썸네일 이미지 = 터치 시 외부 Google Maps 앱 호출 (= openPlaceInMaps) */}
+              {/* ⚠️ 수정금지(승인필요) 2026-10-27 사장님 결정 = 썸네일 + 바로 밑 "예약" = 한 덩어리 = 어디를 눌러도 같은 구글맵 장소 페이지(openPlaceInMaps 1벌) · "예약" = 가격이 있는 곳(0 보다 큼)만 (정본 §2026-10-27) */}
               {/* ⚠️ 수정금지(승인필요) 2026-05-12 = BTS 1주일 SSOT = resolveImageSource (= UA + bucket + Platform 분기) */}
-              <Pressable
-                style={styles.placeThumbnail}
-                onPress={() => openPlaceInMaps(place)}
-              >
-                <SlotThumbnail
-                  place={place}
-                  isMealSlot={isMealSlot}
-                  isMeal={!!isMeal}
-                  theme={theme}
-                  t={t}
-                />
+              <Pressable onPress={() => openPlaceInMaps(place)}>
+                <View style={styles.placeThumbnail}>
+                  <SlotThumbnail
+                    place={place}
+                    isMealSlot={isMealSlot}
+                    isMeal={!!isMeal}
+                    theme={theme}
+                    t={t}
+                  />
+                </View>
+                {canReserve && (
+                  <View style={slotStyles.reserve}>
+                    <Text
+                      style={slotStyles.reserveText}
+                      {...fitTextPropsSingleLine}
+                    >
+                      {t("trip.reserve")}
+                    </Text>
+                  </View>
+                )}
               </Pressable>
 
               {/* 🎙️ [해설 듣기] = 이미지가 떠도 아이콘이 떠도 같은 자리(칸 맨 아래)에 뜬다(식사 슬롯도 동일).

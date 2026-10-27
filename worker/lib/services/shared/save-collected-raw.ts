@@ -7,7 +7,7 @@ import { uploadToR2, isR2Configured } from "./r2-client";
 import { rawPlace } from "../../../../shared/r2-paths";
 
 interface SaveCollectedRawOpts {
-  cityId: number; // = 도시 폴더(R2 {cityId}/raw/ + docs/raw/{cityId}/)
+  cityId: number | string; // = 도시 폴더(R2 {cityId}/raw/ + docs/raw/{cityId}/) · 폴더 전 새 도시 = itinerary-{번호}(§18)
   stepNum: number; // = rawName NN (예: Gemini MIX=90, TS 모음=6)
   stepName: string; // = 'mix-gemini' / 'ts-pm-enrich'
   content?: string; // = 'step1' / 'candidates'

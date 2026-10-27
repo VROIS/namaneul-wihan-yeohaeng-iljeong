@@ -5,13 +5,14 @@ import { findHub } from "../shared/city-hub";
 // ⚠️ 2026-07-17 사장님 확정 = 풀 = city_id ∪ 중심 100km 합집합(순수 확장) = shared/pool-radius 단일 SSOT(§16)
 import { getPoolContext, recalcCrossCityZone } from "../shared/pool-radius";
 
-/** ⚠️ 2026-07-17 사장님 확정 = 풀 = (city_id=요청도시) ∪ (좌표 유효 100km 이내) = 크로스도시 행도 매칭·슬롯표시에 포함 */
+// ⚠️ 수정금지(승인필요) 2026-10-27 사장님 결정 = 풀 = (city_id=요청도시) ∪ (좌표 유효 100km 이내) · 폴더가 아직 없는 새 도시는 잘라 낸 도심 좌표(center) 100km 안의 창고 행을 다 끌어와 재활용 (정본 §2026-10-27)
 export async function loadSeedRawMap(
-  cityId: number,
+  cityId: number | null,
+  startCoords?: { lat: number; lng: number },
 ): Promise<Map<string, any>> {
   const seedRawMap = new Map<string, any>();
   if (!db) return seedRawMap;
-  const { center, where } = await getPoolContext(cityId);
+  const { center, where } = await getPoolContext(cityId ?? 0, startCoords);
   const seeds = await db
     .select({
       id: placeSeedRaw.id,
@@ -40,7 +41,7 @@ export async function loadSeedRawMap(
     .where(where)
     .orderBy(placeSeedRaw.id);
   for (const s of seeds) {
-    recalcCrossCityZone(s as any, cityId, center);
+    recalcCrossCityZone(s as any, cityId ?? 0, center);
     // ⚠️ 수정금지(승인필요) 2026-05-09 = 이름 매칭 보강 = 정규화 + 악센트 제거 (좌표 X, 이름+address ✓)
     const norm = (name: string | null) =>
       name ? name.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : null;

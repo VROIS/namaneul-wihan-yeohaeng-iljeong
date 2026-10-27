@@ -6,12 +6,14 @@ export type PlaceAutoSelection = {
   name: string;
   address: string;
   coords: { lat: number; lng: number };
-  countryCode?: string;
+  // ⚠️ 수정금지(승인필요) 2026-10-27 사장님 결정 = 고른 곳의 구글 종류·주소 조각(나라 포함)을 서버로 그대로 보낸다 = 나라 코드 한 벌 · 서버가 도시를 잘라 낸다(새 도시 폴더 판정) (정본 §2026-10-27)
+  types?: string[];
+  components?: { longText: string; shortText: string; types: string[] }[];
 };
 
 type Opts = {
   apiKey: string;
-  includedPrimaryTypes?: string;
+  includedPrimaryTypes?: string[];
   cityPrefix?: string;
   placeholder?: string;
   language?: string;
@@ -20,7 +22,7 @@ type Opts = {
 export const PLACE_AUTOCOMPLETE_HTML = (opts: Opts): string => {
   const {
     apiKey,
-    includedPrimaryTypes = "",
+    includedPrimaryTypes,
     cityPrefix = "",
     placeholder = "",
     language = "ko",
@@ -70,8 +72,8 @@ gmp-place-autocomplete { width: 100%; display: block; }
     try {
       const { PlaceAutocompleteElement } = await google.maps.importLibrary("places");
       const ac = new PlaceAutocompleteElement(${
-        includedPrimaryTypes
-          ? `{ includedPrimaryTypes: ["${includedPrimaryTypes}"] }`
+        includedPrimaryTypes?.length
+          ? JSON.stringify({ includedPrimaryTypes })
           : "{}"
       });
       ${placeholder ? `try { ac.placeholder = ${JSON.stringify(placeholder)}; } catch(e) {}` : ""}
@@ -82,14 +84,15 @@ gmp-place-autocomplete { width: 100%; display: block; }
         try {
           const pred = ev.placePrediction;
           const place = pred.toPlace();
-          await place.fetchFields({ fields: ["displayName", "formattedAddress", "location", "addressComponents"] });
+          await place.fetchFields({ fields: ["displayName", "formattedAddress", "location", "addressComponents", "types"] });
           const loc = place.location;
           postRN({
             type: "select",
             placeId: place.id || (pred.placeId || ""),
             name: place.displayName || "",
             address: place.formattedAddress || "",
-            countryCode: ((place.addressComponents || []).find(function(c) { return (c.types || []).indexOf("country") >= 0; }) || {}).shortText || "",
+            types: place.types || [],
+            components: (place.addressComponents || []).map(function(c) { return { longText: c.longText, shortText: c.shortText, types: c.types || [] }; }),
             coords: { lat: typeof loc.lat === "function" ? loc.lat() : loc.lat, lng: typeof loc.lng === "function" ? loc.lng() : loc.lng },
           });
         } catch (e) {
