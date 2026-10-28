@@ -54,13 +54,14 @@ export const UNIT_COST_LEDGER: Record<CallProvider, UnitCostLedgerEntry> = {
     verifiedAt: "2026-09-27",
     note: "360p 10초 조각 실측 토큰(영상 19,310·그림 입력 약 8천·글 입력 약 800·글 출력 생각 포함 약 2,270) = $0.3716 = 초당 $0.03716. 콘솔 환산 €0.858 × 세금 1.2 = 공개단가의 약 1.03배. 2026-09-27 콘솔 청구(9-26 옴니 13건)와 토큰 수 일치 확인.",
   },
+  // ⚠️ 수정금지(승인필요) 2026-10-28 사장님 결정 = 그림 단가 = 나노바나나 2.1 1K 공개단가 (정본 큰 일 4)
   nano: {
-    eur: 0.0472,
-    publicPriceUsd: 0.039,
+    eur: 0.0407,
+    publicPriceUsd: 0.0336,
     surchargePct: 21,
-    unit: "장당(gemini-2.5-flash-image, ≤1024×1024)",
+    unit: "장당(gemini-nano-banana-2.1, 1K · 2K = $0.0504)",
     source: "https://ai.google.dev/gemini-api/docs/pricing",
-    verifiedAt: "2026-08-25",
+    verifiedAt: "2026-10-28",
   },
   gemini: {
     eur: 0,

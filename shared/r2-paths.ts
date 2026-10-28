@@ -38,6 +38,16 @@ export const guideContext = (cityId: unknown, userId: Id): string =>
     ? String(Number(cityId))
     : userContext(userId);
 
+// ⚠️ 수정금지(승인필요) 2026-10-28 사장님 결정 = 홍보물 창고 = system/marketing(원본 = raw), 이름 맨 앞 = 시각 (정본 큰 일 4)
+export const marketingDir = "system/marketing";
+
+export const marketingKey = (name: string): string =>
+  `${marketingDir}/${fileStamp()}_${name}`;
+
+// ⚠️ 수정금지(승인필요) 2026-10-29 사장님 결정 = 앱 화면 그림 묶음 = system/app/{시각}_{묶음}/ (한 묶음 = 같은 시각, 앱 코드가 그 묶음 주소 1개를 씀) (정본 큰 일 4)
+export const appAssetKey = (bundle: string): string =>
+  `system/app/${fileStamp()}_${bundle}`;
+
 export function rawPlace(contextId: Id | null | undefined): {
   dir: string;
   suffix: string;
@@ -46,6 +56,7 @@ export function rawPlace(contextId: Id | null | undefined): {
   if (/^\d+$/.test(ctx)) return { dir: `${ctx}/raw`, suffix: "" };
   const itin = ctx.match(/^itinerary-(\d+)$/);
   if (itin) return { dir: `system/itineraries/${itin[1]}/raw`, suffix: "" };
+  if (ctx === "marketing") return { dir: `${marketingDir}/raw`, suffix: "" };
   const user = ctx.match(/^user-(.+)$/);
   if (user)
     return {

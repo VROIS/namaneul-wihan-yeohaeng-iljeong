@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:720px;height:1280px;overflow:hidden;background:#12061f}
+#stage{position:absolute;left:0;top:0;width:1080px;height:1920px;transform:scale(.6666667);transform-origin:0 0;overflow:hidden;
+ font-family:"Segoe UI","Inter",Arial,sans-serif;color:#fff;
+ background:radial-gradient(1200px 900px at 50% 20%,#4b1d8f 0%,#24104a 45%,#12061f 100%)}
+*{animation-play-state:paused!important}
+.scene{position:absolute;inset:0;opacity:0;animation:vis var(--len) linear both;animation-delay:var(--s)}
+@keyframes vis{0%{opacity:0}5%{opacity:1}93%{opacity:1}100%{opacity:0}}
+.in{animation:rise .7s cubic-bezier(.2,.8,.2,1) both;animation-delay:var(--d)}
+@keyframes rise{from{opacity:0;transform:translateY(60px)}to{opacity:1;transform:none}}
+.pop{animation:pop .6s cubic-bezier(.2,1.4,.4,1) both;animation-delay:var(--d)}
+@keyframes pop{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:scale(1)}}
+.fade{animation:fade .6s ease both;animation-delay:var(--d)}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.slideL{animation:slideL .7s cubic-bezier(.2,.8,.2,1) both;animation-delay:var(--d)}
+@keyframes slideL{from{opacity:0;transform:translateX(-120px)}to{opacity:1;transform:none}}
+.h1{font-weight:900;font-size:96px;line-height:1.05;letter-spacing:-2px}
+.h2{font-weight:800;font-size:64px;line-height:1.1;letter-spacing:-1px}
+.sub{font-size:40px;font-weight:500;color:#e9d5ff;line-height:1.3}
+.grad{background:linear-gradient(90deg,#f9a8d4,#c084fc,#a5b4fc);-webkit-background-clip:text;background-clip:text;color:transparent}
+.center{position:absolute;left:80px;right:80px;text-align:center}
+.tag{display:inline-block;padding:14px 30px;border-radius:999px;background:rgba(192,132,252,.18);border:2px solid rgba(192,132,252,.6);font-size:34px;font-weight:700;color:#f3e8ff}
+/* light rays */
+.rays{position:absolute;left:50%;top:1500px;width:10px;height:10px}
+.ray{position:absolute;left:0;bottom:0;width:120px;height:1700px;transform-origin:50% 100%;
+ background:linear-gradient(to top,rgba(216,180,254,.55),rgba(216,180,254,0));filter:blur(8px);
+ animation:sweep 3s ease-in-out both;animation-delay:var(--d)}
+@keyframes sweep{0%{opacity:0;transform:rotate(var(--a0))}30%{opacity:1}100%{opacity:.8;transform:rotate(var(--a1))}}
+.crowd{position:absolute;left:0;right:0;bottom:0;height:420px;background:linear-gradient(to top,#0b0414 40%,rgba(11,4,20,0))}
+.bomb{position:absolute;width:18px;height:18px;border-radius:50%;background:#e9d5ff;box-shadow:0 0 24px 8px rgba(192,132,252,.9);
+ animation:twinkle 1.2s ease-in-out infinite alternate both;animation-delay:var(--d)}
+@keyframes twinkle{from{opacity:.25;transform:scale(.7)}to{opacity:1;transform:scale(1.1)}}
+/* timeline */
+.tl{position:absolute;left:110px;right:90px;top:640px}
+.tl .line{position:absolute;left:58px;top:40px;width:6px;height:0;background:linear-gradient(#c084fc,#f472b6);border-radius:3px;
+ animation:grow 3.0s linear both;animation-delay:var(--d)}
+@keyframes grow{from{height:0}to{height:820px}}
+.stop{position:relative;display:flex;align-items:center;gap:36px;height:170px}
+.dot{width:122px;height:122px;flex:none;border-radius:50%;background:#2a1450;border:5px solid #c084fc;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:34px;color:#f3e8ff}
+.stop .t1{font-size:46px;font-weight:800}
+.stop .t2{font-size:32px;color:#d8b4fe;margin-top:6px}
+.final .dot{background:linear-gradient(135deg,#f472b6,#a855f7);border-color:#fff;box-shadow:0 0 50px 10px rgba(244,114,182,.6)}
+.final .t1{color:#fbcfe8}
+/* characters */
+.cards{position:absolute;left:0;right:0;top:600px;height:760px}
+.card{position:absolute;top:0;width:400px;height:640px;border-radius:40px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.6);
+ background-size:cover;background-position:center;border:4px solid rgba(255,255,255,.85)}
+.card .lab{position:absolute;left:0;right:0;bottom:0;padding:90px 20px 26px;text-align:center;font-weight:900;font-size:44px;
+ background:linear-gradient(to top,rgba(0,0,0,.85),rgba(0,0,0,0));text-shadow:0 2px 8px #000}
+.card .lab small{display:block;font-size:28px;font-weight:600;color:#f5d0fe;margin-top:4px}
+.deal{animation:deal 3.6s cubic-bezier(.3,.7,.2,1) both;animation-delay:var(--d)}
+@keyframes deal{0%{opacity:0;transform:translateX(var(--x0)) rotate(0) scale(.7)}
+ 15%{opacity:1}
+ 55%{transform:translateX(var(--x1)) rotate(var(--r)) scale(var(--sc))}
+ 100%{opacity:1;transform:translateX(var(--x1)) rotate(var(--r)) scale(var(--sc))}}
+/* place card */
+.pcard{position:absolute;left:90px;right:90px;top:600px;border-radius:44px;background:rgba(255,255,255,.96);color:#1e1033;padding:50px 54px;box-shadow:0 40px 100px rgba(0,0,0,.5)}
+.pcard .pname{font-size:58px;font-weight:900}
+.pcard .pmeta{font-size:34px;color:#6b5a86;margin-top:8px}
+.big{font-size:120px;font-weight:900;letter-spacing:-3px;color:#7c3aed;line-height:1}
+.row{display:flex;justify-content:space-between;align-items:flex-end;margin-top:36px}
+.lbl{font-size:30px;color:#6b5a86;font-weight:600}
+.bars{margin-top:40px}
+.bar{display:flex;align-items:center;gap:20px;margin-top:22px;font-size:32px;font-weight:700}
+.bar .b{height:34px;border-radius:17px;background:linear-gradient(90deg,#a855f7,#f472b6);width:0;animation:barw 1s cubic-bezier(.2,.8,.2,1) both;animation-delay:var(--d)}
+@keyframes barw{from{width:0}to{width:var(--w)}}
+.bar .n{width:220px;color:#4c1d95}
+.bar .v{margin-left:auto;color:#1e1033}
+/* camera */
+.vf{position:absolute;left:150px;right:150px;top:560px;height:860px;border-radius:30px;overflow:hidden;
+ background:linear-gradient(#5b3a8f 0%,#f59e8b 55%,#2a1450 56%,#1a0b2e 100%)}
+.sun{position:absolute;left:50%;top:330px;width:240px;height:240px;margin-left:-120px;border-radius:50%;background:radial-gradient(#ffe4c4,#fb923c 70%,rgba(251,146,60,0))}
+.sky{position:absolute;left:0;right:0;bottom:0;height:520px}
+.corner{position:absolute;width:90px;height:90px;border:8px solid #fff}
+.c1{left:30px;top:30px;border-right:0;border-bottom:0}.c2{right:30px;top:30px;border-left:0;border-bottom:0}
+.c3{left:30px;bottom:30px;border-right:0;border-top:0}.c4{right:30px;bottom:30px;border-left:0;border-top:0}
+.shutter{position:absolute;inset:0;background:#fff;opacity:0;animation:flash .5s ease both;animation-delay:var(--d)}
+@keyframes flash{0%{opacity:0}20%{opacity:.95}100%{opacity:0}}
+.wave{position:absolute;left:0;right:0;bottom:70px;display:flex;justify-content:center;align-items:center;gap:14px;height:160px}
+.wave i{display:block;width:20px;border-radius:10px;background:#fff;height:30px;animation:wv .5s ease-in-out infinite alternate both;animation-delay:var(--d)}
+@keyframes wv{from{height:24px}to{height:var(--h)}}
+.bubble{position:absolute;left:60px;right:60px;bottom:250px;padding:30px 36px;border-radius:30px;background:rgba(18,6,31,.82);font-size:34px;line-height:1.35;color:#f3e8ff;border:2px solid rgba(192,132,252,.6)}
+/* badges */
+.badge{position:absolute;left:110px;right:110px;height:230px;border-radius:40px;display:flex;align-items:center;gap:40px;padding:0 50px;
+ background:rgba(255,255,255,.08);border:3px solid rgba(216,180,254,.5)}
+.badge .ic{width:130px;height:130px;flex:none;border-radius:34px;display:flex;align-items:center;justify-content:center;font-size:74px;font-weight:900}
+.badge .bt{font-size:50px;font-weight:900}
+.badge .bs{font-size:32px;color:#e9d5ff;margin-top:6px}
+/* cities */
+.city{position:absolute;left:110px;right:110px;height:120px;display:flex;justify-content:space-between;align-items:center;
+ border-bottom:2px solid rgba(216,180,254,.3);font-size:52px;font-weight:800}
+.city span{font-size:38px;font-weight:600;color:#f9a8d4}
+.logo{position:absolute;left:50%;width:300px;height:300px;margin-left:-150px;border-radius:70px;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 120px 20px rgba(192,132,252,.55)}
+.logo img{width:230px;height:230px}
+.store{display:inline-block;margin:0 14px;padding:22px 40px;border-radius:24px;background:#fff;color:#1e1033;font-size:36px;font-weight:800}
+</style></head>
+<body><div id="stage">
+
+<!-- S1 HOOK 0-3.4 -->
+<div class="scene" style="--s:0s;--len:3.4s">
+  <div class="rays">
+    <div class="ray" style="--d:0s;--a0:-40deg;--a1:-15deg"></div>
+    <div class="ray" style="--d:.1s;--a0:40deg;--a1:12deg"></div>
+    <div class="ray" style="--d:.2s;--a0:-5deg;--a1:25deg"></div>
+  </div>
+  <div class="center in" style="top:520px;--d:.15s"><span class="tag">BTS WORLD TOUR · ARIRANG</span></div>
+  <div class="center h1 in" style="top:660px;--d:.35s">Going to<br>the show?</div>
+  <div class="center h2 in" style="top:960px;--d:1.3s">Don't just see it.</div>
+  <div class="center h1 grad pop" style="top:1060px;--d:1.8s">Live the city.</div>
+  <div class="crowd"></div>
+  <div id="bombs"></div>
+</div>
+
+<!-- S2 CONCERT DAY 3.4-8.2 -->
+<div class="scene" style="--s:3.4s;--len:4.8s">
+  <div class="center in" style="top:300px;--d:3.5s"><span class="tag">01 · CONCERT-DAY PLAN</span></div>
+  <div class="center h2 in" style="top:410px;--d:3.6s">Your day ends<br><span class="grad">at the stadium.</span></div>
+  <div class="tl">
+    <div class="line" style="--d:3.9s"></div>
+    <div class="stop slideL" style="--d:4.0s"><div class="dot">09:30</div><div><div class="t1">Pateo do Collegio</div><div class="t2">São Paulo, Oct 28 · Metrô Sé</div></div></div>
+    <div class="stop slideL" style="--d:4.45s"><div class="dot">11:00</div><div><div class="t1">Mosteiro de São Bento</div><div class="t2">monks' bread · Metrô São Bento</div></div></div>
+    <div class="stop slideL" style="--d:4.9s"><div class="dot">13:30</div><div><div class="t1">MASP + lunch</div><div class="t2">Av. Paulista</div></div></div>
+    <div class="stop slideL" style="--d:5.35s"><div class="dot">15:00</div><div><div class="t1">Metro Line 4</div><div class="t2">Paulista → São Paulo-Morumbi</div></div></div>
+    <div class="stop final pop" style="--d:5.9s"><div class="dot">16:00</div><div><div class="t1">Estádio MorumBIS</div><div class="t2">gates 16h · show 20h</div></div></div>
+  </div>
+</div>
+
+<!-- S3 CHARACTERS 8.2-12.4 -->
+<div class="scene" style="--s:8.2s;--len:4.2s">
+  <div class="center in" style="top:300px;--d:8.3s"><span class="tag">02 · TRAVEL COMPANIONS</span></div>
+  <div class="center h2 in" style="top:410px;--d:8.4s">Pick who you<br><span class="grad">travel with.</span></div>
+  <div class="cards" id="cards"></div>
+  <div class="center sub in" style="top:1420px;--d:10.4s">7 characters · 7 travel styles<br>One route made for your taste</div>
+</div>
+
+<!-- S4 REAL DATA 12.4-16.4 -->
+<div class="scene" style="--s:12.4s;--len:4s">
+  <div class="center in" style="top:300px;--d:12.5s"><span class="tag">03 · REAL PLACES, REAL NUMBERS</span></div>
+  <div class="center h2 in" style="top:410px;--d:12.6s">No guesswork.</div>
+  <div class="pcard pop" style="--d:12.9s">
+    <div class="pname">Estádio MorumBIS</div>
+    <div class="pmeta">São Paulo · stop 7 · 20:00</div>
+    <div class="row">
+      <div><div class="lbl">Google reviews</div><div class="big" id="cntReviews">0</div></div>
+    </div>
+    <div class="row">
+      <div><div class="lbl">Whole day, per person</div><div class="big" id="cntCost">€0</div></div>
+    </div>
+    <div class="bars">
+      <div class="bar"><div class="n">Tickets</div><div class="b" style="--d:13.9s;--w:300px"></div><div class="v">€32</div></div>
+      <div class="bar"><div class="n">Food</div><div class="b" style="--d:14.1s;--w:345px"></div><div class="v">€37</div></div>
+      <div class="bar"><div class="n">Transport</div><div class="b" style="--d:14.3s;--w:115px"></div><div class="v">€12</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- S5 CAMERA AUDIO 16.4-20.2 -->
+<div class="scene" style="--s:16.4s;--len:3.8s">
+  <div class="center in" style="top:300px;--d:16.5s"><span class="tag">04 · AUDIO GUIDE</span></div>
+  <div class="center h2 in" style="top:410px;--d:16.6s">Point. Shoot. <span class="grad">Listen.</span></div>
+  <div class="vf fade" style="--d:16.7s">
+    <div class="sun"></div>
+    <svg class="sky" viewBox="0 0 780 520" preserveAspectRatio="none"><path fill="#1a0b2e" d="M0 520V300h60v-60h40v60h50V180h30l20-60 20 60h30v120h60V230h80v-90l40-50 40 50v90h80v70h50V200h30v-40h30v40h30v100h60v-80h50v80h70v220z"/></svg>
+    <div class="corner c1"></div><div class="corner c2"></div><div class="corner c3"></div><div class="corner c4"></div>
+    <div class="shutter" style="--d:17.5s"></div>
+    <div class="bubble fade" style="--d:18.0s">"This monastery has baked its bread since the 1600s..."</div>
+    <div class="wave" id="wave"></div>
+  </div>
+  <div class="center sub in" style="top:1460px;--d:18.3s">Snap any landmark, hear its story<br>in 2 to 3 seconds</div>
+</div>
+
+<!-- S6 EXPERTS 20.2-23.6 -->
+<div class="scene" style="--s:20.2s;--len:3.4s">
+  <div class="center in" style="top:300px;--d:20.3s"><span class="tag">05 · NOT JUST AI</span></div>
+  <div class="center h2 in" style="top:410px;--d:20.4s">AI plans it.<br><span class="grad">Travel pros check it.</span></div>
+  <div class="badge slideL" style="top:720px;--d:20.7s"><div class="ic" style="background:linear-gradient(135deg,#818cf8,#a855f7)">AI</div><div><div class="bt">AI opinion</div><div class="bs">a second look at every plan</div></div></div>
+  <div class="badge slideL" style="top:990px;--d:21.1s"><div class="ic" style="background:linear-gradient(135deg,#f472b6,#a855f7)">&#10003;</div><div><div class="bt">Expert check</div><div class="bs">by a Paris travel agency</div></div></div>
+  <div class="badge slideL" style="top:1260px;--d:21.5s"><div class="ic" style="background:linear-gradient(135deg,#fb923c,#f472b6);font-size:62px">7</div><div><div class="bt">7 languages</div><div class="bs">made for ARMY everywhere</div></div></div>
+</div>
+
+<!-- S7 CITIES + CTA 23.6-28 -->
+<div class="scene" style="--s:23.6s;--len:4.6s;animation-name:visEnd">
+  <div class="center h2 in" style="top:300px;--d:23.7s">Every tour city.</div>
+  <div class="city slideL" style="top:440px;--d:23.9s">São Paulo<span>Oct 28 · 30 · 31</span></div>
+  <div class="city slideL" style="top:560px;--d:24.05s">Kaohsiung<span>Nov 19 · 21 · 22</span></div>
+  <div class="city slideL" style="top:680px;--d:24.2s">Bangkok<span>Dec 3 · 5 · 6</span></div>
+  <div class="city slideL" style="top:800px;--d:24.35s">Kuala Lumpur<span>Dec 12 · 13</span></div>
+  <div class="city slideL" style="top:920px;--d:24.5s">Singapore<span>Dec 17 – 22</span></div>
+  <div class="logo pop" style="top:1110px;--d:25.2s"><img id="logo"></div>
+  <div class="center h1 pop" style="top:1440px;--d:25.5s;font-size:110px">TRIPIS</div>
+  <div class="center sub in" style="top:1570px;--d:25.8s">Plan your concert city · <b style="color:#fff">tripis.app</b></div>
+  <div class="center in" style="top:1660px;--d:26.1s"><span class="store">App Store</span><span class="store">Google Play</span></div>
+</div>
+<style>@keyframes visEnd{0%{opacity:0}5%{opacity:1}100%{opacity:1}}</style>
+
+</div>
+<script>
+const CH=[["collector","Collector","Culture"],["romanticist","Romanticist","Romantic Wanderer"],["explorer","Explorer","Aesthetic"],["challenger","Challenger","Adrenaline Foodie"],["companion","Companion","Caring"],["recharger","Recharger","Luxury"],["chiller","Chiller","Ultimate Healer"]];
+function build(assets){
+  document.getElementById('logo').src=assets.logo;
+  const cards=document.getElementById('cards');
+  // final layout: fan of 7, center = explorer
+  const pos=[-3,-2,-1,0,1,2,3];
+  const order=[0,1,3,2,4,5,6]; // explorer center
+  order.forEach((ci,i)=>{
+    const p=pos[i], c=CH[ci];
+    const el=document.createElement('div');
+    el.className='card deal';
+    const x1=p*150, r=p*7, sc=p===0?1.08:(1-Math.abs(p)*0.08);
+    el.style.cssText=`left:340px;background-image:url(${assets[c[0]]});--d:${8.6+Math.abs(p)*0.12}s;--x0:0px;--x1:${x1}px;--r:${r}deg;--sc:${sc};z-index:${10-Math.abs(p)}`;
+    el.innerHTML = Math.abs(p)<=1 ? `<div class="lab">${c[1]}<small>${c[2]}</small></div>` : '';
+    cards.appendChild(el);
+  });
+  // bombs
+  const b=document.getElementById('bombs'); let h='';
+  for(let i=0;i<46;i++){const x=(i*97)%1060+10, y=1560+((i*53)%330); h+=`<div class="bomb" style="left:${x}px;top:${y}px;--d:${(i%7)*0.17}s"></div>`;}
+  b.innerHTML=h;
+  const w=document.getElementById('wave'); let wh='';
+  for(let i=0;i<17;i++){wh+=`<i style="--h:${40+((i*37)%110)}px;--d:${18.2+(i%5)*0.09}s"></i>`;}
+  w.innerHTML=wh;
+}
+function ease(x){return 1-Math.pow(1-Math.min(Math.max(x,0),1),3)}
+window.seek=function(t){
+  document.getAnimations().forEach(a=>{a.pause();a.currentTime=t*1000;});
+  const r=ease((t-13.2)/1.2); document.getElementById('cntReviews').textContent=Math.round(79303*r).toLocaleString('en-US');
+  const c=ease((t-13.5)/1.0); document.getElementById('cntCost').textContent='€'+Math.round(81*c);
+};
+</script>
+</body></html>

@@ -223,3 +223,122 @@ export async function* geminiVisionStream(
     raw: { parsed: null, text: fullText, finishReason },
   });
 }
+
+// ⚠️ 수정금지(승인필요) 2026-10-28 사장님 결정 = 그림 생성 = 나노바나나 2.1 1벌(참고 그림 최대 14장, 원본 저장·비용 장부 같이) (정본 큰 일 4)
+const IMAGE_MODEL_ID = "gemini-nano-banana-2.1";
+const INTERACTIONS_URL =
+  "https://generativelanguage.googleapis.com/v1beta/interactions";
+
+interface GeminiImageOptions {
+  references?: { name: string; data: Buffer; mimeType: string }[];
+  aspectRatio?: string;
+  imageSize?: "1K" | "2K" | "4K";
+  contextId?: string | number | null;
+  rawTag?: string | null;
+  apiKey?: string;
+}
+
+export async function geminiImage(
+  prompt: string,
+  opts?: GeminiImageOptions,
+): Promise<Buffer> {
+  const apiKey =
+    opts?.apiKey ||
+    process.env.AI_INTEGRATIONS_GEMINI_API_KEY ||
+    process.env.GEMINI_API_KEY ||
+    "";
+  if (!apiKey) throw new Error("Gemini API key missing (GEMINI_API_KEY)");
+  const refs = opts?.references || [];
+  const body = {
+    model: IMAGE_MODEL_ID,
+    input: [
+      ...refs.map((r) => ({
+        type: "image",
+        mime_type: r.mimeType,
+        data: r.data.toString("base64"),
+      })),
+      { type: "text", text: prompt },
+    ],
+    response_format: {
+      type: "image",
+      mime_type: "image/jpeg",
+      aspect_ratio: opts?.aspectRatio || "1:1",
+      image_size: opts?.imageSize || "1K",
+    },
+  };
+
+  const startedAt = Date.now();
+  let interaction: any;
+  try {
+    interaction = await withQuotaRetry(
+      async () => {
+        const res = await fetch(INTERACTIONS_URL, {
+          method: "POST",
+          headers: {
+            "x-goog-api-key": apiKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(300000),
+        });
+        const json: any = await res.json();
+        if (!res.ok) {
+          const err: Error & { status?: number } = new Error(
+            `[gemini-image] ${res.status}: ${JSON.stringify(json).slice(0, 500)}`,
+          );
+          err.status = res.status;
+          throw err;
+        }
+        return json;
+      },
+      { label: `gemini-image:${opts?.rawTag || "call"}` },
+    );
+  } catch (err: any) {
+    void recordExternalCall({
+      provider: "nano",
+      sku: IMAGE_MODEL_ID,
+      tag: opts?.rawTag ?? null,
+      responseTimeMs: Date.now() - startedAt,
+      success: false,
+      errorMessage: err?.message || String(err),
+    });
+    throw err;
+  }
+
+  const image = (interaction?.steps || [])
+    .flatMap((s: any) => s?.content || [])
+    .filter((c: any) => c?.type === "image")
+    .pop();
+
+  await saveRaw({
+    source: "gemini",
+    contextId: opts?.contextId,
+    tag: opts?.rawTag || "image",
+    request: {
+      prompt,
+      model: IMAGE_MODEL_ID,
+      references: refs.map((r) => r.name),
+      responseFormat: body.response_format,
+    },
+    raw: JSON.parse(
+      JSON.stringify(interaction, (k, v) =>
+        k === "data" && typeof v === "string" && v.length > 1000
+          ? `<${v.length} bytes omitted>`
+          : v,
+      ),
+    ),
+  });
+
+  void recordExternalCall({
+    provider: "nano",
+    sku: `${IMAGE_MODEL_ID}@${body.response_format.image_size}`,
+    tag: opts?.rawTag ?? null,
+    responseTimeMs: Date.now() - startedAt,
+    success: !!image?.data,
+  });
+  if (!image?.data)
+    throw new Error(
+      `[gemini-image] 응답에 그림 없음: ${JSON.stringify(interaction).slice(0, 300)}`,
+    );
+  return Buffer.from(image.data, "base64");
+}

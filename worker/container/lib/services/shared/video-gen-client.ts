@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-09-26 사장님 결정 = 하루 영상 조각 = 옴니 1.1 플래시 1벌(360p 고정), 분당 한도 거절만 1분 뒤 다시 보냄·하루 한도 거절은 바로 실패 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-28 사장님 결정 = 영상 조각 = 옴니 1.1 플래시 1벌(앱 = 360p·참고 그림 기본값, 홍보 = 화질·첫 화면 방식 선택), 분당 한도 거절만 1분 뒤 다시 보냄·하루 한도 거절은 바로 실패 (정본 큰 일 4)
 
 import fs from "fs";
 import { recordExternalCall, precheck } from "./external-call-log";
@@ -6,7 +6,6 @@ import { saveRaw } from "./save-raw";
 import { withQuotaRetry } from "./retry-429"; // 429 재시도 1벌(2026-08-06 §16 승격)
 
 const OMNI_MODEL = "gemini-omni-1.1-flash";
-const OMNI_RESOLUTION = "360p";
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const POLL_INTERVAL_MS = 5000;
 const POLL_TIMEOUT_MS = 10 * 60 * 1000; // 조각 1개 생성 폴링 상한 10분
@@ -16,6 +15,8 @@ export interface SceneClipOpts {
   apiKey: string; // issueApiKey 출입증 (직접 env 조회 금지)
   referenceImages: { path?: string; url?: string; mimeType?: string }[];
   aspectRatio?: "9:16" | "16:9"; // 디폴트 9:16 세로 숏폼
+  resolution?: "360p" | "720p"; // 디폴트 360p (앱 하루 영상)
+  task?: "reference_to_video" | "image_to_video"; // 디폴트 참고 그림 방식, image_to_video = 첫 그림이 첫 화면
   seconds: number; // 조각 길이(초) = 비용 장부 단위
   contextId?: string | number | null; // §18 raw 저장 맥락 (cityId)
   rawTag?: string | null; // §18 파일명 태그
@@ -39,6 +40,10 @@ export async function generateSceneClip(
   opts: SceneClipOpts,
 ): Promise<Buffer> {
   const aspectRatio = opts.aspectRatio || "9:16";
+  const resolution = opts.resolution || "360p";
+  const task = opts.task || "reference_to_video";
+  const sku =
+    resolution === "360p" ? OMNI_MODEL : `${OMNI_MODEL}@${resolution}`;
   const input: any[] = [];
   for (const img of opts.referenceImages)
     input.push({
@@ -52,12 +57,12 @@ export async function generateSceneClip(
   const body = {
     model: OMNI_MODEL,
     input,
-    generation_config: { video_config: { task: "reference_to_video" } },
+    generation_config: { video_config: { task } },
     response_format: {
       type: "video",
       delivery: "uri",
       aspect_ratio: aspectRatio,
-      resolution: OMNI_RESOLUTION,
+      resolution,
     },
   };
 
@@ -115,8 +120,8 @@ export async function generateSceneClip(
       prompt,
       referenceImages: opts.referenceImages.map((i) => i.path || i.url),
       aspectRatio,
-      resolution: OMNI_RESOLUTION,
-      task: "reference_to_video",
+      resolution,
+      task,
     },
     raw: stripVideoBytes(interaction),
   });
@@ -134,7 +139,7 @@ export async function generateSceneClip(
   if (video?.uri) {
     void recordExternalCall({
       provider: "omni",
-      sku: OMNI_MODEL,
+      sku,
       units: opts.seconds,
       tag: opts.rawTag ?? null,
     });
@@ -148,7 +153,7 @@ export async function generateSceneClip(
   if (video?.data) {
     void recordExternalCall({
       provider: "omni",
-      sku: OMNI_MODEL,
+      sku,
       units: opts.seconds,
       tag: opts.rawTag ?? null,
     }); // 2026-08-23 유료호출 카운터

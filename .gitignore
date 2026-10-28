@@ -62,6 +62,7 @@ dev/
 !package.json
 !package-lock.json
 !tsconfig.json
+!marketing/scenarios/*.json
 !tsconfig.*.json
 !app.json
 !eas.json

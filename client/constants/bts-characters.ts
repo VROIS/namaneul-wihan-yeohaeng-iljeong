@@ -99,15 +99,15 @@ export {
   type BTSCharacterId,
 } from "../../shared/bts-character-mapping";
 
-// ⚠️ 수정금지(승인필요) — 캐릭터 전신 이미지 URL 매핑 (Screen 3/4 공유 소스)
-const GH_RAW =
-  "https://raw.githubusercontent.com/VROIS/namaneul-wihan-yeohaeng-iljeong/main/assets/images/bts-characters";
+// ⚠️ 수정금지(승인필요) 2026-10-29 사장님 결정 = 캐릭터 전신 그림 = R2 앱 그림 묶음(marketing install 이 올림, 저장소 assets 와 같은 그림) (정본 큰 일 4)
+const CHARACTER_BASE =
+  "https://media.tripis.app/system/app/2026-10-28_231224_bts-characters";
 export const BTS_CHARACTER_IMAGES: Record<string, { uri: string }> = {
-  collector: { uri: `${GH_RAW}/bts_collector.webp` },
-  romanticist: { uri: `${GH_RAW}/bts_romanticist.webp` },
-  explorer: { uri: `${GH_RAW}/bts_explorer.webp` },
-  challenger: { uri: `${GH_RAW}/bts_challenger.webp` },
-  companion: { uri: `${GH_RAW}/bts_companion.webp` },
-  recharger: { uri: `${GH_RAW}/bts_recharger.webp` },
-  chiller: { uri: `${GH_RAW}/bts_chiller.webp` },
+  collector: { uri: `${CHARACTER_BASE}/bts_collector.webp` },
+  romanticist: { uri: `${CHARACTER_BASE}/bts_romanticist.webp` },
+  explorer: { uri: `${CHARACTER_BASE}/bts_explorer.webp` },
+  challenger: { uri: `${CHARACTER_BASE}/bts_challenger.webp` },
+  companion: { uri: `${CHARACTER_BASE}/bts_companion.webp` },
+  recharger: { uri: `${CHARACTER_BASE}/bts_recharger.webp` },
+  chiller: { uri: `${CHARACTER_BASE}/bts_chiller.webp` },
 };

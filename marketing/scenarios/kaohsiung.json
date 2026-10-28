@@ -1,0 +1,171 @@
+{
+  "episode": 1,
+  "series": "By day, he was your ___",
+  "city": "Kaohsiung",
+  "cityId": 118,
+  "show": {
+    "venue": "Kaohsiung National Stadium",
+    "venuePlaceId": 40242,
+    "dates": [
+      "2026-11-19",
+      "2026-11-21",
+      "2026-11-22"
+    ],
+    "time": "19:00"
+  },
+  "guide": "collector",
+  "dayRole": "GUIDE",
+  "nextCity": "Bangkok",
+  "logline": "혼자 가오슝에 온 나는 공연 날 아침 길을 잃는다. 책을 든 다정한 낯선 사람이 하루 동안 도시를 안내하고, 연지담에서 연꽃잎을 끼운 책갈피를 준다. 밤, 무대 위에서 그가 그 책갈피를 들어 올린다. 그는 나를 기억하고 있었다.",
+  "heart": "작은 친절 = 길 잃은 나에게 하루를 내어 줌 · 물건 = 지난여름 눌러 둔 연꽃잎 책갈피 한 쌍(\"One for you, one for me\") · 대사 되받기 = 나 \"I'll never forget today.\" → 그(무대) \"I'll never forget today either.\" · 빈자리 = 반듯이 접힌 내 지도 + \"Look up.\" (어사이드 회의 10-28)",
+  "clues": "실명 없음 · 숨은 단서 = 안경·책·미술관 사랑 · 무언가를 자주 망가뜨리는 버릇(보얼에서 작은 안내판을 쓰러뜨림)",
+  "language": "대사·자막 = 영어 · 무대 첫 마디만 현지 말",
+  "stageGreeting": {
+    "lang": "zh-TW",
+    "text": "高雄，大家好！",
+    "en": "Hello, Kaohsiung!"
+  },
+  "music": "낮 = 잔잔한 어쿠스틱 기타 · 5번 암전 = 무음 · 6번 = 무대 비트가 터짐",
+  "viewer": "카메라 = 나의 눈(1인칭). 내 얼굴은 나오지 않고 손만 화면 아래에 나온다.",
+  "scenes": [
+    {
+      "n": 0,
+      "cut": 1.5,
+      "cast": "guide-stage",
+      "place": "Stage (cold open)",
+      "draw": "Extreme close-up on a concert stage at night, strong white backlight so the performer's face is completely hidden in silhouette. Only his raised hand is clear: between two fingers he holds up a small paper bookmark with a pressed pink lotus petal. Purple stage haze and light beams behind.",
+      "captions": []
+    },
+    {
+      "n": 1,
+      "cut": 4,
+      "cast": "guide",
+      "placeId": 60950,
+      "place": "Fo Guang Shan Buddha Museum",
+      "draw": "Morning at Fo Guang Shan Buddha Museum, the giant seated golden Buddha far behind. The viewer's hands at the bottom of the frame hold a crumpled paper tourist map that is clearly UPSIDE DOWN: the little Buddha icon and pagoda drawings on the map are printed head-down. The guide (glasses, a book under his arm) has just walked up and points at the upside-down map with an amused, kind, slightly shy smile. Respectful temple setting. Soft morning light.",
+      "line": "Your map is upside down. Come on, I'll show you around.",
+      "captions": [
+        {
+          "text": "\"Your map's upside down.\nCome on, I'll show you around.\"",
+          "from": 0
+        }
+      ]
+    },
+    {
+      "n": 2,
+      "cut": 4,
+      "cast": "guide",
+      "placeId": 144588,
+      "place": "The Pier-2 Art Center",
+      "draw": "Pier-2 Art Center, Kaohsiung: old red-brick harbor warehouses covered in murals, a big quirky outdoor art sculpture. The guide is explaining the artwork with excited hand gestures and his elbow has just knocked over a small art sign, which is tipping over; he freezes, embarrassed, laughing. Bright late-morning light.",
+      "line": "Oops. I break things. Don't tell anyone.",
+      "captions": [
+        {
+          "text": "\"Oops. I break things.\nDon't tell anyone.\"",
+          "from": 0
+        }
+      ]
+    },
+    {
+      "n": 3,
+      "cut": 5,
+      "cast": "guide",
+      "placeId": 60962,
+      "place": "Lotus Pond Scenic Area",
+      "draw": "Lotus Pond in late autumn at golden hour, right at the entrance of the Dragon and Tiger Pagodas (the big open dragon mouth gate) with the twin pagodas and the zigzag bridge behind, only green lotus leaves on the water (no lotus flowers in bloom). Close, warm moment: the guide holds his open book; two small paper bookmarks with pressed pink lotus petals are clearly visible — he holds one out toward the camera and keeps the other in the book; the viewer's hand at the bottom of the frame reaches to take it. Warm sunset light.",
+      "viewerLine": "I'll never forget today.",
+      "line": "I pressed these last summer. One for you, one for me.",
+      "captions": [
+        {
+          "text": "\"I pressed these last summer.\nOne for you, one for me.\"",
+          "from": 0,
+          "to": 2.6
+        },
+        {
+          "text": "\"I'll never forget today.\"",
+          "from": 2.6,
+          "who": "viewer"
+        }
+      ]
+    },
+    {
+      "n": 4,
+      "cut": 3.5,
+      "cast": "guide",
+      "placeId": 40242,
+      "place": "Kaohsiung National Stadium (outside)",
+      "draw": "Outside Kaohsiung National Stadium at dusk (its curving dragon-like roof), a huge crowd of fans with glowing purple light sticks. The guide glances at the concert ticket in the viewer's hand with a knowing smile and presses a glowing light stick into the viewer's other hand (hands at the bottom of the frame), already half-turning into the crowd. Nobody around recognizes him. Blue-hour light with purple glow.",
+      "line": "Save my seat?",
+      "captions": [
+        {
+          "text": "\"Save my seat?\"",
+          "from": 0
+        }
+      ]
+    },
+    {
+      "n": 5,
+      "cut": 2,
+      "cast": "none",
+      "mute": true,
+      "placeId": 40242,
+      "place": "Kaohsiung National Stadium (inside)",
+      "draw": "Inside Kaohsiung National Stadium, first-person view from a seat: the stadium is dark, a sea of purple light sticks, the stage still dark. On the empty seat right next to the viewer lies the same paper tourist map from the morning, now neatly folded, with the stadium circled in pen and two words handwritten on it in pen: \"Look up.\" The viewer's hand holding a glowing light stick at the bottom of the frame. The guide is NOT in this image.",
+      "captions": [
+        {
+          "text": "His seat was empty.",
+          "from": 0,
+          "who": "note"
+        }
+      ],
+      "sign": "손글씨 Look up."
+    },
+    {
+      "n": 6,
+      "cut": 6,
+      "cast": "seven",
+      "placeId": 40242,
+      "place": "Stage",
+      "greeting": true,
+      "draw": "The moment the concert lights explode on at Kaohsiung National Stadium. Medium-wide shot from the front rows: rows of stage lights switch on, purple beams sweep the crowd, a giant LED screen behind the stage shows the exact words \"WORLD TOUR · KAOHSIUNG\". Seven performers in the same stage outfit; the man at center front is the guide from the day, same face and glasses, now in stage outfit, stepping forward to the edge of the stage, large in the frame. He looks straight at the viewer and holds up a small paper bookmark with a pressed pink lotus petal, clearly visible in his raised hand. A bright white spotlight beam from the stage lands on the viewer, flaring into the camera. Light sticks in the foreground.",
+      "line": "I'll never forget today either.",
+      "sign": "BTS WORLD TOUR · KAOHSIUNG = 그림 화면엔 WORLD TOUR · KAOHSIUNG(그림 AI 가 BTS 글자를 막음 10-28 실측) · BTS 는 우리 글자 층",
+      "captions": [
+        {
+          "text": "高雄，大家好！",
+          "from": 0,
+          "to": 1.3,
+          "font": "cjk"
+        },
+        {
+          "text": "\"I'll never forget today either.\"",
+          "from": 1.3
+        }
+      ],
+      "trimStart": 0.4
+    },
+    {
+      "n": 7,
+      "cut": 2.5,
+      "cast": "seven",
+      "place": "Audience",
+      "draw": "First-person view from the audience, same purple concert stage as the reveal: the guide in his stage outfit with glasses stands at the front edge of the stage in a white spotlight, medium size, looking straight at the viewer and smiling. In the foreground the viewer's trembling hand raises the matching small paper bookmark with the pressed pink lotus petal toward him; the other hand holds the purple light stick. Pink petals drift down over the crowd like confetti. Only hands of the viewer are visible.",
+      "captions": [
+        {
+          "text": "He remembered.",
+          "from": 0
+        }
+      ],
+      "fadeOut": 0.25
+    }
+  ],
+  "titles": {
+    "opening": "BY DAY, / HE WAS YOUR GUIDE. · EP.1 · KAOHSIUNG · BTS WORLD TOUR",
+    "ending": "BY NIGHT, HE WAS A STAR.",
+    "endcard": "Next city: Bangkok. Who will he be? · TRIPIS · tripis.app · Nov 19 · 21 · 22 · R17 World Games Exit 1 → 800m · R17 世運站 1號出口 · Fan-made fiction · illustrated characters"
+  },
+  "timeline": "0 결말 미리보기(자막 없음) 1.5 → 흰 섬광 3프레임 → 오프닝 카드 1.5 → 1 지도 4 → 2 단서 4 → 3 책갈피 한 쌍 5 → 4 Save my seat 3.5 → 5 빈자리·Look up 무음 2 → 6 반전 6 → 7 화답·He remembered 2.5 → 엔딩 카드 2 → 끝 카드 3 = 35초",
+  "route": "공연장 = MRT R17 世運站 1號出口 → 800m(어사이드 10-28)",
+  "fanLabel": "Fan-made fiction · illustrated characters",
+  "folder": "가오슝"
+}
