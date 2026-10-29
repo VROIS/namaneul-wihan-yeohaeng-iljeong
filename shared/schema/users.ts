@@ -58,6 +58,8 @@ export const users = pgTable("users", {
     character?: string;
   }>(),
   referredBy: varchar("referred_by"),
+  // ⚠️ 수정금지(승인필요) 2026-10-29 사장님 결정 = 가입 때 처음 들어온 링크의 ref(외부 홍보 채널) = 가입 때 1번만 (정본 §큰 일 4)
+  signupRef: varchar("signup_ref", { length: 64 }),
   referralCode: varchar("referral_code").unique(),
   subscriptionStatus: varchar("subscription_status").default("active"),
   subscriptionCanceledAt: timestamp("subscription_canceled_at"),

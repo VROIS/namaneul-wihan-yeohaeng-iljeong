@@ -15,7 +15,8 @@ import { useTranslation } from "react-i18next";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
-import { apiRequest, itineraryUrl } from "@/lib/query-client";
+import { apiRequest, getApiUrl, itineraryUrl } from "@/lib/query-client";
+import { shareLink } from "@/lib/shareLink";
 // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = 크레딧부족 공용 헬퍼(§16 5곳 공용).
 import { parseCreditShortfall, useCreditShortfall } from "@/lib/creditError";
 import { Icon } from "@/components/Icon";
@@ -126,6 +127,7 @@ function TripisModalInner({
   const [isRequesting, setIsRequesting] = useState(false);
   const [savedDays, setSavedDays] = useState<Set<number>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
+  const [pauseSignal, setPauseSignal] = useState(0);
   const { bumpVideoData, isAuthed, requestLogin } = useMapToggle();
 
   const [itineraryId, setItineraryId] = useState<number | null>(
@@ -243,6 +245,23 @@ function TripisModalInner({
       ); // 서버 사유 그대로(뭉개기 금지)
   };
 
+  // ⚠️ 수정금지(승인필요) 2026-10-29 사장님 결정 = 영상 [공유] = 영상을 멈추고 공유 시트로 "그 도시 칩이 열린 앱" 링크를 보낸다 (정본 §큰 일 4)
+  const shareCityId =
+    params.mode === "city" ? params.rep.cityId : (itinerary?.cityId ?? null);
+  const handleShareVideo = async () => {
+    if (shareCityId == null) return;
+    setPauseSignal((n) => n + 1);
+    try {
+      await shareLink(
+        `${getApiUrl()}/?city=${shareCityId}&ref=share_video`,
+        itinerary?.title || "TRIPIS",
+        t("trip.shareLinkCopied"),
+      );
+    } catch (e) {
+      console.error("[TripisModal] 영상 공유 오류:", e);
+    }
+  };
+
   const handleViewItinerary = () => {
     if (itineraryId == null) return;
     onClose();
@@ -316,6 +335,7 @@ function TripisModalInner({
                 isRequesting={isRequesting}
                 onGenerate={handleGenerate}
                 onVideoByDay={setVideoByDay}
+                pauseSignal={pauseSignal}
               />
             ) : (
               <View style={styles.loadingWrap}>
@@ -425,6 +445,18 @@ function TripisModalInner({
                 </Text>
               </Pressable>
             ) : null}
+
+            {viewing && shareCityId != null && (
+              <Pressable
+                style={styles.topBtn}
+                onPress={handleShareVideo}
+                accessibilityRole="button"
+                accessibilityLabel={t("common.share")}
+              >
+                <Icon name="share-2" size={14} color="#FFFFFF" />
+                <Text style={styles.topBtnText}>{t("common.share")}</Text>
+              </Pressable>
+            )}
 
             <Pressable
               style={styles.closeBtn}

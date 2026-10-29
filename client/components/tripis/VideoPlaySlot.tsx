@@ -35,6 +35,7 @@ interface Props {
   isRequesting: boolean; // 껍데기의 생성 요청 진행 중 여부
   onGenerate(): void; // 생성 요청 = 껍데기 소유 함수 1벌(§0)
   onVideoByDay(v: Record<string, DayVideo>): void; // 폴링 결과를 껍데기로 올림
+  pauseSignal?: number; // 껍데기가 멈춤을 요청할 때마다 1씩 오름(공유 시트를 열 때)
 }
 
 export default function VideoPlaySlot({
@@ -46,11 +47,20 @@ export default function VideoPlaySlot({
   isRequesting,
   onGenerate,
   onVideoByDay,
+  pauseSignal = 0,
 }: Props) {
   const { t } = useTranslation();
   const [sceneIdx, setSceneIdx] = useState(0); // 재생 위치 기반 현재 씬(글라스 카드 전환)
   const [pollTick, setPollTick] = useState(0); // 폴링 재가동 신호 = 네트워크 1회 오류에도 다음 폴링 이어감(§22 react-best)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const videoRef = useRef<Video>(null);
+
+  const handledPause = useRef(pauseSignal);
+  useEffect(() => {
+    if (pauseSignal === handledPause.current) return;
+    handledPause.current = pauseSignal;
+    void videoRef.current?.pauseAsync();
+  }, [pauseSignal]);
 
   useEffect(() => {
     return () => {
@@ -103,12 +113,13 @@ export default function VideoPlaySlot({
   return (
     <View style={styles.body}>
       {dayVideo?.status === "succeeded" && dayVideo.url ? (
-        // ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 완료 = 전체 재생 + 상단 장면 카드(Scene n/N·장소명, 인물이 하단이라 상단 배치) (정본 §)
+        // ⚠️ 수정금지(승인필요) 2026-10-29 사장님 결정 = 완료 = 전체 재생 + 상단 장면 카드(Scene n/N·장소명) · [공유]를 누르면 멈춤 (정본 §큰 일 4)
         <View style={styles.playerBox}>
           {/* 화면 풀 채움 + 터치 시 재생·정지 컨트롤 = useNativeControls(이전 영상보기 그대로).
               videoStyle = 웹에서 contain 강제(2026-08-01 사장님 "잘림" 실측 = 웹이 cover 로 그려 위아래가 잘렸음.
               이전 모듈이 다 보였던 비밀 = contain = 전체가 항상 보이게 축소). */}
           <Video
+            ref={videoRef}
             source={{ uri: dayVideo.url }}
             style={styles.player}
             videoStyle={

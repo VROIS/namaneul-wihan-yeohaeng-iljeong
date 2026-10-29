@@ -96,6 +96,7 @@ export function registerAppleAuthRoutes(app: Express, openDb: OpenDb): void {
         language,
         deviceType,
         entry,
+        ref: req.body?.ref,
       });
       res.json(loginResponse(user));
     } catch (e) {

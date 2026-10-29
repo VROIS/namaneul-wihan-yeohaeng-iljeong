@@ -76,6 +76,7 @@ export function registerAuthCreditsRoutes(app: Express, openDb: OpenDb): void {
           language,
           deviceType,
           entry,
+          ref: req.body?.ref,
         });
         return res.json(loginResponse(user));
       }

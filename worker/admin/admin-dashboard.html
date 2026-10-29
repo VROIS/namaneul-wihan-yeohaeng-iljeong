@@ -1039,7 +1039,7 @@
 
         document.getElementById('activity-kpi-time').textContent = '업데이트: ' + new Date(d.updatedAt).toLocaleTimeString('ko-KR');
 
-        // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 이 칸 1개에 = 로그인 방식 · 유입 경로 · 접속 숫자 · 최근 20명
+        // ⚠️ 수정금지(승인필요) 2026-10-29 사장님 결정 = 이 칸 1개에 = 로그인 방식 · 유입 경로 · 유입 링크(ref) · 접속 숫자 · 최근 20명
         const loginEl = document.getElementById('login-method-breakdown');
         const PROVIDER_LABEL = { google: 'Google', kakao: 'Kakao', email: 'Email', apple: 'Apple', unknown: '미확인' };
         const ENTRY_LABEL = { main: '메인 앱', bts: 'BTS 배너', unknown: '기록 없음' };
@@ -1065,6 +1065,9 @@
           sub('유입 경로') +
           ((d.entryBreakdown || []).map(r => row(ENTRY_LABEL[r.entry] || r.entry, fmtNum(r.count) + '명')).join('')
             || '<div class="empty-state">데이터 없음</div>') +
+          sub('유입 링크(ref · 가입 때)') +
+          ((d.refBreakdown || []).map(r => row(r.ref, fmtNum(r.count) + '명')).join('')
+            || '<div class="empty-state">아직 없음</div>') +
           sub('접속') +
           row('오늘 로그인', fmtNum(a.today || 0) + '명') +
           row('오늘 신규', fmtNum(a.todayNew || 0) + '명') +

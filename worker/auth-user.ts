@@ -148,6 +148,9 @@ export async function applyLogin(
   return updated;
 }
 
+const cleanSignupRef = (v: unknown): string | null =>
+  typeof v === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(v) ? v : null;
+
 /** ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 계정 조회·생성 1벌 = 소셜 3종과 이메일이 같이 쓴다(§16 재발명 금지). */
 export async function findOrCreateUser(
   db: Db,
@@ -161,6 +164,7 @@ export async function findOrCreateUser(
     language?: string;
     deviceType?: string;
     entry?: string; // 유입 경로(main | bts) = shared/login-entry
+    ref?: unknown; // 처음 들어온 링크의 ref = 가입 때만 남김
   },
 ): Promise<User> {
   const {
@@ -174,6 +178,7 @@ export async function findOrCreateUser(
     deviceType,
     entry,
   } = params;
+  const signupRef = cleanSignupRef(params.ref);
 
   const user = await getUserByProvider(db, provider, providerId);
   if (user)
@@ -221,8 +226,9 @@ export async function findOrCreateUser(
       birthDate,
       preferredLanguage: language || "ko",
       deviceType,
-      // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 인증창 두 곳 구분 = 신규 가입 때 유입 경로를 남긴다
+      // ⚠️ 수정금지(승인필요) 2026-10-29 사장님 결정 = 신규 가입 때 인증창(main/bts) + 처음 들어온 링크의 ref 를 남긴다 (정본 §큰 일 4)
       referredBy: entry,
+      signupRef,
       loginCount: 1,
       lastLoginAt: new Date(),
       isPaid: false,

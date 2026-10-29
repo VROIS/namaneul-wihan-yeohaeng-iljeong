@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApiUrl } from "./query-client";
+import { signupRef } from "./refLink";
 // ⚠️ 수정금지(승인필요) 2026-08-15 사장님 승인 = 이 파일은 React 컴포넌트가 아니라(useTranslation 훅 불가)
 import i18n from "./i18n";
 
@@ -70,7 +71,7 @@ export async function clearAuth(): Promise<void> {
   notifyAuthChanged();
 }
 
-// ⚠️ 수정금지(승인필요) 사장님 SSOT 2026-08-08 = **이메일창 = 가입이 아니라 "이미 있는 내 계정 찾기"**.
+// ⚠️ 수정금지(승인필요) 2026-10-29 사장님 결정 = 이메일창 = 가입이 아니라 "이미 있는 내 계정 찾기" · 처음 들어온 링크 ref 를 함께 보낸다 (정본 §큰 일 4)
 export async function emailLogin(data: {
   email: string;
   birthDate?: string; // 2026-08-24 = 생년월일 선택 정책(shared/birthdate-policy)
@@ -82,7 +83,7 @@ export async function emailLogin(data: {
     const response = await fetch(`${getApiUrl()}/api/auth/email-login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...data, ref: signupRef() }),
     });
     const result = await response.json();
     if (response.ok && result.success) {
@@ -104,7 +105,7 @@ export async function emailLogin(data: {
 
 type LoginResult = { success: boolean; user?: UserData; error?: string };
 
-/** ⚠️ 수정금지(승인필요) — 소셜 인증 결과를 우리 서버로 보내 로그인하는 **단 하나의 함수** (2026-07-26 §16). */
+/** ⚠️ 수정금지(승인필요) 2026-10-29 사장님 결정 = 소셜 인증 결과를 우리 서버로 보내 로그인하는 단 하나의 함수 · 처음 들어온 링크 ref 를 함께 보낸다 (정본 §큰 일 4) */
 async function postSocialLogin(
   path: string,
   data: Record<string, string>,
@@ -114,7 +115,7 @@ async function postSocialLogin(
     const response = await fetch(`${getApiUrl()}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...data, ref: signupRef() }),
     });
     const result = await response.json();
     if (response.ok && result.success) {

@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Platform, Share } from "react-native";
 import { Itinerary } from "@/types/trip";
 import { getApiUrl } from "@/lib/query-client";
+import { shareLink } from "@/lib/shareLink";
 import { openCalendar } from "@/lib/itinerary-calendar";
 import { useMapToggle } from "@/contexts/MapToggleContext";
 import { ensureLoggedIn } from "./login-gate";
@@ -37,32 +37,11 @@ export function useShareCalendar({
       const id = await ensureItineraryId();
       if (!id) return; // 저장 실패 = 공유 중단.
 
-      const url = `${getApiUrl()}/shared/itinerary/${id}`;
-
-      if (Platform.OS === "web") {
-        const isMobileWeb =
-          typeof navigator !== "undefined" &&
-          /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
-        if (isMobileWeb && (navigator as any).share) {
-          try {
-            await (navigator as any).share({ title: itinerary.title, url });
-          } catch {}
-        } else if (
-          typeof navigator !== "undefined" &&
-          navigator.clipboard?.writeText
-        ) {
-          await navigator.clipboard.writeText(url);
-          if (typeof window !== "undefined") {
-            window.alert(t("trip.shareLinkCopied"));
-          }
-        }
-      } else {
-        await Share.share(
-          Platform.OS === "ios"
-            ? { url, message: itinerary.title }
-            : { message: `${itinerary.title}\n${url}` },
-        );
-      }
+      await shareLink(
+        `${getApiUrl()}/shared/itinerary/${id}`,
+        itinerary.title,
+        t("trip.shareLinkCopied"),
+      );
     } catch (error) {
       console.error("[TripPlanner] 공유 오류:", error);
     } finally {

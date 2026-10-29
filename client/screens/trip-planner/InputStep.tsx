@@ -27,6 +27,7 @@ import { WebInputModal, NativePicker } from "./components/DateTimePickers";
 import TripisModal, { type RepCard } from "@/components/tripis/TripisModal";
 import type { PlannerApi } from "./hooks/useTripPlanner";
 import { apiRequest } from "@/lib/query-client";
+import { takeCityFromUrl } from "@/lib/cityLink";
 import { fitTextProps } from "./utils";
 import GenerateButtons from "./components/GenerateButtons";
 
@@ -115,6 +116,16 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
       console.error("[InputStep] 도시 카드 조회 실패:", e);
     }
   };
+
+  // ⚠️ 수정금지(승인필요) 2026-10-29 사장님 결정 = 링크 `?city=` = 도시 목록이 오면 그 도시 칩을 누른 상태로 연다 (정본 §큰 일 4)
+  const cityPressRef = useRef(handleCityPress);
+  cityPressRef.current = handleCityPress;
+  useEffect(() => {
+    if (!readyCities.length) return;
+    const linked = takeCityFromUrl();
+    const city = readyCities.find((c) => c.id === linked);
+    if (city) void cityPressRef.current(city);
+  }, [readyCities]);
 
   const renderSectionHeader = (title: string, subtitle: string) => (
     <View style={styles.sectionHeader}>

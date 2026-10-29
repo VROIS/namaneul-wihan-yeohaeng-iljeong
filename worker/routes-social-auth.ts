@@ -85,6 +85,7 @@ async function loginWithKakaoIdToken(
     language?: string;
     deviceType?: string;
     entry?: string;
+    ref?: unknown;
   },
 ) {
   let claims: KakaoIdClaims;
@@ -105,6 +106,7 @@ async function loginWithKakaoIdToken(
     language: params.language,
     deviceType: params.deviceType,
     entry: params.entry,
+    ref: params.ref,
   });
   return loginResponse(user);
 }
@@ -164,6 +166,7 @@ export function registerSocialAuthRoutes(app: Express, openDb: OpenDb): void {
         language,
         deviceType,
         entry,
+        ref: req.body?.ref,
       });
       res.json(loginResponse(user));
     } catch (e) {
@@ -195,6 +198,7 @@ export function registerSocialAuthRoutes(app: Express, openDb: OpenDb): void {
         language,
         deviceType,
         entry,
+        ref: req.body?.ref,
       });
       if (!result) {
         return res

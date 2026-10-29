@@ -1,9 +1,10 @@
-// ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 관리자 대시보드 "로그인 방식 · 접속 현황" 자료 = 서버·Worker 공용 1벌(§0·§16).
+// ⚠️ 수정금지(승인필요) 2026-10-29 사장님 결정 = 관리자 대시보드 "로그인 방식 · 유입 경로 · 유입 링크 · 접속 현황" 자료 = 서버·Worker 공용 1벌 (정본 §큰 일 4)
 import { count, sql } from "drizzle-orm";
 import { users } from "./schema";
 
 export interface AccessSummary {
   entryBreakdown: { entry: string; count: number }[];
+  refBreakdown: { ref: string; count: number }[];
   access: { today: number; todayNew: number; week: number; dormant: number };
   recentUsers: {
     name: string;
@@ -37,6 +38,12 @@ export async function accessSummary(db: AnyDb): Promise<AccessSummary> {
     .from(users)
     .groupBy(users.referredBy);
 
+  const refRows = await db
+    .select({ ref: users.signupRef, count: count() })
+    .from(users)
+    .where(sql`${users.signupRef} IS NOT NULL`)
+    .groupBy(users.signupRef);
+
   const a = firstRow(await db.execute(ACCESS_COUNTS));
 
   const recent = await db
@@ -59,6 +66,10 @@ export async function accessSummary(db: AnyDb): Promise<AccessSummary> {
         count: r.count,
       }),
     ),
+    refBreakdown: refRows.map((r: { ref: string; count: number }) => ({
+      ref: r.ref,
+      count: r.count,
+    })),
     access: {
       today: Number(a.today) || 0,
       todayNew: Number(a.today_new) || 0,
