@@ -7,6 +7,7 @@ import {
 } from "../worker/lib/services/shared/local-paths";
 import { fileURLToPath } from "url";
 import { MISSING, readBestOutput } from "./steps/best-output";
+import { NOT_KOREAN_NAME } from "./steps/common";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 process.chdir(ROOT);
@@ -175,14 +176,14 @@ if (!cityId) {
   console.log(
     `분류(활성) = 구글 분류 없음(페이지 안 연 행) ${noLabel} · 표에 없는 글자 ${unknown}행/${unknownSet.size}종 · 장소 아님 남음 ${notPlace} · 정렬 안 된 행 ${misaligned}`,
   );
-  // ⚠️ 수정금지(승인필요) 2026-10-05 사장님 결정 = 검수에 한국어 이름 칸 검사 = 한글이 아닌 글자(일본어·한자·아랍·히브리·태국·키릴·그리스)가 섞인 이름을 센다 (정본 §)
+  // ⚠️ 수정금지(승인필요) 2026-10-29 사장님 결정 = 검수에 한국어 이름 칸 검사 = 한글이 아닌 글자가 섞인 이름을 센다(글자 표 = common NOT_KOREAN_NAME 1벌, Clef 관문과 같이 씀) (정본 §2026-10-29)
   {
     const broken = (
       await c.query(
         "SELECT id, name_ko FROM place_seed_raw WHERE city_id=$1 AND status='active' AND name_ko IS NOT NULL",
         [cityId],
       )
-    ).rows.filter((r: any) => /[぀-ヿ㐀-鿿؀-ۿ֐-׿฀-๿Ѐ-ӿͰ-Ͽ]/u.test(r.name_ko));
+    ).rows.filter((r: any) => NOT_KOREAN_NAME.test(r.name_ko));
     brokenCount = broken.length;
     console.log(`한국어 이름 칸 = 한글 아닌 글자가 섞인 행 ${broken.length}`);
     if (broken.length)

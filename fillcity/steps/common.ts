@@ -75,6 +75,8 @@ export function roomRateEur(raw: string): number | null {
 
 // ⚠️ 수정금지(승인필요) 2026-10-05 사장님 결정 = v3.2 최적화 (정본 §)
 export const AGENT_WORKERS = 4;
+// ⚠️ 수정금지(승인필요) 2026-10-29 사장님 결정 = 한국어 이름 칸에 섞이면 안 되는 글자(일본어·한자·아랍·히브리·태국·키릴·그리스) 1벌 = 검수(status)와 Clef 관문이 같이 쓴다 (정본 §2026-10-29)
+export const NOT_KOREAN_NAME = /[぀-ヿ㐀-鿿؀-ۿ֐-׿฀-๿Ѐ-ӿͰ-Ͽ]/u;
 
 export function shareRanges(
   total: number,

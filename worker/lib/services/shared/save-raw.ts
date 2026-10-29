@@ -9,8 +9,8 @@ import { uploadToR2, isR2Configured } from "./r2-client";
 import { fileStamp, rawPlace } from "../../../../shared/r2-paths";
 
 export interface SaveRawOpts {
-  // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 승인 = gmaps 추가 = 구글맵 공개페이지로 받은 6요소+cid+사진(TS 자리를 대신하는 형제). 도시별 1파일 = 나중에 한 방에 재입력·조회·근거.
-  source: "ts" | "gemini" | "routes" | "gmaps"; // routes = Google Routes API(일별 바로가기 선처리) = 2026-07-24 사장님 승인 추가
+  // ⚠️ 수정금지(승인필요) 2026-10-29 사장님 결정 = 원본 출처 = TS · 제미니 · 구글 Routes · 구글맵 페이지 · 판단 AI Clef (정본 Clef)
+  source: "ts" | "gemini" | "routes" | "gmaps" | "clef";
 
   contextId?: string | number | null; // 도시 번호 · itinerary-{번호} · user-{번호} (shared/r2-paths rawPlace)
   tag?: string | null; // 호출 맥락 식별(파일명) — 미지정 시 'call'

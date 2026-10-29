@@ -14,6 +14,7 @@ import {
   shareRanges,
   stamp,
 } from "./common";
+import { clefGate, clefVerdict, loadClefKeys, type GateRow } from "./clef-gate";
 import { insertNewRows } from "./new-rows";
 import { validateRefine } from "./refine-validate";
 import {
@@ -66,10 +67,47 @@ const INSTRUCTION = path.join(
       2,
     ),
   );
-  // ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 일꾼 4명 = 전체 행을 정확히 4등분(shareRanges) 동시에 · 판단 순서 검문(procedure-check)을 통과 못 한 행은 결과로 받지 않고 그 행만 이유와 함께 한 번 되돌린다 · 못 한 행(인증·중단)은 인증이 풀린 뒤 다 할 때까지(최대 3번) 다시 맡긴다 · 두 번째도 어기면 단계 실패 (정본 §2026-10-23)
-  const jobs = shareRanges(items.length);
+  // ⚠️ 수정금지(승인필요) 2026-10-29 사장님 결정 = 일꾼 앞에 Clef 관문 = 묶음 규칙을 모두 넘은 행은 짝 맞음 판정(verdict-0) · 나머지 + 감사 표본만 일꾼 4명에게 4등분 · 판단 순서 검문(procedure-check)을 통과 못 한 행은 그 행만 이유와 함께 되돌린다 · 못 한 행(인증·중단)은 인증이 풀린 뒤 최대 3번 다시 맡긴다 (정본 Clef)
+  const gateFile = path.join(dir, "clef-gate.json");
+  if (!argv["resume"]) {
+    await loadClefKeys();
+    const gate = await clefGate(
+      cityId,
+      items.map((x) => x.id),
+    );
+    fs.writeFileSync(gateFile, JSON.stringify(gate, null, 2));
+    fs.writeFileSync(
+      path.join(dir, "verdict-0.json"),
+      JSON.stringify(
+        gate.filter((g) => g.verdict === "auto").map(clefVerdict),
+        null,
+        2,
+      ),
+    );
+  }
+  const auto = new Set(
+    (JSON.parse(fs.readFileSync(gateFile, "utf-8")) as GateRow[])
+      .filter((g) => g.verdict === "auto")
+      .map((g) => g.cid),
+  );
+  const rest = items.filter((x) => !auto.has(String(x.cid)));
+  const jobs = shareRanges(rest.length).map((j) => ({
+    ...j,
+    orders: rest.slice(j.from, j.to + 1).map((x) => x.order),
+  }));
+  const assignFile = path.join(dir, "assign.json");
+  fs.writeFileSync(
+    assignFile,
+    JSON.stringify(
+      Object.fromEntries(
+        jobs.map((j) => [j.k, j.orders.map((order) => ({ order }))]),
+      ),
+      null,
+      2,
+    ),
+  );
   console.log(
-    `═══ 최종 점검 city ${cityId} = PSR ${items.length}행 → 에이전트 ${jobs.length}명(${AGENT_WORKERS}명 고정 균등, 동시) → ${path.relative(ROOT, dir)} ═══`,
+    `═══ 최종 점검 city ${cityId} = PSR ${items.length}행 · Clef 관문 짝 맞음 ${auto.size} → 일꾼 ${rest.length}행 = 에이전트 ${jobs.length}명(${AGENT_WORKERS}명 고정 균등, 동시) → ${path.relative(ROOT, dir)} ═══`,
   );
   const logs = rawDirOf(cityId);
   const run = async (
@@ -85,7 +123,7 @@ const INSTRUCTION = path.join(
           `- 명단 파일 = ${inputFile}`,
           retryFile
             ? `- 네 몫 = ${retryFile} 의 "${j.k}" 목록(order 값). 이 행들은 아래 이유로 받지 않았다 = 이유를 읽고 지시문 순서대로 다시 한다(도시 번호 ${cityId}, 조 번호 ${j.k})`
-            : `- 네게 배정된 순서 = 명단 항목의 order 값이 ${j.from}부터 ${j.to}까지(끝 번호 포함, 도시 번호 ${cityId}, 조 번호 ${j.k})`,
+            : `- 네 몫 = ${assignFile} 의 "${j.k}" 목록(order 값) 전부(도시 번호 ${cityId}, 조 번호 ${j.k})`,
           `- 로그 폴더 = ${logs} (구글 페이지 읽기 *_gmaps-page-read-N.json · 제미니 *_gemini-*.json)`,
           `- 사장님 결정값 = ${reportDir(cityId)} 의 *_boss-fix.json (그 행·칸은 고치지 않는다)`,
           `- 결과 폴더 = ${dir}`,
@@ -187,6 +225,17 @@ const INSTRUCTION = path.join(
     ),
   );
   console.log(`점검표 = ${path.join(dir, "final-table.json")}`);
+  const audited = (
+    JSON.parse(fs.readFileSync(gateFile, "utf-8")) as GateRow[]
+  ).filter((g) => g.verdict === "audit");
+  const auditBad = audited.filter((g) => v.decided.get(g.cid)?.keep === false);
+  console.log(
+    `═══ Clef 감사 = 관문을 넘고 일꾼도 본 ${audited.length}행 중 일꾼이 고친 행 ${auditBad.length} ═══`,
+  );
+  for (const g of auditBad)
+    console.log(
+      `  #${g.id} ${g.name} | ${String(v.decided.get(g.cid)?.reason).slice(0, 110)}`,
+    );
   if (argv["apply"] !== "true") {
     console.log("DRY = --apply 로 통과한 판정·새 식당을 창고에 넣는다");
     process.exit(v.errs.length ? 1 : 0);

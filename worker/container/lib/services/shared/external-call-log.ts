@@ -1,7 +1,14 @@
 // ⚠️ 수정금지(승인필요) 2026-08-23 사장님 승인 = 외부 유료호출 카운터 + 관리자 배치 무료잔량 게이트 = 단일 진입점 1벌(§16).
 import { pool } from "../../db";
 
-export type CallProvider = "ts" | "pm" | "veo" | "omni" | "nano" | "gemini";
+export type CallProvider =
+  | "ts"
+  | "pm"
+  | "veo"
+  | "omni"
+  | "nano"
+  | "gemini"
+  | "clef";
 
 export const FREE_CAPS: Partial<Record<CallProvider, number>> = {
   ts: 1000,
@@ -62,6 +69,15 @@ export const UNIT_COST_LEDGER: Record<CallProvider, UnitCostLedgerEntry> = {
     unit: "장당(gemini-nano-banana-2.1, 1K · 2K = $0.0504)",
     source: "https://ai.google.dev/gemini-api/docs/pricing",
     verifiedAt: "2026-10-28",
+  },
+  // ⚠️ 수정금지(승인필요) 2026-10-29 사장님 결정 = 판단 AI Clef 단가 = 입력 토큰당(출력 무료), units = 입력 토큰 수 (정본 Clef)
+  clef: {
+    eur: 0.00000029,
+    publicPriceUsd: 0.00000024,
+    surchargePct: 21,
+    unit: "입력 토큰당(@cf/cloudflare/clef $0.24/M · clef-flash $0.038/M, 출력 무료)",
+    source: "https://developers.cloudflare.com/workers-ai/platform/pricing/",
+    verifiedAt: "2026-10-29",
   },
   gemini: {
     eur: 0,
