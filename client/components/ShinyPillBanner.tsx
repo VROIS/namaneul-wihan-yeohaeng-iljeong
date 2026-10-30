@@ -13,7 +13,12 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useTranslation } from "react-i18next";
 import { Brand } from "@/constants/theme";
 
-export default function ShinyPillBanner() {
+// ⚠️ 수정금지(승인필요) 2026-10-30 사장님 원문 "사소한 지적이 아닐 수도 있어. 그건 고쳐." = 지금 코드: alignStart = 휴대폰 웹 App 버튼이 있을 때만 제목을 왼쪽 끝(안쪽 왼쪽 여백 0)으로 · 앱·PC 는 가운데 그대로 (정본 큰 일 4)
+export default function ShinyPillBanner({
+  alignStart = false,
+}: {
+  alignStart?: boolean;
+}) {
   const { t } = useTranslation();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
@@ -52,9 +57,9 @@ export default function ShinyPillBanner() {
   });
 
   return (
-    <View style={styles.bannerWrap}>
+    <View style={[styles.bannerWrap, alignStart && styles.bannerStart]}>
       {/* 🌟 검은 배경 상자 없이 순수 텍스트 & 로고 위로 지나는 무한 샤이니 빛줄기 */}
-      <View style={styles.textContainer}>
+      <View style={[styles.textContainer, alignStart && styles.textStart]}>
         {/* Shimmer Light Beam Sweeping Across Text */}
         <Animated.View
           style={[
@@ -106,6 +111,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginVertical: 2,
   },
+  bannerStart: { alignItems: "flex-start" },
+  textStart: { paddingLeft: 0 },
   textContainer: {
     position: "relative",
     flexDirection: "row",

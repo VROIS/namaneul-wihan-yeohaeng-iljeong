@@ -30,8 +30,8 @@ import { apiRequest } from "@/lib/query-client";
 import { takeCityFromUrl } from "@/lib/cityLink";
 import { fitTextProps } from "./utils";
 import GenerateButtons from "./components/GenerateButtons";
-
 import ShinyPillBanner from "@/components/ShinyPillBanner";
+import AppGetButton, { HAS_APP_GET } from "@/components/AppGetButton";
 
 // ⚠️ 수정금지(승인필요) 2026-07-30 사장님 SSOT = 도시버튼 목록 = **서버가 DB 실측으로 내려주는 것만.**
 type ReadyCity = {
@@ -153,7 +153,8 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
       >
         {/* 🌟 OriginKit Shiny Pill 스타일 '지금 핫한 [TRIPIS Mark + TRIPIS] 여정' 3D 쉬머 빔 알약 배너 */}
         <View style={{ marginBottom: 12, marginTop: 2 }}>
-          <ShinyPillBanner />
+          <ShinyPillBanner alignStart={HAS_APP_GET} />
+          <AppGetButton />
         </View>
 
         {/* 1. 완비 도시 버튼 = 서버가 내려준 목록 그대로(개수 고정 아님). 가로 스와이프 */}
@@ -691,7 +692,6 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
         onClose={() => setRepCard(null)}
         onCreateTrip={openBestList}
       />
-
       <WebInputModal planner={planner} />
       <NativePicker planner={planner} />
     </View>
