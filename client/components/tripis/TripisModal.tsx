@@ -245,15 +245,13 @@ function TripisModalInner({
       ); // 서버 사유 그대로(뭉개기 금지)
   };
 
-  // ⚠️ 수정금지(승인필요) 2026-10-29 사장님 결정 = 영상 [공유] = 영상을 멈추고 공유 시트로 "그 도시 칩이 열린 앱" 링크를 보낸다 (정본 §큰 일 4)
-  const shareCityId =
-    params.mode === "city" ? params.rep.cityId : (itinerary?.cityId ?? null);
+  // ⚠️ 수정금지(승인필요) 2026-10-30 02:49:46 UTC 사장님 원문(대화창) "공유 링크를 누르면 영상 재생 화면이 바로 열리게 하는 게 맞아. 홍보 링크는 도시측으로 하는 게 맞고." = 지금 코드: 영상 [공유] = 영상을 멈추고 공유 시트로 그 영상 주소(?video=여정번호-날)를 보낸다 (정본 큰 일 4)
   const handleShareVideo = async () => {
-    if (shareCityId == null) return;
+    if (itineraryId == null) return;
     setPauseSignal((n) => n + 1);
     try {
       await shareLink(
-        `${getApiUrl()}/?city=${shareCityId}&ref=share_video`,
+        `${getApiUrl()}/?video=${itineraryId}-${effectiveDay}&ref=share_video`,
         itinerary?.title || "TRIPIS",
         t("trip.shareLinkCopied"),
       );
@@ -446,7 +444,7 @@ function TripisModalInner({
               </Pressable>
             ) : null}
 
-            {viewing && shareCityId != null && (
+            {viewing && (
               <Pressable
                 style={styles.topBtn}
                 onPress={handleShareVideo}

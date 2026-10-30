@@ -27,6 +27,7 @@ import ExpertOverlay from "@/screens/expert/ExpertOverlay";
 import MainAppOverlay from "@/screens/bts/MainAppOverlay";
 // 결제 후 복귀 = 프로필(충전소)로 보내는 1벌(2026-08-05 사장님 TestFlight 실증)
 import PaymentReturnHandler from "@/components/PaymentReturnHandler";
+import SharedVideoOpener from "@/components/tripis/SharedVideoOpener";
 
 // ⚠️ 수정금지(승인필요) 2026-08-09 사장님 지시 = **첫 실행에 빈 화면이 스치는 것** 제거.
 SplashScreen.preventAutoHideAsync();
@@ -103,6 +104,8 @@ export default function App() {
                       복귀 화면을 프로필로 여는 일은 탭의 첫 화면(MainTabNavigator 의 initialRouteName)이 한다
                       = 이동을 두 곳에서 하지 않는다(§0). */}
                   <PaymentReturnHandler />
+                  {/* ⚠️ 수정금지(승인필요) 2026-10-30 02:49:46 UTC 사장님 원문(대화창) "공유 링크를 누르면 영상 재생 화면이 바로 열리게 하는 게 맞아." = 지금 코드: 공유받은 영상 주소(?video=)를 여는 전역 1벌 (정본 큰 일 4) */}
+                  <SharedVideoOpener />
                 </NavigationContainer>
                 <StatusBar style="auto" />
               </KeyboardProvider>
