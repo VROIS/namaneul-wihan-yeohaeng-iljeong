@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-09-26 사장님 결정 = 완성본 게시 도구 = 운영과 같은 기록·게시 코드로 R2 도시 폴더 저장 + 일차 기록(영어 장소명 카드) + 프로필 게시, 크레딧 없음 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-11-01 사장님 지시 "유리카드처럼 생긴 그거 다 삭제하고" = 지금 코드: 완성본 게시 도구 = 운영과 같은 기록·게시 코드로 R2 도시 폴더 저장 + 일차 기록(장면 카드 없음 · 지명은 영상 안) + 프로필 게시, 크레딧 없음 (정본 2026-11-01)
 // 사용: npx tsx --env-file=.env scripts/publish-day-video.ts <여정번호> <일차> <영상파일> [--dry]
 import fs from "fs";
 import { storage } from "../worker/container/lib/storage";
@@ -6,7 +6,7 @@ import { pool } from "../worker/container/lib/db";
 import {
   MAX_SCENES,
   omniClips,
-  omniSceneCards,
+  clipTitle,
   dayVideoKey,
 } from "../worker/container/lib/services/omni-day-clips";
 import {
@@ -35,15 +35,17 @@ async function main() {
   const daySlots = slots.slice(0, MAX_SCENES);
   const cast = await castFor(itin);
   const city = await videoCity(itin);
-  const scenes = omniSceneCards(omniClips(daySlots, cast), city.name);
+  const titles = omniClips(daySlots, cast).map((c) => clipTitle(c, city.name));
   const buf = fs.readFileSync(file);
   const key = dayVideoKey(city.folder, day, fileStamp());
 
   console.log(
     `여정 ${id} ${day}일차 | 영상 ${(buf.length / 1e6).toFixed(1)}MB → ${key} | 게시 계정 ${itin.userId}`,
   );
-  scenes.forEach((s, i) =>
-    console.log(`  카드 ${i + 1}/${scenes.length}: ${s.placeName}`),
+  titles.forEach((t, i) =>
+    console.log(
+      `  지명 ${i + 1}/${titles.length}: ${t.name}${t.time ? ` · ${t.time}` : ""}`,
+    ),
   );
   if (dry) return;
 
@@ -52,9 +54,8 @@ async function main() {
     status: "succeeded",
     url: up.publicUrl,
     taskId: `omni-manual-i${id}-d${day}`,
-    scenesDone: scenes.length,
-    totalScenes: scenes.length,
-    scenes,
+    scenesDone: daySlots.length,
+    totalScenes: daySlots.length,
   });
   await publishToProfile(itin.userId, id, day);
   console.log(`게시 완료: ${up.publicUrl}`);

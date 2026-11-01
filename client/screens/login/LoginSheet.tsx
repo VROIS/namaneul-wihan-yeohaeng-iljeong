@@ -311,7 +311,8 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
 }
 
 export default function LoginSheet() {
-  const { loginRequestedAt, clearLoginRequest } = useMapToggle();
+  const { loginRequestedAt, clearLoginRequest, authUser, authReady } =
+    useMapToggle();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
@@ -329,6 +330,13 @@ export default function LoginSheet() {
     setVisible(true);
     clearLoginRequest();
   }, [loginRequestedAt, clearLoginRequest]);
+
+  // ⚠️ 수정금지(승인필요) 2026-11-01 사장님 지시 "앱을 열 때마다 생년월일 … 한 번은 무조건 입력" = 지금 코드: 로그인 상태인데 생년월일이 없으면 앱을 열 때마다 이 로그인 창을 연다(입력 → 다시 로그인하면 서버가 저장 → 다음부터 안 뜸) (정본 2026-11-01)
+  const needsBirthDate =
+    BIRTHDATE_REQUIRED && authReady && !!authUser && !authUser.birthDate;
+  useEffect(() => {
+    if (needsBirthDate) setVisible(true);
+  }, [needsBirthDate]);
 
   const handleClose = () => setVisible(false);
 

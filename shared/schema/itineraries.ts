@@ -19,8 +19,6 @@ export interface DayVideo {
   taskId: string;
   scenesDone: number;
   totalScenes: number;
-  /** ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 장면 카드 = 장소명만 (정본 §) */
-  scenes?: { placeName: string }[];
   /** 실패 사유(2026-08-06 사장님 승인 = 서버 예외 문구 그대로 기록 = 화면 표시·포렌식용, 뭉개기 금지 SSOT) */
   error?: string;
   /** ⚠️ 수정금지(승인필요) 2026-09-14 사장님 결정 = 완성본인데 씬이 빠진 경우 = 숫자와 사유표만. 문장은 화면이 7개 로케일로 만든다 (정본 §) */

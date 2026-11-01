@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-09-26 사장님 결정 = 옴니 시험 도구 = 운영과 같은 옴니 조각 코드로 하루치를 동시에 만들고 이어 붙임, 조각은 R2 금고 시험 폴더에 보관, DB 기록·크레딧 없음 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-11-01 사장님 지시 "지금 영상 만드는 방식이 이제 정본이야" = 지금 코드: 옴니 시험 도구 = 운영과 같은 대본(제미니 1회, --dry 는 안 부름)·옴니 조각 코드로 하루치를 동시에 만들고 이어 붙임, 조각은 R2 금고 시험 폴더, DB 기록·크레딧 없음 (정본 2026-11-01)
 // 사용: npx tsx --env-file=.env scripts/omni-clips-preview.ts <여정번호> <일차> <저장폴더> [조각번호들 예: 1,2 또는 all] [언어 ko|en|fr|ja|zh|es|de] [--dry]
 import fs from "fs";
 import path from "path";
@@ -14,8 +14,11 @@ import {
   normalizeVideoLang,
   omniClips,
   omniClipRequest,
+  sceneScriptPrompt,
   clipKey,
+  type SceneScript,
 } from "../worker/container/lib/services/omni-day-clips";
+import { geminiTextJson } from "../worker/container/lib/services/shared/gemini-text";
 import {
   castFor,
   placeTranslations,
@@ -55,14 +58,40 @@ async function main() {
       : clips.map((c) => c.index);
   const chosen = clips.filter((c) => want.includes(c.index));
 
+  const clipOpts = {
+    city: city.name,
+    tripKind: meta.companionType,
+    lang,
+    startDate: (itin.rawData as any)?.startDate,
+    translations,
+    root: process.cwd(),
+  };
+  // 장면 대본 = 운영과 같은 제미니 1회(유료) · 빈 실행(--dry)은 부르지 않고 대본 칸을 비운 지시문만 저장
+  const scenes: SceneScript[] = dry
+    ? []
+    : (
+        await geminiTextJson<{ scenes: SceneScript[] }>(
+          sceneScriptPrompt(clips, cast, clipOpts),
+          {
+            apiKey: await issueApiKey(
+              pool,
+              "GEMINI_API_KEY",
+              null,
+              fileStamp().slice(0, 10),
+              true,
+            ),
+            contextId: null,
+            rawTag: `omni-preview-script-i${id}-d${day}-${lang}`,
+          },
+        )
+      ).scenes;
   const requests = chosen.map((clip) => {
-    const req = omniClipRequest(clip, cast, {
-      city: city.name,
-      tripKind: meta.companionType,
-      lang,
-      translations,
-      root: process.cwd(),
-    });
+    const req = omniClipRequest(
+      clip,
+      cast,
+      scenes.find((s) => Number(s.n) === clip.index),
+      clipOpts,
+    );
     const name = `조각${clip.index}_${lang}`;
     fs.writeFileSync(
       path.join(outDir, `${name}_지시문.txt`),

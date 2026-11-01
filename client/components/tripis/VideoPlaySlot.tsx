@@ -19,8 +19,6 @@ export interface DayVideo {
   taskId: string;
   scenesDone: number;
   totalScenes: number;
-  // ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 장면 카드 = 장소명만(요약 줄 없음) (정본 §)
-  scenes?: { placeName: string }[];
   error?: string; // 실패 사유(서버 예외 문구 그대로 = 뭉개기 금지 SSOT, 2026-08-06)
   // ⚠️ 수정금지(승인필요) 2026-09-14 사장님 결정 = 완성본인데 씬이 빠진 경우 = 숫자와 사유표만(문장은 여기서 번역) (정본 §)
   partial?: { skipped: number; total: number; reason: string };
@@ -50,7 +48,6 @@ export default function VideoPlaySlot({
   pauseSignal = 0,
 }: Props) {
   const { t } = useTranslation();
-  const [sceneIdx, setSceneIdx] = useState(0); // 재생 위치 기반 현재 씬(글라스 카드 전환)
   const [pollTick, setPollTick] = useState(0); // 폴링 재가동 신호 = 네트워크 1회 오류에도 다음 폴링 이어감(§22 react-best)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoRef = useRef<Video>(null);
@@ -90,30 +87,10 @@ export default function VideoPlaySlot({
 
   // 기기 저장 기능 = 완전삭제 = 2026-08-01 사장님 §19 (이미 저장된 것을 보는 화면 = 더 저장할 곳 없음).
 
-  const handlePlaybackStatus = (status: any) => {
-    const scenes = dayVideo?.scenes;
-    if (!status?.isLoaded || !scenes?.length || !status.durationMillis) return;
-    const per = status.durationMillis / scenes.length;
-    const idx = Math.min(
-      Math.floor((status.positionMillis || 0) / per),
-      scenes.length - 1,
-    );
-    setSceneIdx((prev) => (prev === idx ? prev : idx));
-  };
-  const sceneCard = dayVideo?.scenes?.length
-    ? {
-        index: Math.min(sceneIdx, dayVideo.scenes.length - 1),
-        total: dayVideo.scenes.length,
-        placeName:
-          dayVideo.scenes[Math.min(sceneIdx, dayVideo.scenes.length - 1)]
-            .placeName,
-      }
-    : null;
-
   return (
     <View style={styles.body}>
       {dayVideo?.status === "succeeded" && dayVideo.url ? (
-        // ⚠️ 수정금지(승인필요) 2026-10-29 사장님 결정 = 완료 = 전체 재생 + 상단 장면 카드(Scene n/N·장소명) · [공유]를 누르면 멈춤 (정본 §큰 일 4)
+        // ⚠️ 수정금지(승인필요) 2026-11-01 사장님 지시 "유리카드처럼 생긴 그거 다 삭제하고 이거를 정본으로" = 지금 코드: 완료 = 전체 재생(지명은 영상 안 타이포그래피) · [공유]를 누르면 멈춤 (정본 2026-11-01)
         <View style={styles.playerBox}>
           {/* 화면 풀 채움 + 터치 시 재생·정지 컨트롤 = useNativeControls(이전 영상보기 그대로).
               videoStyle = 웹에서 contain 강제(2026-08-01 사장님 "잘림" 실측 = 웹이 cover 로 그려 위아래가 잘렸음.
@@ -129,23 +106,9 @@ export default function VideoPlaySlot({
             resizeMode={ResizeMode.CONTAIN}
             shouldPlay
             isLooping
-            onPlaybackStatusUpdate={handlePlaybackStatus}
           />
-          {/* ⚠️ 수정금지(승인필요) 2026-09-14 사장님 결정 = 씬카드와 "빠진 씬 안내"를 한 세로묶음에 둔다 = 안내가 카드 아래로 흐르므로 글이 길어져도 안 겹치고, 하단은 재생 조작막대 자리로 비워둔다 (정본 §) */}
+          {/* ⚠️ 수정금지(승인필요) 2026-11-01 사장님 지시 "유리카드처럼 생긴 그거 다 삭제하고" = 지금 코드: 위쪽 묶음 = 빠진 씬 안내만 · 하단은 재생 조작막대 자리 (정본 2026-11-01) */}
           <View style={styles.overlayTop} pointerEvents="none">
-            {sceneCard && (
-              <View style={styles.sceneCard}>
-                <View style={styles.sceneCardRow}>
-                  <Icon name="map-pin" size={14} color={Brand.primary} />
-                  <Text style={styles.sceneCardIndex}>
-                    Scene {sceneCard.index + 1}/{sceneCard.total}
-                  </Text>
-                </View>
-                <Text style={styles.sceneCardTitle} numberOfLines={1}>
-                  {sceneCard.placeName}
-                </Text>
-              </View>
-            )}
             {!!dayVideo.partial && (
               <View style={styles.partialNote}>
                 <Icon name="alert-circle" size={13} color="#fcd34d" />
@@ -241,29 +204,6 @@ const styles = StyleSheet.create({
     right: 14,
     top: 104,
     gap: 8,
-  },
-  // ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 장면 카드 = 제미니 블루 글자·그림자 없음(수채화 위 번짐 방지)·카드 폭 글자에 맞춤 (정본 §)
-  sceneCard: {
-    alignSelf: "flex-start",
-    maxWidth: "100%",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderRadius: 20,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    gap: 4,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.45)",
-  },
-  sceneCardRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  sceneCardIndex: {
-    color: Brand.primary,
-    fontSize: 12,
-    fontFamily: Fonts?.medium || undefined,
-  },
-  sceneCardTitle: {
-    color: Brand.primary,
-    fontSize: 21,
-    fontFamily: Fonts?.bold || undefined,
   },
   partialNote: {
     flexDirection: "row",

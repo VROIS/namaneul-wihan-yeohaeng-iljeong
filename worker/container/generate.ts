@@ -10,12 +10,15 @@ import {
   normalizeVideoLang,
   omniClips,
   omniClipRequest,
-  omniSceneCards,
+  sceneScriptPrompt,
+  clipTitle,
   clipKey,
   dayVideoKey,
   slotPlaceId,
   type OmniClip,
+  type SceneScript,
 } from "./lib/services/omni-day-clips";
+import { geminiTextJson } from "./lib/services/shared/gemini-text";
 import {
   castFor,
   placeTranslations,
@@ -80,18 +83,34 @@ export async function runDayVideo(job: DayVideoJob): Promise<void> {
     const stamp = fileStamp();
     const translations = await placeTranslations(daySlots, lang);
     const clips = omniClips(daySlots, cast);
+    const clipOpts = {
+      city: city.name,
+      tripKind: meta.companionType,
+      lang,
+      startDate: (itin.rawData as any)?.startDate,
+      translations,
+      root: process.cwd(),
+    };
+    // ⚠️ 수정금지(승인필요) 2026-11-01 사장님 지시 "플로우 안에 있는 모델과 같이 맞춰서 한 벌 더" = 지금 코드: 장면 대본 = 영상 한 편에 제미니 1회(장소마다 전경·동작·카메라·소리·대사 2줄) (정본 2026-11-01)
+    const { scenes } = await geminiTextJson<{ scenes: SceneScript[] }>(
+      sceneScriptPrompt(clips, cast, clipOpts),
+      {
+        apiKey,
+        contextId: itineraryContext(itin.cityId, id),
+        rawTag: `scene-script-i${id}-d${day}-${lang}`,
+      },
+    );
     const reasons: (string | null)[] = clips.map(() => null);
     let done = 0;
     // 조각 하나 실패해도 전체 폐기 금지 = 성공한 조각만 모아 완성(사장님 SSOT 2026-07-23 = 사용자를 마냥 기다리게 안 함).
     const made = await Promise.all(
       clips.map(async (clip, i): Promise<MadeClip | null> => {
-        const req = omniClipRequest(clip, cast, {
-          city: city.name,
-          tripKind: meta.companionType,
-          lang,
-          translations,
-          root: process.cwd(),
-        });
+        const req = omniClipRequest(
+          clip,
+          cast,
+          scenes.find((s) => Number(s.n) === clip.index),
+          clipOpts,
+        );
         try {
           const buf = await generateSceneClip(req.prompt, {
             apiKey,
@@ -141,18 +160,14 @@ export async function runDayVideo(job: DayVideoJob): Promise<void> {
       ok.map((m) => m.buf),
       dayVideoKey(city.folder, day, stamp),
       ok.reduce((n, m) => n + m.clip.seconds, 0),
-    );
-    const scenes = omniSceneCards(
-      ok.map((m) => m.clip),
-      city.name,
+      ok.map((m) => clipTitle(m.clip, city.name)),
     );
     await setDayVideo(id, day, {
       status: "succeeded",
       url,
       taskId,
-      scenesDone: scenes.length,
-      totalScenes: scenes.length,
-      scenes,
+      scenesDone: okPlaces,
+      totalScenes,
       clips: ok
         .filter((m) => m.key)
         .map((m) => ({
