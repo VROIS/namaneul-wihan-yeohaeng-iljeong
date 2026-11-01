@@ -78,7 +78,8 @@ const TITLE = {
   maxEnd: 9.6,
 };
 const FONT = () => path.join(process.cwd(), "assets/fonts/Cousine-Bold.ttf");
-const OUT_W = 720; // 새김 해상도(생성 속도) = 1080 기준 값을 비율로 줄여 그린다
+// ⚠️ 수정금지(승인필요) 2026-11-01 사장님 지시 "360으로 가자. 전부 다 통일 … 옴니가 나오는 게 360이니까" = 지금 코드: 완성본 = 옴니 그대로 360x640 (지명 값은 1080 기준을 비율로 줄여 그린다) (정본 2026-11-01)
+const OUT_W = 360;
 
 export interface ClipTitle {
   name: string;

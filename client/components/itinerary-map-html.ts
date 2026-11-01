@@ -118,6 +118,8 @@ body { background: #f8f7fb; font-family: -apple-system, "Segoe UI", "Malgun Goth
     if (count === 0) return;
     if (count === 1) { map.setCenter(b.getCenter()); map.setZoom(13); return; }
     map.fitBounds(b, { top: 50, right: 50, bottom: 50, left: 50 });
+    // ⚠️ 수정금지(승인필요) 2026-11-01 사장님 지시 "깃발 문제 … 아까 네가 해결했던 그 방법대로" = 지금 코드: 출발지 깃발과 장소가 겹치거나 아주 가까우면 맞춘 뒤 줌 15보다 더 들어가지 않는다 (정본 2026-11-01)
+    google.maps.event.addListenerOnce(map, "idle", () => { if (map.getZoom() > 15) map.setZoom(15); });
   }
 
   window.syncItinerary = function(payload) {
