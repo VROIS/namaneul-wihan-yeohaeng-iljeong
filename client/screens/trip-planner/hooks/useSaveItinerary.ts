@@ -93,7 +93,6 @@ export function useSaveItinerary({
         curationFocus: itinerary.metadata?.curationFocus,
         companionType: itinerary.companionType,
         companionCount: itinerary.companionCount,
-        companionAges: itinerary.companionAges,
         vibes: (itinerary.vibeWeights ?? []).map((v) => v.vibe),
         travelPace: itinerary.metadata?.travelPace,
         mobilityStyle: itinerary.mobilityStyle,

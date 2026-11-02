@@ -62,7 +62,6 @@ export interface TripFormData {
   birthDate: string;
   companionType: string;
   companionCount: number;
-  companionAges: string;
   curationFocus: CurationFocus;
   destination: string;
   destinationCoords?: { lat: number; lng: number };

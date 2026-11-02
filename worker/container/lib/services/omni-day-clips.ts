@@ -74,7 +74,7 @@ export function vehicleAssetPath(cast: GhibliCast): string {
   return `assets/vehicles/vehicle_${cast.vehicle.type === "sprinter_bus" ? "bus" : cast.vehicle.type}.jpg`;
 }
 
-// ⚠️ 수정금지(승인필요) 2026-11-01 사장님 지시 "같은 그림은 한 번만 + N명 · 최대 60대" = 지금 코드: 출연진 계산 1벌('누구랑'·인원 + 생년월일 실계산) 뒤 같은 캐릭터는 한 번만 남기고 나머지는 일행 뒤 +N명 (정본 2026-11-01)
+// ⚠️ 수정금지(승인필요) 2026-11-02 사장님 지시 "그 매트릭스대로 들어가야지. 옛 것을 왜 살려" = 지금 코드: 출연진 계산 1벌('누구랑'·인원 + 생년월일 매트릭스, 동반자 나이 입력 안 읽음) 뒤 같은 캐릭터는 한 번만 남기고 나머지는 일행 뒤 +N명 (정본 2026-11-01)
 export function castForItinerary(
   itinerary: Record<string, any>,
   user?: Record<string, any> | null,
@@ -84,7 +84,6 @@ export function castForItinerary(
     companionCount: itinerary.companionCount,
     userAge: calculateAge(user?.birthDate || itinerary.userBirthDate),
     userGender: itinerary.userGender,
-    companionAges: itinerary.companionAges,
   });
   const seen = new Set<string>();
   const travelers = cast.travelers.filter((c) =>
@@ -130,20 +129,31 @@ function season(date?: string): string {
   return m ? "winter" : "the current season";
 }
 
-function roleOf(i: number, c: GhibliCharacter, tripKind?: string): string {
+// ⚠️ 수정금지(승인필요) 2026-11-02 사장님 지시 "1번하고 2번만 하고 통과하고 나한테 얘기해" = 지금 코드: 역할 = 아이·10대 먼저(아들·딸) → 대가족에서 본인보다 윗 나이대(할아버지·할머니) → 남은 어른 앞 2명(아버지·어머니) · 나머지 어른(다 큰 아들·딸) (정본 2026-11-01)
+function roleOf(
+  c: GhibliCharacter,
+  people: GhibliCharacter[],
+  tripKind?: string,
+): string {
   const m = c.gender === "male";
   if (c.role === "guide") return "the guide";
   if (tripKind === "Single") return "the traveler";
   if (tripKind === "Couple") return m ? "the husband" : "the wife";
   if (tripKind === "Family" || tripKind === "ExtendedFamily") {
-    if (i <= 1) return m ? "the father" : "the mother";
-    if (tripKind === "ExtendedFamily" && i <= 3)
-      return m ? "the grandfather" : "the grandmother";
-    if (c.ageGroup === "kids" || c.ageGroup === "teen")
-      return m ? "the son" : "the daughter";
+    const young = (x: GhibliCharacter) =>
+      x.ageGroup === "kids" || x.ageGroup === "teen";
+    const decade = (x: GhibliCharacter) => parseInt(x.ageGroup, 10) || 0;
+    const elder = (x: GhibliCharacter) =>
+      tripKind === "ExtendedFamily" && decade(x) > decade(people[0]);
+    if (young(c)) return m ? "the son" : "the daughter";
+    if (elder(c)) return m ? "the grandfather" : "the grandmother";
+    const nth = people
+      .slice(0, people.indexOf(c))
+      .filter((x) => x.role !== "guide" && !young(x) && !elder(x)).length;
+    if (nth <= 1) return m ? "the father" : "the mother";
     return m ? "the grown-up son" : "the grown-up daughter";
   }
-  return `friend ${i + 1}`;
+  return `friend ${people.indexOf(c) + 1}`;
 }
 
 const DECADE: Record<string, string> = {
@@ -154,14 +164,17 @@ const DECADE: Record<string, string> = {
   "6": "sixties",
 };
 function ageOf(c: GhibliCharacter): string {
-  if (/kid/.test(c.id)) return "a child about ten years old";
-  if (/teen/.test(c.id)) return "a teenager about fifteen years old";
+  if (c.ageGroup === "kids") return "child height";
+  if (c.ageGroup === "teen") return "teenager, nearly adult height";
   const d = c.id.match(/(\d)0s/)?.[1];
-  const his = c.gender === "female" ? "her" : "his";
-  return d ? `in ${his} ${DECADE[d]}` : "an adult";
+  return `adult ${c.gender === "female" ? "woman in her" : "man in his"} ${d ? DECADE[d] : "forties"}`;
 }
 
-const speaker = (role: string) => role.replace(/^the /, "").toUpperCase();
+const andList = (xs: string[]): string =>
+  xs.length > 1
+    ? `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`
+    : xs[0] || "";
+
 const isMeal = (s: any) =>
   !!s.isMealSlot ||
   /restaurant|cafe/i.test(`${s.seedCategory || ""} ${s.type || ""}`);
@@ -206,7 +219,7 @@ interface ClipOpts {
   root: string;
 }
 
-// ⚠️ 수정금지(승인필요) 2026-11-01 사장님 지시 "대사는 우리 기본 틀만 주고" = 지금 코드: 장면 대본 요청문 = Flow 대본 도구 형식(장소마다 10초 한 컷 · 전경 · 주인공 동작 1개 · 카메라 1개 · 소리 · 가이드 한 줄 + 반응 한 줄) (정본 2026-11-01)
+// ⚠️ 수정금지(승인필요) 2026-11-02 사장님 지시 "그 식당의 대표적인 음식과 음료수를 푸짐하게 먹는다 … 마시고 먹는다" = 지금 코드: 장면 대본 요청문 = Flow 대본 도구 형식(장소마다 10초 한 컷 · 전경 · 주인공 동작 1개 = 이름 없는 동사구 · 카메라 1개 · 소리 · 가이드 한 줄 + 반응 한 줄) · 사람 = 로마자 이름(역할) · 식사 = 다 같이 한 테이블에서 그 집 대표 음식·음료를 푸짐하게 먹고 마심 (정본 2026-11-01)
 export function sceneScriptPrompt(
   clips: OmniClip[],
   cast: GhibliCast,
@@ -215,20 +228,20 @@ export function sceneScriptPrompt(
   const people = castLineup(cast);
   const langName = videoLangName(opts.lang);
   const label = (c: GhibliCharacter) =>
-    speaker(roleOf(people.indexOf(c), c, opts.tripKind));
+    `${c.nameEn} (${roleOf(c, people, opts.tripKind).replace(/^the /, "")})`;
   const places = clips.filter((c) => !c.ending);
   return [
     `You write scene scripts for a vertical 9:16 travel film in ${opts.city}, ${season(opts.startDate)}.`,
     `Exactly ${places.length} scenes, one per place in this order. Each scene = ONE continuous 10-second shot (no cuts).`,
-    `Cast (exactly these people, every scene): ${people.map((c) => `${label(c)} (${ageOf(c)})`).join("; ")}. The GUIDE is a local driving guide who presents each place.`,
+    `Cast (exactly these people, every scene): ${people.map((c) => `${label(c)}, ${ageOf(c)}`).join("; ")}. ${cast.koreanGuide.nameEn} is the local driving guide who presents each place.`,
     "For each scene write:",
     "- foreground: what is in the sharp foreground, fitting the season and the place (flowers, leaves, steam, lanterns...), one short phrase",
-    '- action: the given LEAD person doing ONE clear, funny, visible action that fits the place; start with "The <lead>"',
+    `- action: the given LEAD doing ONE clear, funny, visible action that fits the place, written as a verb phrase WITHOUT the lead's name (e.g. "spins around like a ballerina in the narrow alley"); anyone else is named only by their name`,
     `- camera: exactly one of ${CAMERAS.map((c) => `"${c}"`).join(", ")}`,
     "- sfx: one line of place sounds",
     `- guideLine: the guide's line in ${langName}, 15-25 characters, a warm witty one-liner drawn from the place summary; no numbers, no English words`,
-    `- reaction: the LEAD's short ${langName} reaction, under 15 characters, no numbers, no English words (if the lead is the GUIDE, the reaction comes from the first family member instead)`,
-    "Never have anyone read, point at or hold any sign, menu or text. Meal places: the group sits at one table with the signature dish.",
+    `- reaction: the LEAD's short ${langName} reaction, under 15 characters, no numbers, no English words (if the lead is the guide, the reaction comes from ${cast.travelers[0].nameEn} instead)`,
+    "Never have anyone read, point at or hold any sign, menu, phone or text. Meal places: everyone eats and drinks this place's signature food and drinks heartily together at one table.",
     "Places:",
     ...places.map((c) => {
       const s = c.slots[0];
@@ -243,7 +256,10 @@ export function sceneScriptPrompt(
   ].join("\n");
 }
 
-// ⚠️ 수정금지(승인필요) 2026-11-01 사장님 지시 "지금 영상 만드는 방식이 이제 정본이야" = 지금 코드: 옴니 지시문 = Flow 최고판 틀(실사 환경 + 3D 사람 · 참고 그림 = 3D 캐릭터·장소 실사 사진·3D 차 · 나이 · 대사는 소리로만 · 글자 금지) (정본 2026-11-01)
+const STYLE =
+  "STYLE: Premium cinematic travel film. The ENVIRONMENT is fully photorealistic like a high-end travel reel: sharp seasonal foreground, natural light, shallow depth of field, one rich warm color grade. The PEOPLE are high-end 3D animated film characters (Pixar-like, soft stylized faces, expressive acting, talking) - every person in every frame is rendered exactly like their 3D reference image, never as a photoreal human. Characters interact with each other, not the camera. Uncropped full frame, textless: no letters, blank signboards, no speech bubbles, no captions, no letterboxing.";
+
+// ⚠️ 수정금지(승인필요) 2026-11-02 사장님 지시 "그 식당의 대표적인 음식과 음료수를 푸짐하게 먹는다 … 마시고 먹는다" = 지금 코드: 옴니 지시문 = 사람마다 참고 그림 번호 + 이름 + 역할 + 나이 + 3D 그림 그대로의 겉모습 + 겹치지 않는 옷 표시 · 정확한 인원 · 키 규칙 · 자리 배치(식사 = 다 같이 한 테이블에서 그 집 대표 음식·음료를 푸짐하게 먹고 마심) · 동작·대사 = 이름 + 그림 번호로 묶음 · 글자 금지 2번 · 배웅 = 가이드 혼자 말함 (정본 2026-11-01)
 export function omniClipRequest(
   clip: OmniClip,
   cast: GhibliCast,
@@ -253,70 +269,101 @@ export function omniClipRequest(
   const people = castLineup(cast);
   const langName = videoLangName(opts.lang);
   const ref = (i: number) => `<IMAGE_REF_${i}>`;
-  const roles = people.map((c, i) => roleOf(i, c, opts.tripKind));
   const guide = cast.koreanGuide;
+  const g = people.length - 1;
   const gHis = guide.gender === "female" ? "her" : "his";
-  const gHim = guide.gender === "female" ? "her" : "him";
-  const extra = Math.max(0, cast.totalTravelerCount - cast.travelers.length);
+  const guests = cast.travelers;
+  const extra = Math.max(0, cast.totalTravelerCount - guests.length);
+  const total = people.length + extra;
+  const bind = (c: GhibliCharacter) =>
+    `${c.nameEn} ${ref(people.indexOf(c))} (${c.anchor})`;
+  const guestNames = andList(guests.map((c) => c.nameEn));
   const images: { path?: string; url?: string }[] = people.map((c) => ({
     path: path.join(opts.root, c.assetPath),
   }));
   const s = clip.slots[0];
+  const ending = clip.ending || !s;
   let placeRef = "";
-  if (s?.image) {
-    placeRef = ` ${ref(images.length)} is the real place: use it only for the layout and landmarks; it never changes how the people look.`;
+  if (!ending && s.image) {
+    placeRef = ` ${ref(images.length)} is the real place: use it only for layout and landmarks; it never changes how the people look.`;
     images.push({ url: s.image });
   }
-  const withCar =
-    clip.ending || (!!s && drives(s) && !isMeal(s) && !isIndoor(s));
+  const withCar = ending || (drives(s) && !isMeal(s) && !isIndoor(s));
   const carRef = withCar
     ? images.push({ path: path.join(opts.root, vehicleAssetPath(cast)) }) - 1
     : -1;
-  const spoken = "These lines are only heard, never written on screen.";
 
-  const head = [
-    "STYLE: Premium cinematic travel film. The ENVIRONMENT is fully photorealistic like a high-end travel reel: sharp seasonal foreground, natural light, shallow depth of field, one rich warm color grade. The PEOPLE are high-end 3D animated film characters (Pixar-like, soft stylized faces, expressive acting, talking) - every person in every frame is rendered exactly like their 3D reference image, never as a photoreal human. Characters interact with each other, not the camera. Uncropped full frame, textless: no letters, blank signboards, no speech bubbles, no captions, no letterboxing.",
-    `References: ${people.map((c, i) => `${ref(i)} ${speaker(roles[i])}`).join(", ")} — each image fixes that one person's face, hair and outfit.${placeRef}`,
-    `${people
-      .map((c, i) => `${roles[i]} is ${ageOf(c)}`)
-      .join("; ")
-      .replace(
-        /^t/,
-        "T",
-      )}. Only the people in the reference images are the group;${extra ? ` ${extra} more members of the group stand just behind them;` : ""} everyone else stays small and far in the background. The guide always wears ${gHis} own outfit and never works at a shop. Phones stay in pockets.`,
-    `Dialogue in ${langName} only, each line spoken only by its own speaker with matching lips. No letters anywhere: blank signs, no speech bubbles, no captions, no subtitles. Nobody reads, points at or holds any sign or menu.`,
-    "",
+  const young = (group: string) =>
+    people.filter((c) => c.ageGroup === group).map((c) => c.nameEn);
+  const kids = young("kids");
+  const teens = young("teen");
+  const heightRule =
+    kids.length || teens.length
+      ? `${[
+          kids.length
+            ? `${andList(kids)} ${kids.length > 1 ? "are children" : "is a child"}, head-and-shoulders shorter than the adults`
+            : "",
+          teens.length
+            ? `${andList(teens)} ${teens.length > 1 ? "are teenagers" : "is a teenager"}, nearly adult height`
+            : "",
+        ]
+          .filter(Boolean)
+          .join("; ")}; everyone else is a full-grown adult of adult height.`
+      : `${total > 2 ? `All ${total}` : "Both"} are full-grown adults of adult height; nobody is a child.`;
+  const extraRule = extra
+    ? ` ${extra} extra guest${extra > 1 ? "s" : ""} with no reference image ${extra > 1 ? "stay" : "stays"} behind the referenced people and never ${extra > 1 ? "take" : "takes"} their faces or clothes.`
+    : "";
+  const castBlock = [
+    `CAST: exactly ${total} people${ending ? ", all visible for the whole shot" : ""} — ${guests.length + extra} guest${guests.length + extra > 1 ? "s" : ""} and the guide. One reference image per person; each image fixes that person's face, hair, outfit and height; hands free, no phones:`,
+    ...guests.map(
+      (c, i) =>
+        `- ${ref(i)} ${c.nameEn}, ${roleOf(c, people, opts.tripKind)} (${ageOf(c)}): ${c.ghibliStylePrompt}; the only one in ${c.anchor}.`,
+    ),
+    `- ${ref(g)} ${guide.nameEn}, the guide (${ageOf(guide)}): ${guide.ghibliStylePrompt}; the only one in ${guide.anchor}, always in ${gHis} own outfit, never a shop worker.`,
+    `${heightRule}${extraRule}`,
   ];
+  const dialogue = `DIALOGUE in ${langName} only, heard, never written on screen; ${ending ? "only the guide speaks" : "each line spoken only by its named speaker"}, with matching lips. No letters anywhere: blank signs, no captions, no subtitles; nobody reads, points at or holds any sign, menu or phone.`;
 
-  if (clip.ending || !s) {
+  if (ending) {
     const prompt = [
-      ...head,
-      `A continuous ten-second vertical 9:16 shot. The end of the day in ${opts.city}: ${lightAt("19:00").toLowerCase()} beside the guide's car ${ref(carRef)}.`,
-      "The guide opens the car door for everyone; the whole group turns and waves goodbye to the camera, happy and tired.",
-      "The camera: slow pull back.",
+      STYLE.replace(" not the camera.", " and wave to the camera at the end."),
+      ...castBlock,
+      `No other people near the camera. ${ref(carRef)} is the guide's car, parked at the curb, blank license plate.`,
+      "",
+      `SCENE: A continuous ten-second vertical 9:16 shot. End of the day in ${opts.city}, ${lightAt("19:00").toLowerCase()}, beside the car.`,
+      `BLOCKING: ${people.length > 1 ? `all ${people.length} stand in one row beside the car, clearly separated, every face visible: ${bind(guide)} at the open rear door on the far left, ${guestNames} in a row to ${gHis} right${extra ? ", the extra guests behind them" : ""}` : `${bind(guide)} at the open rear door`}. ${guide.nameEn} speaks, then everyone turns and waves goodbye to the camera, happy and tired.`,
+      "CAMERA: slow pull back.",
       "SFX: soft evening city ambience and a car door opening.",
-      `GUIDE: ${FAREWELL[opts.lang] || FAREWELL.en}`,
-      spoken,
+      dialogue,
+      `${bind(guide)}: "${FAREWELL[opts.lang] || FAREWELL.en}"`,
     ].join("\n");
     return { prompt, images };
   }
 
   const lead = clip.lead;
-  const leadLabel = speaker(roles[people.indexOf(lead)]);
-  const reactor = lead.role === "guide" ? speaker(roles[0]) : leadLabel;
+  const reactor = lead.role === "guide" ? guests[0] : lead;
   const camera =
     scene && CAMERAS.includes(scene.camera) ? scene.camera : CAMERAS[0];
+  const action = (scene?.action || "smiles and looks around the place")
+    .trim()
+    .replace(new RegExp(`^(the\\s+)?${lead.nameEn}\\b[\\s,]*`, "i"), "")
+    .replace(/^./, (ch) => ch.toLowerCase());
+  const blocking = isMeal(s)
+    ? `All ${total} eat and drink this place's signature food and drinks heartily together at one table, each in their own chair, every face visible; ${bind(guide)} at the head; ${guestNames} along the sides.`
+    : `${bind(guide)} stands front-right presenting the place; ${guestNames} ${guests.length > 1 ? "stand side by side" : "stands"} to ${gHis} left, clearly separated, every face visible, nobody overlapping or merging.`;
   const prompt = [
-    ...head,
-    `A continuous ten-second vertical 9:16 shot. ${placeName(s)}, ${opts.city}, ${lightAt(s.startTime).toLowerCase()}; ${scene?.foreground || "seasonal details"} sharp in the foreground.${carRef >= 0 ? ` The guide's car ${ref(carRef)} is parked nearby.` : ""}`,
-    isMeal(s)
-      ? `The guide seats everyone around one table and presents the signature dish, steaming and delicious. ${scene?.action || ""}`.trim()
-      : `The guide stands in the foreground presenting the place; the group is with ${gHim}. ${scene?.action || ""}`.trim(),
-    `The camera: ${camera}.`,
+    STYLE,
+    ...castBlock,
+    `No other people near the camera; passers-by tiny and blurred.${placeRef}${carRef >= 0 ? ` ${ref(carRef)} is the guide's car parked nearby, blank license plate.` : ""}`,
+    "",
+    `SCENE: A continuous ten-second vertical 9:16 shot. ${placeName(s)}, ${opts.city}, ${lightAt(s.startTime).toLowerCase()}; ${scene?.foreground || "seasonal details"} sharp in the foreground.`,
+    `BLOCKING: ${blocking}`,
+    `ACTION: ${bind(lead)} ${action}`,
+    `CAMERA: ${camera}.`,
     `SFX: ${scene?.sfx || "the natural sounds of the place"}`,
-    `GUIDE: ${scene?.guideLine || ""}`,
-    `${reactor}: ${scene?.reaction || ""}`,
-    spoken,
+    dialogue,
+    `${bind(guide)}: "${scene?.guideLine || ""}"`,
+    `${bind(reactor)}: "${scene?.reaction || ""}"`,
   ].join("\n");
   return { prompt, images };
 }

@@ -73,7 +73,6 @@ export default function BTSTripScreen() {
       travelPace: derivedPace,
       companionType: "Single" as CompanionType, // BTS = 1인·1일(사장님 결정)
       companionCount: 1,
-      companionAges: "",
       ...(venue && venue.latitude != null && venue.longitude != null
         ? {
             accommodationName: venue.nameEn || venue.nameKo || undefined, // ⚠️ 2026-08-22 사장님 원칙 = nameEn 1순위(null→undefined = 타입 정합)

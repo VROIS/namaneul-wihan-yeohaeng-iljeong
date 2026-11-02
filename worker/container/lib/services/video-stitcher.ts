@@ -5,11 +5,11 @@ import os from "os";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import ffmpegPath from "ffmpeg-static";
 import { uploadToR2 } from "./shared/r2-client";
 
 const execFileAsync = promisify(execFile);
-const FFMPEG = ffmpegPath as unknown as string;
+// ⚠️ 수정금지(승인필요) 2026-11-02 사장님 지시 "아까처럼 네가 원하는 대로 그 순서로 해" = 지금 코드: ffmpeg = 컨테이너 이미지의 데비안 공식 ffmpeg 1벌(PATH 의 ffmpeg · 지명 새김 drawtext 포함) (정본 2026-11-01)
+const FFMPEG = "ffmpeg";
 
 async function durationOf(file: string): Promise<number> {
   const info = await execFileAsync(FFMPEG, ["-i", file]).catch(

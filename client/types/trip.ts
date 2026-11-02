@@ -31,7 +31,6 @@ export interface TripFormData {
   birthDate: string; // 🎯 사용자 본인 생년월일 (로그인 필수 - 가족 연령 추정용)
   companionType: CompanionType;
   companionCount: number;
-  companionAges: string;
   curationFocus: CurationFocus;
   destination: string;
   destinationCoords?: { lat: number; lng: number };
@@ -171,7 +170,6 @@ export interface Itinerary {
   };
   companionType?: string;
   companionCount?: number;
-  companionAges?: string;
   travelStyle?: TravelStyle;
   mobilityStyle?: MobilityStyle;
   // ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 생성 응답 metadata 통째 보존(§20 셀렉 금지) = 후속 호출(AI의견 등)이 그대로 사용.

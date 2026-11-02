@@ -114,8 +114,6 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     birthDate: "", // 🔧 필수 입력값으로 변경
     companionType: "Family",
     companionCount: 4,
-    // ⚠️ 수정금지(승인필요) 2026-11-01 사장님 지시 "생년월일 입력하면 추정해서 매트릭스로" = 지금 코드: 동반자 나이 = 빈 값 → 영상 출연진이 생년월일로 추정(자녀 = 본인−30 · 부모 = 본인+25) (정본 2026-11-01)
-    companionAges: "",
     curationFocus: "Everyone",
     destination: "Paris",
     startDate: formatDate(new Date()),

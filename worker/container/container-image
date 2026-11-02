@@ -5,6 +5,11 @@ FROM node:22-slim
 
 WORKDIR /app
 
+# ⚠️ 수정금지(승인필요) 2026-11-02 사장님 지시 "아까처럼 네가 원하는 대로 그 순서로 해" = 지금 코드: ffmpeg = 데비안 공식 패키지 1벌(지명 새김 drawtext 포함 · npm ffmpeg-static 7.0.2 리눅스판은 drawtext 없음) (정본 2026-11-01)
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/* \
+    && ffmpeg -hide_banner -filters | grep -q drawtext
+
 # 런타임 npm 패키지 6개 + 번들러 = worker/container/package.json 1벌
 COPY worker/container/package.json ./package.json
 RUN npm install --no-audit --no-fund
@@ -16,6 +21,8 @@ COPY worker/container ./worker/container
 # 번들 = 레포 파일 28개(worker 15 + shared 13) → 1파일. npm 패키지는 node_modules 에서 그대로 읽는다(--packages=external).
 RUN npx esbuild worker/container/generate.ts --bundle --platform=node --format=cjs \
       --packages=external --alias:@shared=./shared --outfile=dist/server.cjs \
+    && npx esbuild worker/container/selftest.ts --bundle --platform=node --format=cjs \
+      --packages=external --alias:@shared=./shared --outfile=dist/selftest.cjs \
     && npm prune --omit=dev \
     && rm -rf shared worker
 
@@ -26,6 +33,9 @@ COPY assets/characters ./assets/characters
 COPY assets/vehicles ./assets/vehicles
 #   video-stitcher.ts 지명 타이포그래피 글꼴 = assets/fonts/Cousine-Bold.ttf (2026-11-01 사장님 1번)
 COPY assets/fonts/Cousine-Bold.ttf ./assets/fonts/Cousine-Bold.ttf
+
+# 리눅스 안 실제 시험 = 운영 이어 붙이기·지명 새기기(실패 = 빌드 실패) · 시험 파일은 지운다
+RUN node dist/selftest.cjs && rm dist/selftest.cjs
 
 # 🔴 worker/routes-video-generate.ts 의 defaultPort 와 반드시 같은 값(8080).
 ENV PORT=8080

@@ -76,8 +76,8 @@ export async function videoCity(
 export async function tripInputs(itin: Record<string, any>) {
   const user = itin.userId ? await getUser(db!, itin.userId) : null;
   const { rawData: _omit, ...meta } = itin as any;
-  // ⚠️ 2026-08-22 사장님 승인(A+B+C) = 캐스팅 재료(누구랑·인원·나이) = rawData(생성 산출물=진실) 우선(읽을 때 조립).
-  for (const k of ["companionType", "companionCount", "companionAges"])
+  // ⚠️ 수정금지(승인필요) 2026-11-02 사장님 지시 "그 매트릭스대로 들어가야지. 옛 것을 왜 살려" = 지금 코드: 캐스팅 재료 = 누구랑·인원 2개(rawData 우선) · 나이 = 생년월일 매트릭스 (정본 2026-11-01)
+  for (const k of ["companionType", "companionCount"])
     if (_omit?.[k] != null) meta[k] = _omit[k];
   return { user, meta };
 }

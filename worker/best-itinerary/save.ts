@@ -66,14 +66,7 @@ export async function buildItineraryData(db: Db, body: any) {
       ? perPersonEur
       : undefined;
   const truthCols = Object.fromEntries(
-    [
-      "companionType",
-      "companionCount",
-      "companionAges",
-      "curationFocus",
-      "vibes",
-      "travelPace",
-    ]
+    ["companionType", "companionCount", "curationFocus", "vibes", "travelPace"]
       .map((k) => [k, (body as any)[k] ?? (rawData as any)[k]])
       .filter(([, v]) => v != null),
   );
