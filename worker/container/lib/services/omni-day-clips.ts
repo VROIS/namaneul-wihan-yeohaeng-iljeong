@@ -9,7 +9,7 @@ import {
 } from "./character-roster-ghibli";
 
 export const MAX_SCENES = 10;
-export const CLIP_SECONDS = 10;
+const CLIP_SECONDS = 10;
 
 export interface OmniClip {
   index: number;
@@ -36,7 +36,7 @@ export interface SceneScript {
 export const slotPlaceId = (s: any): number =>
   parseInt(String(s?.id ?? "").replace(/\D/g, ""), 10);
 
-// ⚠️ 수정금지(승인필요) 2026-09-26 사장님 결정 = 영상 언어 = 앱 7개 언어 두 글자 코드 → 지시문 언어명 1벌 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-11-03 최적값 = 영상 언어 = 앱 7개 언어 두 글자 코드 → 지시문 언어명 1벌(이 파일 안에서만 씀) (정본 2026-11-03)
 const VIDEO_LANGS: Record<string, string> = {
   ko: "Korean",
   en: "English",
@@ -46,7 +46,7 @@ const VIDEO_LANGS: Record<string, string> = {
   es: "Spanish",
   de: "German",
 };
-export function videoLangName(code?: string | null): string {
+function videoLangName(code?: string | null): string {
   return VIDEO_LANGS[(code || "ko").slice(0, 2)] || "Korean";
 }
 export function normalizeVideoLang(code?: string | null): string {
@@ -65,13 +65,13 @@ const FAREWELL: Record<string, string> = {
   de: "Heute hat es richtig Spaß gemacht. Kommen Sie gut nach Hause!",
 };
 
-// ⚠️ 수정금지(승인필요) 2026-09-26 사장님 결정 = 사람 목록 순서 = 일행 순서 + 가이드 마지막, 주인공 = 그 번호 (정본 §)
-export function castLineup(cast: GhibliCast): GhibliCharacter[] {
+// ⚠️ 수정금지(승인필요) 2026-11-03 최적값 = 사람 목록 순서 = 일행 순서 + 가이드 마지막, 주인공 = 그 번호 (정본 2026-11-03)
+function castLineup(cast: GhibliCast): GhibliCharacter[] {
   return [...cast.travelers, cast.koreanGuide];
 }
 
-// ⚠️ 수정금지(승인필요) 2026-09-26 사장님 결정 = 차 그림 파일 고르기 1벌 (정본 §)
-export function vehicleAssetPath(cast: GhibliCast): string {
+// ⚠️ 수정금지(승인필요) 2026-11-03 최적값 = 차 그림 파일 고르기 1벌 (정본 2026-11-03)
+function vehicleAssetPath(cast: GhibliCast): string {
   return `assets/vehicles/vehicle_${cast.vehicle.type === "sprinter_bus" ? "bus" : cast.vehicle.type}.jpg`;
 }
 
@@ -150,13 +150,20 @@ function roleOf(
 const speaker = (role: string) => role.replace(/^the /, "").toUpperCase();
 const his = (c: GhibliCharacter) => (c.gender === "female" ? "her" : "his");
 
-// ⚠️ 수정금지(승인필요) 2026-11-03 최적값 = 지시문 글자 = worker/container/prompts/ 파일(압축판, 지문 잠금) · 코드는 {{빈칸}} 치환만 · 제미니가 비운 칸은 빈 글자 (정본 2026-11-03)
+// ⚠️ 수정금지(승인필요) 2026-11-03 최적값 = 지시문 글자 = worker/container/prompts/ 파일(압축판, 지문 잠금, 파일마다 한 번만 읽음) · 코드는 {{빈칸}} 치환만 · 제미니가 비운 칸은 빈 글자 · 동작 끝 마침표는 꼭 붙임 (정본 2026-11-03)
 const PROMPTS = "worker/container/prompts";
+const promptCache = new Map<string, string>();
 function promptFile(root: string, name: string): string {
-  return fs
-    .readFileSync(path.join(root, PROMPTS, name), "utf8")
-    .replace(/\r\n/g, "\n")
-    .replace(/\n$/, "");
+  const file = path.join(root, PROMPTS, name);
+  let text = promptCache.get(file);
+  if (text === undefined) {
+    text = fs
+      .readFileSync(file, "utf8")
+      .replace(/\r\n/g, "\n")
+      .replace(/\n$/, "");
+    promptCache.set(file, text);
+  }
+  return text;
 }
 interface Fragments {
   placeRef: string;
@@ -167,10 +174,12 @@ interface Fragments {
   ageShort: Record<string, string>;
 }
 const fragmentsOf = (root: string): Fragments =>
-  JSON.parse(
-    fs.readFileSync(path.join(root, PROMPTS, "fragments.json"), "utf8"),
-  );
-export function fill(
+  JSON.parse(promptFile(root, "fragments.json"));
+const sentence = (t: string): string => {
+  const s = String(t ?? "").trim();
+  return !s || /[.!?…]["')\]]*$/.test(s) ? s : `${s}.`;
+};
+function fill(
   tpl: string,
   vals: Record<string, string | number | undefined>,
 ): string {
@@ -180,9 +189,8 @@ export function fill(
   });
 }
 function ageOf(c: GhibliCharacter, frag: Fragments): string {
-  const key = c.role === "guide" ? "guide" : c.ageGroup;
-  const tpl = frag.age[key];
-  if (!tpl) throw new Error(`[prompt] 나이 문구 없음: ${key}`);
+  const tpl = frag.age[c.ageGroup];
+  if (!tpl) throw new Error(`[prompt] 나이 문구 없음: ${c.ageGroup}`);
   return fill(tpl, { HIS: his(c) });
 }
 
@@ -196,7 +204,7 @@ const isIndoor = (s: any) =>
   /\b(mall|library|museum|aquarium|department store|gallery|arcade)\b/i.test(
     String(s.nameEn || s.name || ""),
   );
-export const placeName = (s: any): string =>
+const placeName = (s: any): string =>
   String(s.nameEn || s.nameLocal || s.name || "")
     .split("/")[0]
     .trim();
@@ -208,7 +216,7 @@ const CAMERAS = [
   "slow pull back",
 ];
 
-export function placeLine(
+function placeLine(
   slot: any,
   lang: string,
   tr?: PlaceTranslation,
@@ -295,7 +303,7 @@ export function omniClipRequest(
     REFS: people
       .map(
         (c, i) =>
-          `<IMAGE_REF_${i}> ${roles[i].replace(/^the /, "")} ${frag.ageShort[c.role === "guide" ? "guide" : c.ageGroup]}`,
+          `<IMAGE_REF_${i}> ${roles[i].replace(/^the /, "")} ${frag.ageShort[c.ageGroup]}`,
       )
       .join(", "),
     PLACE_REF: placeRef,
@@ -319,7 +327,7 @@ export function omniClipRequest(
     LIGHT: scene.light,
     FOREGROUND: scene.foreground,
     CAR: withCar ? frag.carScene : "",
-    ACTION: scene.action,
+    ACTION: sentence(scene.action),
     CAMERA: scene.camera,
     SFX: scene.sfx,
     LINES: (scene.lines || []).map((l) => `${l.speaker}: ${l.text}`).join("\n"),

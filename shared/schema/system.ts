@@ -11,6 +11,7 @@ import {
   numeric,
   index,
 } from "drizzle-orm/pg-core";
+import { numericNumber } from "./numeric-number";
 
 export const apiServiceStatus = pgTable("api_service_status", {
   id: serial("id").primaryKey(),
@@ -126,14 +127,14 @@ export const externalCalls = pgTable(
   ],
 );
 
-// ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = api_logs drizzle 정의 = 실 DB 그대로(§16)
+// ⚠️ 수정금지(승인필요) 2026-11-03 최적값 = api_logs drizzle 정의 = 실 DB 그대로(예상 비용 = numeric(10,6)) (정본 2026-11-03)
 export const apiLogs = pgTable("api_logs", {
   id: serial("id").primaryKey(),
   type: text("type"),
   userId: integer("user_id"),
   responseTime: integer("response_time"),
   tokensUsed: integer("tokens_used"),
-  estimatedCost: real("estimated_cost"),
+  estimatedCost: numericNumber("estimated_cost", { precision: 10, scale: 6 }),
   statusCode: integer("status_code"),
   errorMessage: text("error_message"),
   createdAt: timestamp("created_at")

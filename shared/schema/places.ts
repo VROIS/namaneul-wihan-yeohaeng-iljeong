@@ -10,6 +10,7 @@ import {
   unique,
 } from "drizzle-orm/pg-core";
 import { cities } from "./cities";
+import { numericNumber } from "./numeric-number";
 
 export const placeSeedRaw = pgTable("place_seed_raw", {
   id: serial("id").primaryKey(),
@@ -37,9 +38,9 @@ export const placeSeedRaw = pgTable("place_seed_raw", {
   // ⚠️ 수정금지(승인필요) 2026-05-15 = 13 번째 SSOT 요소 = google_maps_uri
   googleMapsUri: text("google_maps_uri"),
 
-  // ⚠️ 수정금지(승인필요) 2026-06-11 = best_image_url DROP = 이미지 image_url(구글 PM) 1종 통일 (고아·비PM 2순위 폴백 폐기)
-  latitude: real("latitude"),
-  longitude: real("longitude"),
+  // ⚠️ 수정금지(승인필요) 2026-11-03 최적값 = 좌표 = DB 형 numeric(9,6) 그대로 · 이미지 = image_url(구글 PM) 1종 (정본 2026-11-03)
+  latitude: numericNumber("latitude", { precision: 9, scale: 6 }),
+  longitude: numericNumber("longitude", { precision: 9, scale: 6 }),
   googleReviewCount: integer("google_review_count"),
   // ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 안 쓰는 칸 정리: 영업시간(opening_hours)·이미지 갱신 시각(image_updated_at)만 남긴다 (정본 §정리)
   openingHours: jsonb("opening_hours").$type<Record<string, string>>(),
@@ -55,10 +56,13 @@ export const placeSeedRaw = pgTable("place_seed_raw", {
     .notNull(),
   // ⚠️ 수정금지(승인필요) 2026-07-16 = updated_at 레포 등재 §19(DB↔레포 동기화) = DB 실측 nullable+default now() 그대로 반영.
   updatedAt: timestamp("updated_at").default(sql`now()`),
-  // ⚠️ 수정금지(승인필요) — 2026-05-04 사용자 SSOT: gemini3-2026-05 표준화 17 필드 추가 (메인앱 통합 진입점)
+  // ⚠️ 수정금지(승인필요) 2026-11-03 최적값 = 제미니 표준화 칸 묶음 · 도심 거리 = DB 형 numeric(5,1) 그대로 (정본 2026-11-03)
   summaryKo: text("summary_ko"), // 한국어 감성 요약 (NUBI 카피, 숏폼 KO)
   dayZone: text("day_zone"), // core (≤10km) / outskirt (10-100km)
-  distanceKmFromCenter: real("distance_km_from_center"), // 도심 거리 (haversine)
+  distanceKmFromCenter: numericNumber("distance_km_from_center", {
+    precision: 5,
+    scale: 1,
+  }), // 도심 거리 (haversine)
   address: text("address"), // 전체 주소 + 우편번호
   googlePrimaryType: text("google_primary_type"), // Google primary type (museum, restaurant 등)
   // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 확정 = 베스트&베스트 7자리 언어코드(분류 표식. 순위도 계산식도 아님).

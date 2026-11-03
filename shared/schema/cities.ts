@@ -4,11 +4,11 @@ import {
   text,
   serial,
   timestamp,
-  real,
   boolean,
   jsonb,
   integer,
 } from "drizzle-orm/pg-core";
+import { numericNumber } from "./numeric-number";
 
 export const cities = pgTable("cities", {
   id: serial("id").primaryKey(),
@@ -18,8 +18,9 @@ export const cities = pgTable("cities", {
   aliases: jsonb("aliases").$type<string[]>().default([]), // 별칭 배열 (예: ["巴黎","パリ"])
   country: text("country").notNull(),
   countryCode: text("country_code").notNull(),
-  latitude: real("latitude").notNull(),
-  longitude: real("longitude").notNull(),
+  // ⚠️ 수정금지(승인필요) 2026-11-03 최적값 = 도시 좌표 = DB 형 numeric(9,6) 그대로 (정본 2026-11-03)
+  latitude: numericNumber("latitude", { precision: 9, scale: 6 }).notNull(),
+  longitude: numericNumber("longitude", { precision: 9, scale: 6 }).notNull(),
   timezone: text("timezone"),
   primaryLanguage: text("primary_language"),
   mcpBucket: text("mcp_bucket"), // france30 | europe30 | both (레거시)

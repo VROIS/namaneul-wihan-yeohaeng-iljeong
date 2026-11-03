@@ -1,7 +1,10 @@
 // ⚠️ 수정금지(승인필요) 2026-10-24 사장님 결정 = 최종 점검 = 일꾼 판정을 검문(지시문대로 했는가) 통과분은 --apply 판에서 그 자리에서 창고에 넣는다(고침 = llm-review --apply · 새 식당 = discovery-lists-insert --report) · --apply 가 없으면 점검표만 · 사람(AI) 수작업 단계 없음 (정본 §2026-10-24)
 import fs from "fs";
 import path from "path";
-import { rawDirOf } from "../../worker/lib/services/shared/local-paths";
+import {
+  lastGoogleLogs,
+  rawDirOf,
+} from "../../worker/lib/services/shared/local-paths";
 import {
   ROOT,
   AGENT_WORKERS,
@@ -21,6 +24,7 @@ import {
   type AuditResult,
   auditWithRetry,
   checkCheckRow,
+  missedShops,
 } from "./procedure-check";
 
 loadEnv();
@@ -45,6 +49,15 @@ const INSTRUCTION = path.join(
       [cityId],
     )
   ).rows.map((r: any, order: number) => ({ order, ...r }));
+  // 창고에 이미 있는 이 도시 가게 이름 = 시설 안 가게를 이미 넣었으면 빠뜨림이 아니다
+  const known: string[] = (
+    await c.query(
+      `SELECT name_en, name_local, name_ko FROM place_seed_raw WHERE city_id=$1 AND merged_into IS NULL`,
+      [cityId],
+    )
+  ).rows.flatMap((r: any) =>
+    [r.name_en, r.name_local, r.name_ko].filter(Boolean),
+  );
   await c.end();
   const dir = argv["resume"]
     ? path.resolve(String(argv["resume"]))
@@ -135,11 +148,23 @@ const INSTRUCTION = path.join(
   // --resume=<이 판 결과 폴더> = 일꾼 첫 몫은 다시 돌리지 않고 검문·되돌림부터(유료 0)
   if (!argv["resume"]) await run(jobs);
   const byCid = new Map(items.map((x) => [String(x.cid), x]));
-  // ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 검문 = 어긴 행은 판정 파일에서 빼고 rejected-{k}.json 에 이유와 남긴다 · 결과가 없는 행은 못 한 행으로 따로 담는다 (정본 §2026-10-23)
+  const pageLogs = lastGoogleLogs(cityId);
+  // ⚠️ 수정금지(승인필요) 2026-11-03 최적값 = 검문 = 어긴 행은 판정 파일에서 빼고 rejected-{k}.json 에 이유와 남긴다 · 결과가 없는 행은 못 한 행으로 따로 담는다 · 시설 행 로그 "At this place" 에 이름이 나온 식당이 창고에도 new-rows 에도 없으면 받지 않는다(분류 04 와 같은 검사) (정본 2026-11-03)
   const audit = (): AuditResult => {
     const bad = new Map<number, string[]>();
     const missing = new Set<number>();
     const seen = new Set<string>();
+    const written = [...known];
+    for (const f of fs
+      .readdirSync(dir)
+      .filter((x) => /^new-rows-\d+\.json$/.test(x))) {
+      try {
+        for (const n of JSON.parse(fs.readFileSync(path.join(dir, f), "utf-8")))
+          written.push(String(n?.["이름"] ?? ""));
+      } catch {
+        continue;
+      }
+    }
     for (const f of fs
       .readdirSync(dir)
       .filter((x) => /^verdict-\d+\.json$/.test(x))) {
@@ -159,6 +184,15 @@ const INSTRUCTION = path.join(
           continue;
         }
         const why = checkCheckRow(v);
+        const missed = missedShops(
+          pageLogs.get(Number(it.id))?.rawText,
+          v?.fix?.seed_category ?? it.seed_category,
+          written,
+        );
+        if (missed.length)
+          why.push(
+            `로그 "At this place" 에 이름이 나온 식당을 new-rows 에 적지 않았다 = ${missed.join(", ")} (시설 행 규칙)`,
+          );
         if (why.length) {
           bad.set(it.order, why);
           out.push({ ...v, 받지않은이유: why });

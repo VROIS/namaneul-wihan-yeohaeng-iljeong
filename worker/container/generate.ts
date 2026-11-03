@@ -16,9 +16,12 @@ import {
   dayVideoKey,
   slotPlaceId,
   type OmniClip,
-  type SceneScript,
 } from "./lib/services/omni-day-clips";
-import { checkPrompt, scriptScenes } from "./lib/services/prompt-check";
+import {
+  checkPrompt,
+  sceneOf,
+  scriptScenes,
+} from "./lib/services/prompt-check";
 import { geminiTextJson } from "./lib/services/shared/gemini-text";
 import {
   castFor,
@@ -101,8 +104,6 @@ export async function runDayVideo(job: DayVideoJob): Promise<void> {
         rawTag: `scene-script-i${id}-d${day}-${lang}`,
       }),
     );
-    const sceneOf = (clip: OmniClip, list: SceneScript[]) =>
-      list.find((x) => Number(x.n) === clip.index);
     const reasons: (string | null)[] = clips.map(() => null);
     for (const [i, c] of clips.entries()) {
       if (missing.includes(c.index)) {
@@ -118,7 +119,7 @@ export async function runDayVideo(job: DayVideoJob): Promise<void> {
         const req = omniClipRequest(
           clip,
           cast,
-          sceneOf(clip, scenes),
+          sceneOf(scenes, clip),
           clipOpts,
         );
         const promptErrs = checkPrompt(req.prompt, req.images.length);
@@ -192,7 +193,7 @@ export async function runDayVideo(job: DayVideoJob): Promise<void> {
           key: m.key as string,
           places: m.clip.slots.map(slotPlaceId),
         })),
-      // ⚠️ 수정금지(승인필요) 2026-09-26 사장님 결정 = 빠진 장소는 **숫자와 사유표만** 남긴다(옴니 = 실패한 조각에 든 장소 수) = 문장 조립은 화면(7개 로케일)이 한다 (정본 §)
+      // ⚠️ 수정금지(승인필요) 2026-11-03 최적값 = 빠진 장소 = 숫자와 사유 키만 DB 기록(옴니 = 실패한 조각에 든 장소 수 · 화면 표시 없음) (정본 2026-11-03)
       partial:
         okPlaces < totalScenes
           ? {

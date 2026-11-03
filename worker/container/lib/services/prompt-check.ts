@@ -13,6 +13,12 @@ export function checkPrompt(prompt: string, imageCount: number): string[] {
   return e;
 }
 
+// 조각의 장면 대본 찾기 1벌 (운영·시험 도구가 같이 부름)
+export const sceneOf = (
+  scenes: SceneScript[],
+  clip: OmniClip,
+): SceneScript | undefined => scenes.find((x) => Number(x.n) === clip.index);
+
 // 대본 1벌 = 제미니 1회, 받은 그대로 · 응답이 {"scenes":[…]} 든 바로 [...] 든 받는다 (운영·시험 도구가 같이 부름)
 export async function scriptScenes(
   clips: OmniClip[],
@@ -23,7 +29,7 @@ export async function scriptScenes(
     ? (r as SceneScript[])
     : ((r as { scenes?: SceneScript[] } | null)?.scenes ?? []);
   const missing = clips
-    .filter((c) => !c.ending && !scenes.some((x) => Number(x.n) === c.index))
+    .filter((c) => !c.ending && !sceneOf(scenes, c))
     .map((c) => c.index);
   return { scenes, missing };
 }

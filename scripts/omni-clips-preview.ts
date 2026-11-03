@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-11-03 최적값 = 옴니 시험 도구 = 운영과 같은 대본(제미니 1회, --dry 는 안 부름)·옴니 조각 코드로 하루치를 동시에 만들고 이어 붙임, 조각은 R2 금고 시험 폴더, DB 기록·크레딧 없음 · --birth/--with/--count = 출연진 매트릭스 입력 3개만 바꿔 시험(계산은 운영 castForItinerary 그대로) (정본 2026-11-03)
+// ⚠️ 수정금지(승인필요) 2026-11-03 최적값 = 옴니 시험 도구 = 운영과 같은 대본(제미니 1회, --dry 는 안 부름)·장면 찾기·나가는 지시문 검사·옴니 조각 코드로 하루치를 동시에 만들고 이어 붙임, 조각은 R2 금고 시험 폴더, DB 기록·크레딧 없음 · --birth/--with/--count = 출연진 매트릭스 입력 3개만 바꿔 시험(계산은 운영 castForItinerary 그대로) (정본 2026-11-03)
 // 사용: npx tsx --env-file=.env scripts/omni-clips-preview.ts <여정번호> <일차> <저장폴더> [조각번호들 예: 1,2 또는 all] [언어 ko|en|fr|ja|zh|es|de] [--dry] [--birth=YYYY-MM-DD --with=Family --count=4] [--guide=f]
 import fs from "fs";
 import path from "path";
@@ -23,7 +23,11 @@ import {
   clipTitle,
   type SceneScript,
 } from "../worker/container/lib/services/omni-day-clips";
-import { scriptScenes } from "../worker/container/lib/services/prompt-check";
+import {
+  checkPrompt,
+  sceneOf,
+  scriptScenes,
+} from "../worker/container/lib/services/prompt-check";
 import { geminiTextJson } from "../worker/container/lib/services/shared/gemini-text";
 import { GHIBLI_CHARACTER_ROSTER_18 } from "../worker/container/lib/services/character-roster-ghibli";
 import {
@@ -124,13 +128,8 @@ async function main() {
     dry
       ? chosen.filter((c) => c.ending)
       : chosen.filter((c) => !skipped.includes(c))
-  ).map((clip) => {
-    const req = omniClipRequest(
-      clip,
-      cast,
-      scenes.find((s) => Number(s.n) === clip.index),
-      clipOpts,
-    );
+  ).flatMap((clip) => {
+    const req = omniClipRequest(clip, cast, sceneOf(scenes, clip), clipOpts);
     const name = `조각${clip.index}_${lang}`;
     fs.writeFileSync(
       path.join(outDir, `${name}_지시문.txt`),
@@ -138,10 +137,18 @@ async function main() {
         .map((im, i) => `<IMAGE_REF_${i}> ${im.path || im.url}`)
         .join("\n")}\n`,
     );
+    // 운영(generate.ts)과 같은 나가는 지시문 검사 = 걸리면 그 조각은 옴니에 안 보냄
+    const errs = checkPrompt(req.prompt, req.images.length);
+    if (errs.length) {
+      console.log(
+        `조각 ${clip.index} 지시문 검사 실패(옴니 안 보냄): ${errs.join(" · ")}`,
+      );
+      return [];
+    }
     console.log(
       `조각 ${clip.index} 지시문 저장 (${clip.slots.length}곳${clip.ending ? " + 배웅" : ""}, ${clip.seconds}초, 그림 ${req.images.length}장)`,
     );
-    return { clip, req, name };
+    return [{ clip, req, name }];
   });
   if (dry) return;
 
