@@ -66,48 +66,72 @@ export async function generateSceneClip(
     },
   };
 
-  let interaction: any = await withQuotaRetry(
-    async () => {
-      const res = await fetch(`${API_BASE}/interactions`, {
-        method: "POST",
-        headers: {
-          "x-goog-api-key": opts.apiKey,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(POLL_TIMEOUT_MS),
-      });
-      const json: any = await res.json();
-      const text = JSON.stringify(json);
-      if (res.status === 429 && /per ?day/i.test(text))
-        throw new Error(
-          `[video-gen] Omni 하루 한도(quota) 도달 = 다시 보내지 않음 (${text.match(/"quotaId":"([^"]+)"/)?.[1] || "per day"})`,
-        );
-      if (!res.ok) {
-        const err: Error & { status?: number } = new Error(
-          `[video-gen] Omni ${res.status}: ${text.slice(0, 500)}`,
-        );
-        err.status = res.status;
-        throw err;
-      }
-      return json;
-    },
-    { delaysMs: PER_MINUTE_RETRY_MS, label: "omni" },
-  );
+  const requestMeta = {
+    model: OMNI_MODEL,
+    prompt,
+    referenceImages: opts.referenceImages.map((i) => i.path || i.url),
+    aspectRatio,
+    resolution,
+    task,
+  };
+  // ⚠️ 수정금지(승인필요) 2026-11-03 최적값 = 옴니가 요청을 거절하거나 기다리다 끊기면 그 오류 원문도 §18 raw 로 남긴 뒤 던진다 (정본 2026-11-03)
+  let interaction: any;
+  try {
+    interaction = await withQuotaRetry(
+      async () => {
+        const res = await fetch(`${API_BASE}/interactions`, {
+          method: "POST",
+          headers: {
+            "x-goog-api-key": opts.apiKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(POLL_TIMEOUT_MS),
+        });
+        const json: any = await res.json();
+        const text = JSON.stringify(json);
+        if (res.status === 429 && /per ?day/i.test(text))
+          throw new Error(
+            `[video-gen] Omni 하루 한도(quota) 도달 = 다시 보내지 않음 (${text.match(/"quotaId":"([^"]+)"/)?.[1] || "per day"})`,
+          );
+        if (!res.ok) {
+          const err: Error & { status?: number } = new Error(
+            `[video-gen] Omni ${res.status}: ${text.slice(0, 500)}`,
+          );
+          err.status = res.status;
+          throw err;
+        }
+        return json;
+      },
+      { delaysMs: PER_MINUTE_RETRY_MS, label: "omni" },
+    );
 
-  const started = Date.now();
-  while (
-    interaction?.status &&
-    interaction.status !== "completed" &&
-    interaction.status !== "failed"
-  ) {
-    if (Date.now() - started > POLL_TIMEOUT_MS)
-      throw new Error(`[video-gen] 폴링 타임아웃(10분): ${interaction?.id}`);
-    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-    const pr = await fetch(`${API_BASE}/interactions/${interaction.id}`, {
-      headers: { "x-goog-api-key": opts.apiKey },
-    });
-    interaction = await pr.json();
+    const started = Date.now();
+    while (
+      interaction?.status &&
+      interaction.status !== "completed" &&
+      interaction.status !== "failed"
+    ) {
+      if (Date.now() - started > POLL_TIMEOUT_MS)
+        throw new Error(`[video-gen] 폴링 타임아웃(10분): ${interaction?.id}`);
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+      const pr = await fetch(`${API_BASE}/interactions/${interaction.id}`, {
+        headers: { "x-goog-api-key": opts.apiKey },
+      });
+      interaction = await pr.json();
+    }
+  } catch (e) {
+    await saveRaw({
+      source: "gemini",
+      contextId: opts.contextId,
+      tag: `${opts.rawTag || "omni-clip"}-rejected`,
+      request: requestMeta,
+      raw: {
+        error: String((e as Error)?.message || e),
+        status: (e as any)?.status ?? null,
+      },
+    }).catch(() => {});
+    throw e;
   }
 
   // §18 = 유료호출 메타 저장 (base64 영상 바이트는 제외 = 재현용 메타만. 영상 원본 = R2 videos 금고가 보존)
@@ -115,14 +139,7 @@ export async function generateSceneClip(
     source: "gemini",
     contextId: opts.contextId,
     tag: opts.rawTag || "omni-clip",
-    request: {
-      model: OMNI_MODEL,
-      prompt,
-      referenceImages: opts.referenceImages.map((i) => i.path || i.url),
-      aspectRatio,
-      resolution,
-      task,
-    },
+    request: requestMeta,
     raw: stripVideoBytes(interaction),
   });
 

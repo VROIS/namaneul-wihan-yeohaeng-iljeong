@@ -18,6 +18,7 @@ import {
   type OmniClip,
   type SceneScript,
 } from "./lib/services/omni-day-clips";
+import { checkPrompt, scriptScenes } from "./lib/services/prompt-check";
 import { geminiTextJson } from "./lib/services/shared/gemini-text";
 import {
   castFor,
@@ -32,7 +33,7 @@ import { uploadToR2, isR2Configured } from "./lib/services/shared/r2-client";
 import { chargeOnSuccess } from "@shared/credits";
 import { fileStamp, itineraryContext } from "../../shared/r2-paths";
 
-// ⚠️ 수정금지(승인필요) 2026-09-14 사장님 결정 = **씬 1개가 죽은 사유표(키)** 전용 = 화면이 tripisVideo.partialReason.<키> 로 번역한다. 여정 전체 실패 사유는 이걸 쓰지 않고 예외 문장 원문을 쓴다(운영 동일) (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-11-03 최적값 = 조각 실패 사유 키 = DB 기록용(화면 표시 없음) (정본 2026-11-03)
 function userReason(e: unknown): string {
   const m = String((e as Error)?.message || e);
   if (/429|RESOURCE_EXHAUSTED|quota/i.test(m)) return "quota";
@@ -90,27 +91,44 @@ export async function runDayVideo(job: DayVideoJob): Promise<void> {
       startDate: (itin.rawData as any)?.startDate,
       translations,
       root: process.cwd(),
+      transport: meta.transport,
     };
-    // ⚠️ 수정금지(승인필요) 2026-11-01 사장님 지시 "플로우 안에 있는 모델과 같이 맞춰서 한 벌 더" = 지금 코드: 장면 대본 = 영상 한 편에 제미니 1회(장소마다 전경·동작·카메라·소리·대사 2줄) (정본 2026-11-01)
-    const { scenes } = await geminiTextJson<{ scenes: SceneScript[] }>(
-      sceneScriptPrompt(clips, cast, clipOpts),
-      {
+    // ⚠️ 수정금지(승인필요) 2026-11-03 최적값 = 장면 대본 = 제미니 1회 받은 그대로(재요청 없음) → 그 장면 대본이 안 온 조각만 빠짐 (정본 2026-11-03)
+    const { scenes, missing } = await scriptScenes(clips, () =>
+      geminiTextJson(sceneScriptPrompt(clips, cast, clipOpts), {
         apiKey,
         contextId: itineraryContext(itin.cityId, id),
         rawTag: `scene-script-i${id}-d${day}-${lang}`,
-      },
+      }),
     );
+    const sceneOf = (clip: OmniClip, list: SceneScript[]) =>
+      list.find((x) => Number(x.n) === clip.index);
     const reasons: (string | null)[] = clips.map(() => null);
+    for (const [i, c] of clips.entries()) {
+      if (missing.includes(c.index)) {
+        console.error(`[video] ${taskId} 조각${c.index} 장면 대본 없음`);
+        reasons[i] = "scene";
+      }
+    }
     let done = 0;
     // 조각 하나 실패해도 전체 폐기 금지 = 성공한 조각만 모아 완성(사장님 SSOT 2026-07-23 = 사용자를 마냥 기다리게 안 함).
     const made = await Promise.all(
       clips.map(async (clip, i): Promise<MadeClip | null> => {
+        if (reasons[i]) return null;
         const req = omniClipRequest(
           clip,
           cast,
-          scenes.find((s) => Number(s.n) === clip.index),
+          sceneOf(clip, scenes),
           clipOpts,
         );
+        const promptErrs = checkPrompt(req.prompt, req.images.length);
+        if (promptErrs.length) {
+          console.error(
+            `[video] ${taskId} 조각${clip.index} 지시문 검사 실패(옴니 안 보냄): ${promptErrs.join(" · ")}`,
+          );
+          reasons[i] = "scene";
+          return null;
+        }
         try {
           const buf = await generateSceneClip(req.prompt, {
             apiKey,

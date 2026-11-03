@@ -33,6 +33,8 @@ COPY assets/characters ./assets/characters
 COPY assets/vehicles ./assets/vehicles
 #   video-stitcher.ts 지명 타이포그래피 글꼴 = assets/fonts/Cousine-Bold.ttf (2026-11-01 사장님 1번)
 COPY assets/fonts/Cousine-Bold.ttf ./assets/fonts/Cousine-Bold.ttf
+#   omni-day-clips.ts 지시문 글자 = worker/container/prompts/*.txt·json (2026-11-03 최적값)
+COPY worker/container/prompts ./worker/container/prompts
 
 # 리눅스 안 실제 시험 = 운영 이어 붙이기·지명 새기기(실패 = 빌드 실패) · 시험 파일은 지운다
 RUN node dist/selftest.cjs && rm dist/selftest.cjs

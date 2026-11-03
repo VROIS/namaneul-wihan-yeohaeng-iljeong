@@ -1,0 +1,3 @@
+{{PLACE}}, {{CITY}}, {{LIGHT}}; {{FOREGROUND}} in the foreground.{{CAR}} {{ACTION}} {{CAMERA}}.
+SFX: {{SFX}}
+{{LINES}}

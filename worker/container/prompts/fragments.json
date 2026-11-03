@@ -1,0 +1,26 @@
+{
+  "placeRef": " <IMAGE_REF_{{I}}> the real place.",
+  "carRef": " <IMAGE_REF_{{I}}> the guide's car.",
+  "carScene": " The guide's car is parked nearby.",
+  "extra": " {{N}} more of the group stand behind them.",
+  "age": {
+    "kids": "a child about ten years old",
+    "teen": "a teenager about fifteen years old",
+    "20s": "in {{HIS}} twenties",
+    "30s": "in {{HIS}} thirties",
+    "40s": "in {{HIS}} forties",
+    "50s": "in {{HIS}} fifties",
+    "60s": "in {{HIS}} sixties",
+    "guide": "in {{HIS}} forties"
+  },
+  "ageShort": {
+    "kids": "child",
+    "teen": "teen",
+    "20s": "20s",
+    "30s": "30s",
+    "40s": "40s",
+    "50s": "50s",
+    "60s": "60s",
+    "guide": "40s"
+  }
+}

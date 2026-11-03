@@ -20,8 +20,6 @@ export interface DayVideo {
   scenesDone: number;
   totalScenes: number;
   error?: string; // 실패 사유(서버 예외 문구 그대로 = 뭉개기 금지 SSOT, 2026-08-06)
-  // ⚠️ 수정금지(승인필요) 2026-09-14 사장님 결정 = 완성본인데 씬이 빠진 경우 = 숫자와 사유표만(문장은 여기서 번역) (정본 §)
-  partial?: { skipped: number; total: number; reason: string };
 }
 
 interface Props {
@@ -107,23 +105,7 @@ export default function VideoPlaySlot({
             shouldPlay
             isLooping
           />
-          {/* ⚠️ 수정금지(승인필요) 2026-11-01 사장님 지시 "유리카드처럼 생긴 그거 다 삭제하고" = 지금 코드: 위쪽 묶음 = 빠진 씬 안내만 · 하단은 재생 조작막대 자리 (정본 2026-11-01) */}
-          <View style={styles.overlayTop} pointerEvents="none">
-            {!!dayVideo.partial && (
-              <View style={styles.partialNote}>
-                <Icon name="alert-circle" size={13} color="#fcd34d" />
-                <Text style={styles.partialNoteText} numberOfLines={2}>
-                  {t("tripisVideo.partialWithReason", {
-                    skipped: dayVideo.partial.skipped,
-                    total: dayVideo.partial.total,
-                    reason: t(
-                      `tripisVideo.partialReason.${dayVideo.partial.reason}`,
-                    ),
-                  })}
-                </Text>
-              </View>
-            )}
-          </View>
+          {/* ⚠️ 수정금지(승인필요) 2026-11-03 최적값 = 영상 위 안내 없음(빠진 장소 수는 DB 기록만) (정본 2026-11-03) */}
         </View>
       ) : dayVideo?.status === "processing" ? (
         // ⏳ 생성중 = 진행률. 문구 = 2026-08-03 사장님 교체('지브리' 폐기 §19) + 나가도 됨 안내(백그라운드 진행).
@@ -197,29 +179,6 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
   playerBox: { flex: 1 },
   player: { width: "100%", height: "100%" },
-  // ⚠️ 수정금지(승인필요) 2026-09-14 사장님 결정 = 위쪽 겹침판(top 104 = 오버레이 칩줄 아래) = 글라스 씬카드 + 빠진 씬 안내가 이 안에서 위아래로 흐른다(하단 조작막대 자리 침범 없음) (정본 §)
-  overlayTop: {
-    position: "absolute",
-    left: 14,
-    right: 14,
-    top: 104,
-    gap: 8,
-  },
-  partialNote: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    backgroundColor: "rgba(0,0,0,0.55)",
-  },
-  partialNoteText: {
-    flex: 1,
-    color: "#fde68a",
-    fontSize: 12,
-    lineHeight: 17,
-  },
   progressText: {
     color: "#FFFFFF",
     fontSize: 16,

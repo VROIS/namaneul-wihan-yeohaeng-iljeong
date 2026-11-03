@@ -79,6 +79,9 @@ export async function tripInputs(itin: Record<string, any>) {
   // ⚠️ 수정금지(승인필요) 2026-11-02 사장님 지시 "그 매트릭스대로 들어가야지. 옛 것을 왜 살려" = 지금 코드: 캐스팅 재료 = 누구랑·인원 2개(rawData 우선) · 나이 = 생년월일 매트릭스 (정본 2026-11-01)
   for (const k of ["companionType", "companionCount"])
     if (_omit?.[k] != null) meta[k] = _omit[k];
+  // ⚠️ 수정금지(승인필요) 2026-11-03 최적값 = 영상 이동 분기 = 여정 매트릭스 metadata.transportCategory 단일 소스(guide 만 가이드 차, 그 밖은 대중교통) (정본 2026-11-03)
+  meta.transport =
+    _omit?.metadata?.transportCategory === "guide" ? "guide" : "transit";
   return { user, meta };
 }
 

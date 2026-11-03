@@ -1,0 +1,2 @@
+{{REFS}}: 3D animated characters (Pixar-like), never photoreal.{{PLACE_REF}}{{CAR_REF}}
+Photorealistic travel film, one continuous 10-second vertical shot. Exactly these {{COUNT}} people.{{EXTRA}} No on-screen text. {{LANG}} dialogue, lips in sync.

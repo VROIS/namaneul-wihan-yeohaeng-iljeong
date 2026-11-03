@@ -397,15 +397,7 @@
     "genNotice": "Tarda unos 4-5 min — puedes salir mientras se está creando.\nCuando esté lista, aparecerá en el botón TRIPIS de abajo.",
     "failWithReason": "Error al generar: {{reason}}",
     "failGeneric": "La generación anterior falló. Inténtalo de nuevo.",
-    "notYet": "Aún no hay vídeo del día {{d}}",
-    "partialWithReason": "{{skipped}} de {{total}} escenas omitidas: {{reason}}",
-    "partialReason": {
-      "quota": "Límite diario alcanzado",
-      "timeout": "Tiempo agotado",
-      "storage": "No se pudo guardar",
-      "image": "No se pudo dibujar",
-      "scene": "No se pudo crear"
-    }
+    "notYet": "Aún no hay vídeo del día {{d}}"
   },
   "errorFallback": {
     "title": "Ocurrió un problema en TRIPIS",
