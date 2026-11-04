@@ -5,8 +5,11 @@ type Id = number | string;
 export const fileStamp = (d: Date = new Date()): string =>
   d.toISOString().slice(0, 19).replace("T", "_").replace(/:/g, "");
 
+const STAMP_HEAD = /^\d{4}-\d{2}-\d{2}_\d{6}_/;
+const STAMPED = new RegExp(`${STAMP_HEAD.source}(.+)\\.[^.]+$`);
+
 export const stampedName = (fileName: string): string | null =>
-  fileName.match(/^\d{4}-\d{2}-\d{2}_\d{6}_(.+)\.[^.]+$/)?.[1] ?? null;
+  fileName.match(STAMPED)?.[1] ?? null;
 
 export const laterKey = (a: string, b: string): string =>
   b.slice(b.lastIndexOf("/")) > a.slice(a.lastIndexOf("/")) ? b : a;
@@ -88,5 +91,6 @@ export const adminMetricsKey = (date: string): string =>
 // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 관리자 화면 저장본 최신 1개 = 관리 통계 장부와 같은 예외(시각 접두 없이 덮어쓰기) (정본 §)
 export const adminSnapshotKey = "system/admin-metrics/latest.json";
 
+// ⚠️ 수정금지(승인필요) 2026-11-04 최적값 = 도시 보고서 이름도 맨 앞 = 시각 초까지(이름에 시각이 없으면 올리는 순간의 시각을 붙인다) (정본 2026-11-04)
 export const cityReportKey = (cityId: Id, fileName: string): string =>
-  `${cityId}/reports/${fileName}`;
+  `${cityId}/reports/${STAMP_HEAD.test(fileName) ? fileName : `${fileStamp()}_${fileName}`}`;

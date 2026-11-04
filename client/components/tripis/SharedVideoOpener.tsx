@@ -16,6 +16,29 @@ function readOnce(): TripisOpenParams | null {
 
 const shared = readOnce();
 
+// ⚠️ 수정금지(승인필요) 2026-11-04 최적값 = 영상 창이 받은 여정의 도시 번호를 메인 화면에 한 번만 넘긴다(메인이 아직 없으면 맡아 뒀다가 붙을 때 넘김) = 메인이 그 도시를 검색창에 채움 (정본 2026-11-04)
+let passed = false;
+let heldCity: number | null = null;
+let listener: ((cityId: number) => void) | null = null;
+function passCity(cityId: number) {
+  if (passed) return;
+  passed = true;
+  if (listener) listener(cityId);
+  else heldCity = cityId;
+}
+export function listenSharedVideoCity(
+  fn: (cityId: number) => void,
+): () => void {
+  listener = fn;
+  if (heldCity != null) {
+    fn(heldCity);
+    heldCity = null;
+  }
+  return () => {
+    if (listener === fn) listener = null;
+  };
+}
+
 export default function SharedVideoOpener() {
   const [params, setParams] = useState(shared);
   return (
@@ -23,6 +46,7 @@ export default function SharedVideoOpener() {
       visible={params !== null}
       params={params}
       onClose={() => setParams(null)}
+      onCity={passCity}
     />
   );
 }

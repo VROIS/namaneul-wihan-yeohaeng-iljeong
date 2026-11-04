@@ -80,6 +80,7 @@ interface Props {
   params: TripisOpenParams | null;
   onClose(): void;
   onCreateTrip?(): void;
+  onCity?(cityId: number): void;
 }
 
 export default function TripisModal({
@@ -87,6 +88,7 @@ export default function TripisModal({
   params,
   onClose,
   onCreateTrip,
+  onCity,
 }: Props) {
   if (!visible || !params) return null;
   return (
@@ -95,6 +97,7 @@ export default function TripisModal({
         params={params}
         onClose={onClose}
         onCreateTrip={onCreateTrip}
+        onCity={onCity}
       />
     </Modal>
   );
@@ -104,10 +107,12 @@ function TripisModalInner({
   params,
   onClose,
   onCreateTrip,
+  onCity,
 }: {
   params: TripisOpenParams;
   onClose(): void;
   onCreateTrip?(): void;
+  onCity?(cityId: number): void;
 }) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -146,13 +151,16 @@ function TripisModalInner({
         apiRequest("GET", itineraryUrl(itineraryId, i18n.language)),
         apiRequest("GET", `/api/itineraries/${itineraryId}/video`),
       ]);
-      setItinerary(await ir.json());
+      const it = await ir.json();
+      setItinerary(it);
+      // ⚠️ 수정금지(승인필요) 2026-11-04 최적값 = 받은 여정의 도시 번호를 여는 쪽에 넘긴다(영상 링크 → 메인 검색창 = 같은 조회 한 번) (정본 2026-11-04)
+      if (it?.cityId) onCity?.(it.cityId);
       const v = await vr.json();
       setVideoByDay(v.videoByDay || {});
     } catch (e) {
       console.error("[TripisModal] 로드 오류:", e);
     }
-  }, [itineraryId, viewMode]);
+  }, [itineraryId, viewMode, onCity]);
 
   useEffect(() => {
     loadAll();

@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-11-03 최적값 = 옴니 시험 도구 = 운영과 같은 대본(제미니 1회, --dry 는 안 부름)·장면 찾기·나가는 지시문 검사·옴니 조각 코드로 하루치를 동시에 만들고 이어 붙임, 조각은 R2 금고 시험 폴더, DB 기록·크레딧 없음 · --birth/--with/--count = 출연진 매트릭스 입력 3개만 바꿔 시험(계산은 운영 castForItinerary 그대로) (정본 2026-11-03)
+// ⚠️ 수정금지(승인필요) 2026-11-04 최적값 = 옴니 시험 도구 = 운영과 같은 대본(제미니 1회, --dry 는 안 부름)·장면 찾기·나가는 지시문 검사·옴니 조각 코드로 하루치를 동시에 만들고 이어 붙임, 조각은 R2 금고 시험 폴더, DB 기록·크레딧 없음 · --birth/--with/--count = 출연진 매트릭스 입력 3개만 바꿔 시험(계산은 운영 castForItinerary 그대로) · 제미니 대본·옴니 지시문 원본 = 운영과 같이 그 여정 도시 폴더(언어별 파일) (정본 2026-11-04)
 // 사용: npx tsx --env-file=.env scripts/omni-clips-preview.ts <여정번호> <일차> <저장폴더> [조각번호들 예: 1,2 또는 all] [언어 ko|en|fr|ja|zh|es|de] [--dry] [--birth=YYYY-MM-DD --with=Family --count=4] [--guide=f]
 import fs from "fs";
 import path from "path";
@@ -11,7 +11,7 @@ import {
   concatClips,
 } from "../worker/container/lib/services/video-stitcher";
 import { uploadToR2 } from "../worker/container/lib/services/shared/r2-client";
-import { fileStamp } from "../shared/r2-paths";
+import { fileStamp, itineraryContext } from "../shared/r2-paths";
 import {
   MAX_SCENES,
   castForItinerary,
@@ -109,7 +109,7 @@ async function main() {
             fileStamp().slice(0, 10),
             true,
           ),
-          contextId: null,
+          contextId: itineraryContext(itin.cityId, id),
           rawTag: `omni-preview-script-i${id}-d${day}-${lang}`,
         }),
       );
@@ -171,7 +171,7 @@ async function main() {
           referenceImages: req.images,
           aspectRatio: "9:16",
           seconds: clip.seconds,
-          contextId: null,
+          contextId: itineraryContext(itin.cityId, id),
           rawTag: `omni-preview-i${id}-d${day}-c${clip.index}-${lang}`,
         });
         fs.writeFileSync(path.join(outDir, `${name}.mp4`), buf);
