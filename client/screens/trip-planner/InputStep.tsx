@@ -28,6 +28,7 @@ import TripisModal, { type RepCard } from "@/components/tripis/TripisModal";
 import type { PlannerApi } from "./hooks/useTripPlanner";
 import { apiRequest } from "@/lib/query-client";
 import { takeCityFromUrl } from "@/lib/cityLink";
+import { takeBtsFromUrl } from "@/lib/btsLink";
 import { cityDestination, useVideoLinkCity } from "./hooks/useVideoLinkCity";
 import { fitTextProps } from "./utils";
 import GenerateButtons from "./components/GenerateButtons";
@@ -119,6 +120,11 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
     if (city) void cityPressRef.current(city);
   }, [readyCities]);
   useVideoLinkCity(readyCities, setFormData, lastCityRef);
+  // ⚠️ 수정금지(승인필요) 2026-11-05 사장님 결정 = 링크 `?bts` = 메인이 뜬 뒤 BTS 랜딩으로 바로(BTS 버튼과 같은 이동) (정본 2026-11-05)
+  useEffect(() => {
+    if (navigation && takeBtsFromUrl())
+      (navigation as any).navigate("BTSLanding");
+  }, [navigation]);
 
   const renderSectionHeader = (title: string, subtitle: string) => (
     <View style={styles.sectionHeader}>
