@@ -1,11 +1,11 @@
-// ⚠️ 수정금지(승인필요) 2026-10-28 사장님 결정 = 영상 조각 = 옴니 1.1 플래시 1벌(앱 = 360p·참고 그림 기본값, 홍보 = 화질·첫 화면 방식 선택), 분당 한도 거절만 1분 뒤 다시 보냄·하루 한도 거절은 바로 실패 (정본 큰 일 4)
+// ⚠️ 수정금지(승인필요) 2026-11-05 사장님 결정 = 영상 조각 = 옴니 1.2 플래시 1벌(앱 = 360p·참고 그림 기본값, 홍보 = 화질·첫 화면 방식 선택) · 조각 길이 = 요청에 초 지정 · 분당 한도 거절만 1분 뒤 다시 보냄·하루 한도 거절은 바로 실패 (정본 2026-11-05)
 
 import fs from "fs";
 import { recordExternalCall, precheck } from "./external-call-log";
 import { saveRaw } from "./save-raw";
 import { withQuotaRetry } from "./retry-429"; // 429 재시도 1벌(2026-08-06 §16 승격)
 
-const OMNI_MODEL = "gemini-omni-1.1-flash";
+const OMNI_MODEL = "gemini-omni-1.2-flash";
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const POLL_INTERVAL_MS = 5000;
 const POLL_TIMEOUT_MS = 10 * 60 * 1000; // 조각 1개 생성 폴링 상한 10분
@@ -17,7 +17,7 @@ export interface SceneClipOpts {
   aspectRatio?: "9:16" | "16:9"; // 디폴트 9:16 세로 숏폼
   resolution?: "360p" | "720p"; // 디폴트 360p (앱 하루 영상)
   task?: "reference_to_video" | "image_to_video"; // 디폴트 참고 그림 방식, image_to_video = 첫 그림이 첫 화면
-  seconds: number; // 조각 길이(초) = 비용 장부 단위
+  seconds: number; // 조각 길이(초) = 옴니 요청 길이 = 비용 장부 단위
   contextId?: string | number | null; // §18 raw 저장 맥락 (cityId)
   rawTag?: string | null; // §18 파일명 태그
 }
@@ -63,6 +63,7 @@ export async function generateSceneClip(
       delivery: "uri",
       aspect_ratio: aspectRatio,
       resolution,
+      duration: `${opts.seconds}s`,
     },
   };
 
@@ -73,6 +74,7 @@ export async function generateSceneClip(
     aspectRatio,
     resolution,
     task,
+    duration: `${opts.seconds}s`,
   };
   // ⚠️ 수정금지(승인필요) 2026-11-03 최적값 = 옴니가 요청을 거절하거나 기다리다 끊기면 그 오류 원문도 §18 raw 로 남긴 뒤 던진다 (정본 2026-11-03)
   let interaction: any;

@@ -26,8 +26,8 @@ export const HELP_FAQ: { icon: string; q: Bi; a: Bi }[] = [
       en: "Where and how much are credits used?",
     },
     a: {
-      ko: "기능별로 정해진 만큼만 차감돼요 — 여정 생성 5 · AI 의견 5 · Tripis 해설 5 · 전문가 검증 10 · 여행 영상 제작 60. 가입하면 50 크레딧을 무료로 드리고, 부족하면 프로필 > 결제 관리에서 충전(€10 = 140 크레딧)할 수 있어요.",
-      en: "Each feature deducts a fixed amount — trip generation 5, AI opinion 5, Tripis narration 5, expert verification 10, and trip video creation 60. You get 50 free credits when you sign up, and if you run low, you can top up (€10 = 140 credits) from Profile > Payment.",
+      ko: "기능별로 정해진 만큼만 차감돼요 — 여정 생성 5 · AI 의견 5 · Tripis 해설 5 · 전문가 검증 10 · 여행 영상 제작 50. 가입하면 50 크레딧을 무료로 드리고, 부족하면 프로필 > 결제 관리에서 충전(€10 = 140 크레딧)할 수 있어요.",
+      en: "Each feature deducts a fixed amount — trip generation 5, AI opinion 5, Tripis narration 5, expert verification 10, and trip video creation 50. You get 50 free credits when you sign up, and if you run low, you can top up (€10 = 140 credits) from Profile > Payment.",
     },
   },
   {
@@ -59,8 +59,8 @@ export const HELP_FAQ: { icon: string; q: Bi; a: Bi }[] = [
       en: 'What does the "trip animation" feature for a day\'s itinerary do?',
     },
     a: {
-      ko: "여정 화면 우측 상단의 영상 버튼을 누르면, 그 날 일정을 애니메이션 영상으로 만들 수 있어요(60크레딧, 약 4~5분 소요). 만드는 동안 앱을 나가거나 다른 화면을 봐도 괜찮아요 — 완성되면 하단 [Tripis] 탭에 빨간 알림이 뜨고, 눌러보면 완성된 영상이 프로필에 자동으로 올라와 있어요. 이미 만들어진 영상이 있는 날짜는 다시 만들 필요 없이 바로 감상하거나 [저장]으로 내 프로필에 담을 수 있어요.",
-      en: "Tap the video button at the top right of the trip screen to turn that day's itinerary into an animated video (60 credits, takes about 4-5 minutes). You can leave the app or view other screens while it's being made — once it's done, a red badge appears on the [Tripis] tab at the bottom, and the finished video is automatically added to your profile. For a day that already has a video, you don't need to make it again — you can watch it right away or use [Save] to add it to your profile.",
+      ko: "여정 화면 우측 상단의 영상 버튼을 누르면, 그 날 일정을 애니메이션 영상으로 만들 수 있어요(50크레딧, 약 2~3분 소요). 만드는 동안 앱을 나가거나 다른 화면을 봐도 괜찮아요 — 완성되면 하단 [Tripis] 탭에 빨간 알림이 뜨고, 눌러보면 완성된 영상이 프로필에 자동으로 올라와 있어요. 이미 만들어진 영상이 있는 날짜는 다시 만들 필요 없이 바로 감상하거나 [저장]으로 내 프로필에 담을 수 있어요.",
+      en: "Tap the video button at the top right of the trip screen to turn that day's itinerary into an animated video (50 credits, takes about 2-3 minutes). You can leave the app or view other screens while it's being made — once it's done, a red badge appears on the [Tripis] tab at the bottom, and the finished video is automatically added to your profile. For a day that already has a video, you don't need to make it again — you can watch it right away or use [Save] to add it to your profile.",
     },
   },
   {

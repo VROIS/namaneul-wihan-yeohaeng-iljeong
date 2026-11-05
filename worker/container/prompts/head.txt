@@ -1,2 +1,2 @@
-{{REFS}}: 3D animated characters (Pixar-like), never photoreal.{{PLACE_REF}}{{CAR_REF}}
-Photorealistic travel film, one continuous 10-second vertical shot. Exactly these {{COUNT}} people.{{EXTRA}} No on-screen text. {{LANG}} dialogue, lips in sync.
+{{REFS}}: 3D animated characters (Pixar-like), never photoreal.{{CAR_REF}}
+3D animated travel film (Pixar-like), one {{SECONDS}}-second vertical clip: people and places are all 3D animation, never photoreal; each place keeps the recognizable features of its real look (buildings, landmarks). Each timed part below is one continuous shot at its own place, joined by a quick cut. Exactly these {{COUNT}} people.{{EXTRA}} No on-screen text. {{LANG}} dialogue, lips in sync.

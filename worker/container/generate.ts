@@ -11,17 +11,13 @@ import {
   omniClips,
   omniClipRequest,
   sceneScriptPrompt,
-  clipTitle,
+  clipTitles,
   clipKey,
   dayVideoKey,
   slotPlaceId,
   type OmniClip,
 } from "./lib/services/omni-day-clips";
-import {
-  checkPrompt,
-  sceneOf,
-  scriptScenes,
-} from "./lib/services/prompt-check";
+import { checkPrompt, scriptScenes } from "./lib/services/prompt-check";
 import { geminiTextJson } from "./lib/services/shared/gemini-text";
 import {
   castFor,
@@ -116,12 +112,7 @@ export async function runDayVideo(job: DayVideoJob): Promise<void> {
     const made = await Promise.all(
       clips.map(async (clip, i): Promise<MadeClip | null> => {
         if (reasons[i]) return null;
-        const req = omniClipRequest(
-          clip,
-          cast,
-          sceneOf(scenes, clip),
-          clipOpts,
-        );
+        const req = omniClipRequest(clip, cast, scenes, clipOpts);
         const promptErrs = checkPrompt(req.prompt, req.images.length);
         if (promptErrs.length) {
           console.error(
@@ -179,7 +170,7 @@ export async function runDayVideo(job: DayVideoJob): Promise<void> {
       ok.map((m) => m.buf),
       dayVideoKey(city.folder, day, stamp),
       ok.reduce((n, m) => n + m.clip.seconds, 0),
-      ok.map((m) => clipTitle(m.clip, city.name)),
+      ok.map((m) => clipTitles(m.clip)),
     );
     await setDayVideo(id, day, {
       status: "succeeded",

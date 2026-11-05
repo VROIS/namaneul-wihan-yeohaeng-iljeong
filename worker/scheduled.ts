@@ -6,7 +6,12 @@ import { appendTick } from "./lib/services/shared/metrics-heartbeat";
 import { runSnapshotTick } from "./admin-snapshot";
 import { refreshKakaoJwks } from "./routes-social-auth";
 import { cleanupDeletedAccounts } from "./lib/services/account-cleanup";
-import { youtubePromoTick } from "./admin-promo";
+import {
+  instagramPromoTick,
+  threadsPromoTick,
+  tiktokPromoTick,
+  youtubePromoTick,
+} from "./admin-promo";
 
 const KAKAO_JWKS_CRON = "0 3 * * *";
 const ACCOUNT_CLEANUP_CRON = "30 4 * * *";
@@ -37,13 +42,20 @@ async function kakaoJwksTick(): Promise<void> {
   }
 }
 
-// ⚠️ 수정금지(승인필요) 2026-11-05 사장님 결정 = 홍보 탭 유튜브 숫자 = 매시 정각 자동 (정본 2026-11-05)
+// ⚠️ 수정금지(승인필요) 2026-11-05 사장님 결정 = 홍보 탭 유튜브·틱톡·인스타·스레드 숫자 = 매시 정각 자동, 한쪽이 실패해도 다른 쪽은 돈다 (정본 2026-11-05)
 async function promoTick(): Promise<void> {
-  try {
-    const n = await withEngineDb(() => youtubePromoTick(db!));
-    console.log(`[홍보] 유튜브 숫자 기록 = ${n}편`);
-  } catch (e) {
-    console.warn("[홍보] 유튜브 숫자 기록 실패:", (e as Error).message);
+  for (const [name, tick] of [
+    ["유튜브", youtubePromoTick],
+    ["틱톡", tiktokPromoTick],
+    ["인스타", instagramPromoTick],
+    ["스레드", threadsPromoTick],
+  ] as const) {
+    try {
+      const n = await withEngineDb(() => tick(db!));
+      console.log(`[홍보] ${name} 숫자 기록 = ${n}편`);
+    } catch (e) {
+      console.warn(`[홍보] ${name} 숫자 기록 실패:`, (e as Error).message);
+    }
   }
 }
 

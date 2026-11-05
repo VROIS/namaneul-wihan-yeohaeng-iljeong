@@ -65,7 +65,7 @@ export async function concatClips(
   }
 }
 
-// ⚠️ 수정금지(승인필요) 2026-11-01 사장님 지시 "두 줄 지명 괜찮아" · "50% 해야겠다" · "마지막에 떠 있는 것을 조금 더" = 지금 코드: 지명 타이포그래피 = Cousine Bold · 위 줄 지명(최대 86, 한 줄 안에 들어가게 축소) · 아래 줄 시각(52) · 왼쪽 위 · 타자기 초당 8글자 · 다 찍힌 뒤 4초 · 장면 10초 안에서 끝 (값 = 1080x1920 기준) (정본 2026-11-01)
+// ⚠️ 수정금지(승인필요) 2026-11-05 사장님 결정 = 지명 타이포그래피 = Cousine Bold · 위 줄 지명(최대 86, 한 줄 안에 들어가게 축소) · 아래 줄 시각(52) · 왼쪽 위 · 타자기 초당 8글자 · 다 찍힌 뒤 4초 · 장소 칸 7초 안에서 끝 (값 = 1080x1920 기준) (정본 2026-11-05)
 const TITLE = {
   size: 86,
   timeSize: 52,
@@ -75,7 +75,7 @@ const TITLE = {
   start: 0.4,
   hold: 4,
   fade: 0.4,
-  maxEnd: 9.6,
+  maxEnd: 6.8,
 };
 const FONT = () => path.join(process.cwd(), "assets/fonts/Cousine-Bold.ttf");
 // ⚠️ 수정금지(승인필요) 2026-11-01 사장님 지시 "360으로 가자. 전부 다 통일 … 옴니가 나오는 게 360이니까" = 지금 코드: 완성본 = 옴니 그대로 360x640 (지명 값은 1080 기준을 비율로 줄여 그린다) (정본 2026-11-01)
@@ -213,12 +213,30 @@ export async function burnTitles(
   }
 }
 
-// ⚠️ 수정금지(승인필요) 2026-11-01 사장님 지시 "유리카드처럼 생긴 그거 다 삭제하고 이거를 정본으로" = 지금 코드: 완성본 = 조각 길이 합으로 검사 → 조각마다 실제 길이로 지명 새김 → 도시별 폴더 주소에 저장 (정본 2026-11-01)
+export type ClipMarks = { title: ClipTitle; at: number }[];
+
+// ⚠️ 수정금지(승인필요) 2026-11-05 사장님 결정 = 조각 안 장소마다 지명 = 조각 실제 시작 + 칸 시작(0초·7초) 1벌 = 운영 업로드와 옴니 시험 도구가 같이 쓴다 (정본 2026-11-05)
+export function burnClipTitles(
+  video: Buffer,
+  marks: ClipMarks[],
+  starts: number[],
+): Promise<Buffer> {
+  const flat = marks.flatMap((ms, i) =>
+    ms.map((m) => ({ title: m.title, at: starts[i] + m.at })),
+  );
+  return burnTitles(
+    video,
+    flat.map((m) => m.title),
+    flat.map((m) => m.at),
+  );
+}
+
+// ⚠️ 수정금지(승인필요) 2026-11-05 사장님 결정 = 완성본 = 조각 길이 합으로 검사 → 조각 안 장소마다 실제 시각으로 지명 새김 → 도시별 폴더 주소에 저장 (정본 2026-11-05)
 export async function stitchAndUpload(
   clips: Buffer[],
   key: string,
   expectedSec: number,
-  titles: ClipTitle[],
+  marks: ClipMarks[],
 ): Promise<string> {
   const { buf, durationSec, starts } = await concatClips(clips);
   if (durationSec < expectedSec * 0.85)
@@ -227,7 +245,7 @@ export async function stitchAndUpload(
     );
   const up = await uploadToR2(
     key,
-    await burnTitles(buf, titles, starts),
+    await burnClipTitles(buf, marks, starts),
     "video/mp4",
   );
   return up.publicUrl;

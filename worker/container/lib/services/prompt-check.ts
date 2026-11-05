@@ -13,13 +13,13 @@ export function checkPrompt(prompt: string, imageCount: number): string[] {
   return e;
 }
 
-// 조각의 장면 대본 찾기 1벌 (운영·시험 도구가 같이 부름)
+// ⚠️ 수정금지(승인필요) 2026-11-05 사장님 결정 = 장면 대본 n = 장소 순번 · 장소의 장면 찾기 1벌 (정본 2026-11-05)
 export const sceneOf = (
   scenes: SceneScript[],
-  clip: OmniClip,
-): SceneScript | undefined => scenes.find((x) => Number(x.n) === clip.index);
+  placeNo: number,
+): SceneScript | undefined => scenes.find((x) => Number(x.n) === placeNo);
 
-// 대본 1벌 = 제미니 1회, 받은 그대로 · 응답이 {"scenes":[…]} 든 바로 [...] 든 받는다 (운영·시험 도구가 같이 부름)
+// 대본 1벌 = 제미니 1회, 받은 그대로 · 응답이 {"scenes":[…]} 든 바로 [...] 든 받는다 · 조각 안 장소 중 하나라도 대본이 없으면 그 조각만 빠짐 (운영·시험 도구가 같이 부름)
 export async function scriptScenes(
   clips: OmniClip[],
   ask: () => Promise<unknown>,
@@ -29,7 +29,7 @@ export async function scriptScenes(
     ? (r as SceneScript[])
     : ((r as { scenes?: SceneScript[] } | null)?.scenes ?? []);
   const missing = clips
-    .filter((c) => !c.ending && !sceneOf(scenes, c))
+    .filter((c) => c.placeNos.some((n) => !sceneOf(scenes, n)))
     .map((c) => c.index);
   return { scenes, missing };
 }

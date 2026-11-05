@@ -206,7 +206,7 @@ function TripisModalInner({
 
   const handleGenerate = async () => {
     if (itineraryId == null) return;
-    // 🔒 수정금지(승인필요) 2026-08-05 사장님 SSOT = 영상 만들기 = 로그인 필수(+60크레딧은 서버 1벌).
+    // ⚠️ 수정금지(승인필요) 2026-11-05 사장님 결정 = 영상 만들기 = 로그인 필수(크레딧 차감은 서버 단가표 1벌) (정본 2026-11-05)
     if (!isAuthed) {
       onClose();
       requestLogin();

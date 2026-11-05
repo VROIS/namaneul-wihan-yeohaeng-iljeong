@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-11-04 최적값 = 옴니 시험 도구 = 운영과 같은 대본(제미니 1회, --dry 는 안 부름)·장면 찾기·나가는 지시문 검사·옴니 조각 코드로 하루치를 동시에 만들고 이어 붙임, 조각은 R2 금고 시험 폴더, DB 기록·크레딧 없음 · --birth/--with/--count = 출연진 매트릭스 입력 3개만 바꿔 시험(계산은 운영 castForItinerary 그대로) · 제미니 대본·옴니 지시문 원본 = 운영과 같이 그 여정 도시 폴더(언어별 파일) (정본 2026-11-04)
+// ⚠️ 수정금지(승인필요) 2026-11-05 사장님 결정 = 옴니 시험 도구 = 운영과 같은 대본(제미니 1회, --dry 는 안 부르고 대본 요청문만 저장)·나가는 지시문 검사·옴니 조각 코드(2곳 15초)로 하루치를 동시에 만들고 이어 붙임(조각 안 장소마다 지명), 조각은 R2 금고 시험 폴더, DB 기록·크레딧 없음 · --birth/--with/--count = 출연진 매트릭스 입력 3개만 바꿔 시험(계산은 운영 castForItinerary 그대로) · 제미니 대본·옴니 지시문 원본 = 운영과 같이 그 여정 도시 폴더(언어별 파일) (정본 2026-11-05)
 // 사용: npx tsx --env-file=.env scripts/omni-clips-preview.ts <여정번호> <일차> <저장폴더> [조각번호들 예: 1,2 또는 all] [언어 ko|en|fr|ja|zh|es|de] [--dry] [--birth=YYYY-MM-DD --with=Family --count=4] [--guide=f]
 import fs from "fs";
 import path from "path";
@@ -7,7 +7,7 @@ import { pool } from "../worker/container/lib/db";
 import { issueApiKey } from "../worker/container/lib/services/shared/issue-api-key";
 import { generateSceneClip } from "../worker/container/lib/services/shared/video-gen-client";
 import {
-  burnTitles,
+  burnClipTitles,
   concatClips,
 } from "../worker/container/lib/services/video-stitcher";
 import { uploadToR2 } from "../worker/container/lib/services/shared/r2-client";
@@ -20,12 +20,11 @@ import {
   omniClipRequest,
   sceneScriptPrompt,
   clipKey,
-  clipTitle,
+  clipTitles,
   type SceneScript,
 } from "../worker/container/lib/services/omni-day-clips";
 import {
   checkPrompt,
-  sceneOf,
   scriptScenes,
 } from "../worker/container/lib/services/prompt-check";
 import { geminiTextJson } from "../worker/container/lib/services/shared/gemini-text";
@@ -97,7 +96,7 @@ async function main() {
     root: process.cwd(),
     transport: meta.transport,
   };
-  // 장면 대본 = 운영과 같은 제미니 1회 받은 그대로(재요청 없음) → 그 장면 대본이 안 온 조각만 빠짐(generate.ts 와 같은 흐름) · 빈 실행(--dry)은 부르지 않고 대본 칸을 비운 지시문만 저장
+  // 장면 대본 = 운영과 같은 제미니 1회 받은 그대로(재요청 없음) → 그 장면 대본이 안 온 조각만 빠짐(generate.ts 와 같은 흐름) · 빈 실행(--dry)은 부르지 않고 대본 요청문만 저장
   const { scenes, missing } = dry
     ? { scenes: [] as SceneScript[], missing: [] as number[] }
     : await scriptScenes(chosen, async () =>
@@ -118,39 +117,38 @@ async function main() {
       console.log(`조각 ${c.index} 장면 대본 없음`);
     return missing.includes(c.index);
   });
-  // 빈 실행(--dry) = 대본이 없으므로 장소 조각 지시문은 못 만든다 → 대본 요청문 + 배웅 조각만 저장
-  if (dry)
+  // 빈 실행(--dry) = 조각마다 대본이 있어야 지시문을 만든다 → 대본 요청문만 저장
+  if (dry) {
     fs.writeFileSync(
       path.join(outDir, `대본요청문_${lang}.txt`),
       sceneScriptPrompt(clips, cast, clipOpts) + "\n",
     );
-  const requests = (
-    dry
-      ? chosen.filter((c) => c.ending)
-      : chosen.filter((c) => !skipped.includes(c))
-  ).flatMap((clip) => {
-    const req = omniClipRequest(clip, cast, sceneOf(scenes, clip), clipOpts);
-    const name = `조각${clip.index}_${lang}`;
-    fs.writeFileSync(
-      path.join(outDir, `${name}_지시문.txt`),
-      `${req.prompt}\n\n=== 그림 순서 ===\n${req.images
-        .map((im, i) => `<IMAGE_REF_${i}> ${im.path || im.url}`)
-        .join("\n")}\n`,
-    );
-    // 운영(generate.ts)과 같은 나가는 지시문 검사 = 걸리면 그 조각은 옴니에 안 보냄
-    const errs = checkPrompt(req.prompt, req.images.length);
-    if (errs.length) {
-      console.log(
-        `조각 ${clip.index} 지시문 검사 실패(옴니 안 보냄): ${errs.join(" · ")}`,
+    return;
+  }
+  const requests = chosen
+    .filter((c) => !skipped.includes(c))
+    .flatMap((clip) => {
+      const req = omniClipRequest(clip, cast, scenes, clipOpts);
+      const name = `조각${clip.index}_${lang}`;
+      fs.writeFileSync(
+        path.join(outDir, `${name}_지시문.txt`),
+        `${req.prompt}\n\n=== 그림 순서 ===\n${req.images
+          .map((im, i) => `<IMAGE_REF_${i}> ${im.path || im.url}`)
+          .join("\n")}\n`,
       );
-      return [];
-    }
-    console.log(
-      `조각 ${clip.index} 지시문 저장 (${clip.slots.length}곳${clip.ending ? " + 배웅" : ""}, ${clip.seconds}초, 그림 ${req.images.length}장)`,
-    );
-    return [{ clip, req, name }];
-  });
-  if (dry) return;
+      // 운영(generate.ts)과 같은 나가는 지시문 검사 = 걸리면 그 조각은 옴니에 안 보냄
+      const errs = checkPrompt(req.prompt, req.images.length);
+      if (errs.length) {
+        console.log(
+          `조각 ${clip.index} 지시문 검사 실패(옴니 안 보냄): ${errs.join(" · ")}`,
+        );
+        return [];
+      }
+      console.log(
+        `조각 ${clip.index} 지시문 저장 (장소 ${clip.placeNos.join("·")}${clip.ending ? " + 작별" : ""}, ${clip.seconds}초, 그림 ${req.images.length}장)`,
+      );
+      return [{ clip, req, name }];
+    });
 
   const stamp = fileStamp();
   const vault = `${city.folder}/tests`;
@@ -200,9 +198,9 @@ async function main() {
     const { buf, durationSec, starts } = await concatClips(
       made.map((m) => m.buf),
     );
-    const titled = await burnTitles(
+    const titled = await burnClipTitles(
       buf,
-      made.map((m) => clipTitle(m.clip, city.name)),
+      made.map((m) => clipTitles(m.clip)),
       starts,
     );
     fs.writeFileSync(path.join(outDir, `완성본_${lang}.mp4`), titled);

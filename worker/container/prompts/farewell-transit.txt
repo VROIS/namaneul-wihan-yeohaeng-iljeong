@@ -1,2 +1,0 @@
-The end of the day in {{CITY}}: cozy evening light with glowing lamps in front of a metro station entrance. The whole group waves goodbye.
-GUIDE: {{FAREWELL}}

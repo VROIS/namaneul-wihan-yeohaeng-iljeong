@@ -6,13 +6,13 @@ import { creditTransactions, users } from "./schema";
 type Db = PgDatabase<PgQueryResultHKT, any>;
 type JsonRes = { status(code: number): { json(body: unknown): unknown } };
 
-// ⚠️ 수정금지(승인필요) — 크레딧 단가표 = 사장님 SSOT 2026-07-22 (일별영상 60 = A안·B안 동일, 2026-07-29 확정).
+// ⚠️ 수정금지(승인필요) 2026-11-05 사장님 결정 = 크레딧 단가표 · 일별영상 50 = 가입 보너스 50으로 첫 영상 1편 (정본 2026-11-05)
 export const CREDIT_COSTS = {
   route_generate: 5, // 여정 생성 (DB-only 포함 = 동일)
   ai_opinion: 5, // AI 의견
   guide_explain: 5, // Tripis 해설 (가이드 미니앱)
   expert_verify: 10, // 전문가 검증·문의
-  day_video: 60, // 일별 여행영상 (하루치)
+  day_video: 50, // 일별 여행영상 (하루치)
 } as const;
 
 type CreditFeature = keyof typeof CREDIT_COSTS;

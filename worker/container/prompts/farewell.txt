@@ -1,2 +1,1 @@
-The end of the day in {{CITY}}: cozy evening light with glowing lamps beside the guide's car. The whole group waves goodbye.
-GUIDE: {{FAREWELL}}
+This is the end of the day in {{CITY}}: the whole group waves goodbye.

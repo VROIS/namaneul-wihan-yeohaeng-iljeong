@@ -6,7 +6,7 @@ import { pool } from "../worker/container/lib/db";
 import {
   MAX_SCENES,
   omniClips,
-  clipTitle,
+  clipTitles,
   dayVideoKey,
 } from "../worker/container/lib/services/omni-day-clips";
 import {
@@ -35,7 +35,9 @@ async function main() {
   const daySlots = slots.slice(0, MAX_SCENES);
   const cast = await castFor(itin);
   const city = await videoCity(itin);
-  const titles = omniClips(daySlots, cast).map((c) => clipTitle(c, city.name));
+  const titles = omniClips(daySlots, cast).flatMap((c) =>
+    clipTitles(c).map((m) => m.title),
+  );
   const buf = fs.readFileSync(file);
   const key = dayVideoKey(city.folder, day, fileStamp());
 

@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-11-03 최적값 = 하루 영상 = 옴니 1.1 플래시 1벌 · 실사 배경 + 3D 캐릭터 · 1곳 = 10초 1조각 + 배웅 1조각 · 장면 대본 = 제미니 1회 · 지시문 글자 = prompts/ 파일(잠금) · 화면 글자 없음 (정본 2026-11-03)
+// ⚠️ 수정금지(승인필요) 2026-11-05 사장님 결정 = 하루 영상 = 옴니 1.2 플래시 1벌 · 인물·장소 모두 3D · 2곳 = 15초 1조각(홀수 마지막 1곳 = 8초) · 마지막 장소 안에서 작별 · 장면 대본 = 제미니 1회 · 지시문 글자 = prompts/ 파일(잠금) · 화면 글자 없음 (정본 2026-11-05)
 import fs from "fs";
 import path from "path";
 import { calculateAge } from "./protagonist-generator";
@@ -7,15 +7,18 @@ import {
   type GhibliCast,
   type GhibliCharacter,
 } from "./character-roster-ghibli";
+import { sceneOf } from "./prompt-check";
 
 export const MAX_SCENES = 10;
-const CLIP_SECONDS = 10;
+const PAIR_SECONDS = 15;
+const SINGLE_SECONDS = 8;
 
 export interface OmniClip {
   index: number;
-  slots: any[]; // 장소 1곳 · 배웅 = 빈 목록
-  lead: GhibliCharacter;
-  ending: boolean;
+  slots: any[]; // 장소 2곳(홀수 마지막 = 1곳)
+  placeNos: number[]; // 장소 순번 = 장면 대본 n
+  leads: GhibliCharacter[]; // 장소마다 주인공
+  ending: boolean; // 마지막 장소가 든 조각 = 작별 포함
   seconds: number;
 }
 
@@ -93,22 +96,21 @@ export function castForItinerary(
   return { ...cast, travelers };
 }
 
+// ⚠️ 수정금지(승인필요) 2026-11-05 사장님 결정 = 장소 2곳씩 1조각(15초) · 홀수 마지막 1곳 = 8초 · 배웅 조각 없음 = 마지막 장소 조각이 작별 포함 · 주인공 = 장소 순번대로 일행 → 가이드 (정본 2026-11-05)
 export function omniClips(slots: any[], cast: GhibliCast): OmniClip[] {
   const people = castLineup(cast);
-  const clips: OmniClip[] = slots.map((s, i) => ({
-    index: i + 1,
-    slots: [s],
-    lead: people[i % people.length],
-    ending: false,
-    seconds: CLIP_SECONDS,
-  }));
-  clips.push({
-    index: clips.length + 1,
-    slots: [],
-    lead: cast.koreanGuide,
-    ending: true,
-    seconds: CLIP_SECONDS,
-  });
+  const clips: OmniClip[] = [];
+  for (let i = 0; i < slots.length; i += 2) {
+    const placeNos = [i + 1, i + 2].filter((n) => n <= slots.length);
+    clips.push({
+      index: clips.length + 1,
+      slots: placeNos.map((n) => slots[n - 1]),
+      placeNos,
+      leads: placeNos.map((n) => people[(n - 1) % people.length]),
+      ending: placeNos[placeNos.length - 1] === slots.length,
+      seconds: placeNos.length === 2 ? PAIR_SECONDS : SINGLE_SECONDS,
+    });
+  }
   return clips;
 }
 
@@ -166,7 +168,6 @@ function promptFile(root: string, name: string): string {
   return text;
 }
 interface Fragments {
-  placeRef: string;
   carRef: string;
   carScene: string;
   extra: string;
@@ -229,7 +230,7 @@ function placeLine(
   };
 }
 
-// ⚠️ 수정금지(승인필요) 2026-11-03 최적값 = 참조 그림 = 사람마다 1장 + 장소 사진 + 차(가이드 여정의 운전 장소·배웅만, 차를 준 장소 조각은 본문에 "차가 근처에 서 있다" 1문장) · 대중교통 여정 = 차 0 · 배웅 = 지하철역 입구 (정본 2026-11-03)
+// ⚠️ 수정금지(승인필요) 2026-11-05 사장님 결정 = 참조 그림 = 사람마다 1장 + 차(가이드 여정에서 조각 안 운전 장소가 있을 때, 그 장소 칸에 "차가 근처에 서 있다" 1문장) · 장소 사진 없음(이름만) · 대중교통 여정 = 차 0 · 최대 6장 (정본 2026-11-05)
 export interface ClipOpts {
   city: string;
   tripKind?: string;
@@ -249,7 +250,9 @@ export function sceneScriptPrompt(
   const frag = fragmentsOf(opts.root);
   const label = (c: GhibliCharacter) =>
     speaker(roleOf(c, people, opts.tripKind));
-  const places = clips.filter((c) => !c.ending);
+  const places = clips.flatMap((c) =>
+    c.slots.map((s, k) => ({ s, no: c.placeNos[k], lead: c.leads[k] })),
+  );
   return fill(promptFile(opts.root, "scene-script.txt"), {
     CITY: opts.city,
     SEASON: season(opts.startDate),
@@ -257,24 +260,28 @@ export function sceneScriptPrompt(
     CAST: people.map((c) => `${label(c)} (${ageOf(c, frag)})`).join("; "),
     CAMERAS: CAMERAS.map((c) => `"${c}"`).join(", "),
     LANG: videoLangName(opts.lang),
+    FAREWELL: FAREWELL[opts.lang] || FAREWELL.en,
     PLACES: places
-      .map((c) => {
-        const s = c.slots[0];
+      .map(({ s, no, lead }) => {
         const summary = placeLine(
           s,
           opts.lang,
           opts.translations.get(slotPlaceId(s)),
         ).text;
-        return `${c.index}. ${placeName(s)}, ${s.startTime || ""}${isMeal(s) ? " (meal)" : ""} — LEAD: ${label(c.lead)} — summary: ${summary.slice(0, 300)}`;
+        return `${no}. ${placeName(s)}, ${s.startTime || ""}${isMeal(s) ? " (meal)" : ""} — LEAD: ${label(lead)} — summary: ${summary.slice(0, 300)}`;
       })
       .join("\n"),
   });
 }
 
+// ⚠️ 수정금지(승인필요) 2026-11-05 사장님 결정 = 조각 안 시간 = 2곳 0-7s / 7-15s · 1곳 0-8s · 마지막 장소 칸 끝에 작별 1문장 (정본 2026-11-05)
+const CUTS: Record<number, string[]> = { 2: ["0-7s", "7-15s"], 1: ["0-8s"] };
+const CUT_AT: Record<number, number[]> = { 2: [0, 7], 1: [0] };
+
 export function omniClipRequest(
   clip: OmniClip,
   cast: GhibliCast,
-  scene: SceneScript | undefined,
+  scenes: SceneScript[],
   opts: ClipOpts,
 ): { prompt: string; images: { path?: string; url?: string }[] } {
   const people = castLineup(cast);
@@ -284,16 +291,8 @@ export function omniClipRequest(
   const images: { path?: string; url?: string }[] = people.map((c) => ({
     path: path.join(opts.root, c.assetPath),
   }));
-  const s = clip.slots[0];
-  const ending = clip.ending || !s;
-  let placeRef = "";
-  if (!ending && s.image) {
-    placeRef = fill(frag.placeRef, { I: images.length });
-    images.push({ url: s.image });
-  }
-  const withCar =
-    opts.transport === "guide" &&
-    (ending || (drives(s) && !isMeal(s) && !isIndoor(s)));
+  const carAt = (s: any) => drives(s) && !isMeal(s) && !isIndoor(s);
+  const withCar = opts.transport === "guide" && clip.slots.some(carAt);
   let carRef = "";
   if (withCar) {
     carRef = fill(frag.carRef, { I: images.length });
@@ -306,50 +305,56 @@ export function omniClipRequest(
           `<IMAGE_REF_${i}> ${roles[i].replace(/^the /, "")} ${frag.ageShort[c.ageGroup]}`,
       )
       .join(", "),
-    PLACE_REF: placeRef,
     CAR_REF: carRef,
     COUNT: people.length,
     EXTRA: extra ? fill(frag.extra, { N: extra }) : "",
     LANG: videoLangName(opts.lang),
+    SECONDS: clip.seconds,
   });
-
-  if (ending) {
-    const body = fill(
-      promptFile(opts.root, withCar ? "farewell.txt" : "farewell-transit.txt"),
-      { CITY: opts.city, FAREWELL: FAREWELL[opts.lang] || FAREWELL.en },
-    );
-    return { prompt: `${head}\n${body}`, images };
-  }
-  if (!scene) throw new Error(`[prompt] 조각 ${clip.index} 장면 대본 없음`);
-  const body = fill(promptFile(opts.root, "clip.txt"), {
-    PLACE: placeName(s),
-    CITY: opts.city,
-    LIGHT: scene.light,
-    FOREGROUND: scene.foreground,
-    CAR: withCar ? frag.carScene : "",
-    ACTION: sentence(scene.action),
-    CAMERA: scene.camera,
-    SFX: scene.sfx,
-    LINES: (scene.lines || []).map((l) => `${l.speaker}: ${l.text}`).join("\n"),
+  const cuts = CUTS[clip.slots.length];
+  const parts = clip.slots.map((s, k) => {
+    const scene = sceneOf(scenes, clip.placeNos[k]);
+    if (!scene)
+      throw new Error(`[prompt] 장소 ${clip.placeNos[k]} 장면 대본 없음`);
+    const body = fill(promptFile(opts.root, "clip.txt"), {
+      PLACE: placeName(s),
+      CITY: opts.city,
+      LIGHT: scene.light,
+      FOREGROUND: scene.foreground,
+      CAR: withCar && carAt(s) ? frag.carScene : "",
+      ACTION: sentence(scene.action),
+      CAMERA: scene.camera,
+      SFX: scene.sfx,
+      LINES: (scene.lines || [])
+        .map((l) => `${l.speaker}: ${l.text}`)
+        .join("\n"),
+    });
+    const bye =
+      clip.ending && k === clip.slots.length - 1
+        ? `\n${fill(promptFile(opts.root, "farewell.txt"), { CITY: opts.city })}`
+        : "";
+    return `${cuts[k]}: ${body}${bye}`;
   });
-  return { prompt: `${head}\n${body}`, images };
+  return { prompt: [head, ...parts].join("\n"), images };
 }
 
-// ⚠️ 수정금지(승인필요) 2026-11-01 사장님 지시 "유리카드처럼 생긴 그거 다 삭제하고 이거를 정본으로" = 지금 코드: 지명 타이포그래피 문구 = 위 줄 영어 장소명 · 아래 줄 도착 시각 · 배웅 = 도시 이름 (정본 2026-11-01)
-export function clipTitle(
+// ⚠️ 수정금지(승인필요) 2026-11-05 사장님 결정 = 지명 타이포그래피 = 조각 안 장소마다(2곳 = 0초·7초) 위 줄 영어 장소명 · 아래 줄 도착 시각 (정본 2026-11-05)
+export function clipTitles(
   clip: OmniClip,
-  city: string,
-): { name: string; time?: string } {
-  const s = clip.slots[0];
-  if (clip.ending || !s) return { name: city };
-  const [h, m] = String(s.startTime || "")
-    .split(":")
-    .map(Number);
-  const time =
-    !s.startTime || Number.isNaN(h)
-      ? undefined
-      : `${((h + 11) % 12) + 1}:${String(m || 0).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
-  return { name: placeName(s), time };
+): { title: { name: string; time?: string }; at: number }[] {
+  return clip.slots.map((s, k) => {
+    const [h, m] = String(s.startTime || "")
+      .split(":")
+      .map(Number);
+    const time =
+      !s.startTime || Number.isNaN(h)
+        ? undefined
+        : `${((h + 11) % 12) + 1}:${String(m || 0).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+    return {
+      title: { name: placeName(s), time },
+      at: CUT_AT[clip.slots.length][k],
+    };
+  });
 }
 
 // ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 영상 폴더 = shared/r2-paths videoDir(도시 번호/videos/여정), 이름 맨 앞 = 만든 시각 초까지(다시 만들어도 덮지 않음), 조각 이름에 장소 번호·언어 (정본 K3)
