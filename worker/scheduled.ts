@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 워커 정기 작업(카카오 열쇠·환율·계정 정리·지표·멈춘 여정 청소) 한 곳 = 후처리 큐는 사람 인증이 필요해 영구 삭제 (정본 §정리)
+// ⚠️ 수정금지(승인필요) 2026-11-05 사장님 결정 = 워커 정기 작업(카카오 열쇠·환율·계정 정리·지표·멈춘 여정 청소·홍보 유튜브 숫자) 한 곳 (정본 2026-11-05)
 import { sql } from "drizzle-orm";
 import { db, pool, withEngineDb } from "./lib/db";
 import { refreshRates } from "./lib/services/fill/exchange-rates";
@@ -6,10 +6,12 @@ import { appendTick } from "./lib/services/shared/metrics-heartbeat";
 import { runSnapshotTick } from "./admin-snapshot";
 import { refreshKakaoJwks } from "./routes-social-auth";
 import { cleanupDeletedAccounts } from "./lib/services/account-cleanup";
+import { youtubePromoTick } from "./admin-promo";
 
 const KAKAO_JWKS_CRON = "0 3 * * *";
 const ACCOUNT_CLEANUP_CRON = "30 4 * * *";
 const RATES_CRON = "0 5 * * *";
+const PROMO_CRON = "0 * * * *";
 
 export const withScheduled = <T extends object>(httpHandler: T) => ({
   ...httpHandler,
@@ -20,7 +22,9 @@ export const withScheduled = <T extends object>(httpHandler: T) => ({
         ? accountCleanupTick()
         : controller.cron === RATES_CRON
           ? ratesTick()
-          : metricsTick(),
+          : controller.cron === PROMO_CRON
+            ? promoTick()
+            : metricsTick(),
 });
 
 // ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 관제탑이 매일 카카오 공개 열쇠를 금고에 갱신 = 로그인 중에는 카카오를 부르지 않는다, 실패하면 금고의 기존 열쇠 유지 (정본 9-25)
@@ -30,6 +34,16 @@ async function kakaoJwksTick(): Promise<void> {
     console.log("[카카오] 공개 열쇠 갱신 확인");
   } catch (e) {
     console.warn("[카카오] 공개 열쇠 갱신 실패:", (e as Error).message);
+  }
+}
+
+// ⚠️ 수정금지(승인필요) 2026-11-05 사장님 결정 = 홍보 탭 유튜브 숫자 = 매시 정각 자동 (정본 2026-11-05)
+async function promoTick(): Promise<void> {
+  try {
+    const n = await withEngineDb(() => youtubePromoTick(db!));
+    console.log(`[홍보] 유튜브 숫자 기록 = ${n}편`);
+  } catch (e) {
+    console.warn("[홍보] 유튜브 숫자 기록 실패:", (e as Error).message);
   }
 }
 

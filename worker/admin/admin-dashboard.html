@@ -373,6 +373,8 @@
       <button class="tab active" data-tab="overview">현황</button>
       <button class="tab" data-tab="api">API 상태</button>
       <button class="tab" data-tab="guide-prices">콘텐츠관리</button>
+      <!-- ⚠️ 수정금지(승인필요) 2026-11-05 사장님 결정 = 홍보 탭 = 그리기는 promo.js 1벌, 자료는 같은 저장본 (정본 2026-11-05) -->
+      <button class="tab" data-tab="promo">홍보</button>
     </div>
     <!-- 검증요청 탭 = 앱 내 전문가 답변함(client/screens/expert/)으로 대체 = 삭제 2026-07-16 §19 -->
     
@@ -546,6 +548,8 @@
       </div>
 
     </div>
+
+    <div id="tab-promo" class="tab-content" style="display: none;"></div>
 
     <div id="tab-guide-prices" class="tab-content" style="display: none;">
       <!-- 🖼️ 콘텐츠별 미리보기 + ID 선별입력 (2026-08-25 확정 스펙 v2, 사장님 정정)
@@ -941,6 +945,7 @@
 
   </div>
   
+  <script src="/admin/promo.js"></script>
   <script>
     const API_BASE = '/api/admin';
     
@@ -991,6 +996,7 @@
         case 'overview': return loadDashboard();
         case 'api': loadApiKeys(); break;
         case 'guide-prices': loadGuidePrices(); break;
+        case 'promo': return loadPromo();
       }
     }
 

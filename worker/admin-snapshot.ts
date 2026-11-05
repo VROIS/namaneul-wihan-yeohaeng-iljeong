@@ -7,6 +7,7 @@ import {
   dashboardData,
   externalCallsSummaryData,
 } from "./admin-data";
+import { promoSummaryData } from "./admin-promo";
 import { recentItinerariesSummary } from "./routes-admin-itineraries";
 import {
   getFromR2,
@@ -32,6 +33,7 @@ const SECTIONS: [string, (db: Db) => Promise<unknown>][] = [
     "itineraries",
     async (db) => ({ items: await recentItinerariesSummary(db) }),
   ],
+  ["promo", promoSummaryData], // ⚠️ 수정금지(승인필요) 2026-11-05 사장님 결정 = 홍보 탭도 같은 저장본에서 읽는다 (정본 2026-11-05)
 ];
 
 async function readSnapshot(): Promise<Snapshot | null> {

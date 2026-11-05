@@ -374,35 +374,25 @@ function TripisModalInner({
               style={styles.chips}
               contentContainerStyle={styles.chipsContent}
             >
-              {dayNumbers.map((d) => {
-                const st = videoByDay[String(d)]?.status;
-                return (
-                  <Pressable
-                    key={d}
+              {/* ⚠️ 수정금지(승인필요) 2026-11-04 최적값 = 일차 버튼 = 32px 동그라미 "1일"(한국어) · "D1"(그 밖 언어 = 영어) · 기본 브랜드 파랑 · 고른 날만 흰색 · 다른 표시 없음 · 일차 수 제한 없이 이 줄만 가로 스크롤 (정본 2026-11-04) */}
+              {dayNumbers.map((d) => (
+                <Pressable
+                  key={d}
+                  style={[styles.chip, effectiveDay === d && styles.chipActive]}
+                  onPress={() => setSelectedDay(d)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: effectiveDay === d }}
+                >
+                  <Text
                     style={[
-                      styles.chip,
-                      effectiveDay === d && styles.chipActive,
+                      styles.chipText,
+                      effectiveDay === d && styles.chipTextActive,
                     ]}
-                    onPress={() => setSelectedDay(d)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: effectiveDay === d }}
                   >
-                    <Text
-                      style={[
-                        styles.chipText,
-                        effectiveDay === d && styles.chipTextActive,
-                      ]}
-                    >
-                      {t("tripisVideo.dayChip", { d })}
-                      {st === "succeeded"
-                        ? " ✓"
-                        : st === "processing"
-                          ? " …"
-                          : ""}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+                    {t("tripisVideo.dayChip", { d })}
+                  </Text>
+                </Pressable>
+              ))}
             </ScrollView>
 
             {/* 우측 버튼 = 상황표(2026-08-03 사장님 확정):
@@ -460,7 +450,9 @@ function TripisModalInner({
                 accessibilityLabel={t("common.share")}
               >
                 <Icon name="share-2" size={14} color="#FFFFFF" />
-                <Text style={styles.topBtnText}>{t("common.share")}</Text>
+                <Text style={styles.topBtnText}>
+                  {t("tripisVideo.shareBtn")}
+                </Text>
               </Pressable>
             )}
 
@@ -503,17 +495,18 @@ const styles = StyleSheet.create({
     paddingRight: Spacing.sm,
   },
   chip: {
-    paddingHorizontal: 13,
-    paddingVertical: 7,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1.5,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#FFFFFF",
-    maxWidth: 140,
+    borderColor: Brand.primary,
+    backgroundColor: Brand.primary,
   },
-  chipActive: { backgroundColor: Brand.primary, borderColor: Brand.primary },
-  chipText: { fontSize: 12, fontFamily: Fonts.bold, color: "#0F172A" },
-  chipTextActive: { color: "#FFFFFF" },
+  chipActive: { backgroundColor: "#FFFFFF" },
+  chipText: { fontSize: 11, fontFamily: Fonts.bold, color: "#FFFFFF" },
+  chipTextActive: { color: Brand.primary },
   topBtn: {
     flexDirection: "row",
     alignItems: "center",

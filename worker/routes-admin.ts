@@ -5,12 +5,14 @@ import * as schema from "../shared/schema";
 import { getFirstAdmin, loginResponse } from "./auth-user";
 import { apiKeysMasked, externalCallsSummaryData } from "./admin-data";
 import { registerAdminSnapshot } from "./admin-snapshot";
+import { registerAdminPromoRoutes } from "./admin-promo";
 import type { OpenDb } from "./db-types";
 
 const { guidePrices } = schema;
 
 export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
   registerAdminSnapshot(app, openDb);
+  registerAdminPromoRoutes(app, openDb);
   // ⚠️ 수정금지(승인필요) 2026-07-13 = 관리자 로그인 = 비번 서버검증 → 관리자 세션 토큰 발급(§16 = 기존 Bearer 인증 재사용).
   app.post("/api/admin/login", async (req: Request, res: Response) => {
     const { db, close } = openDb();

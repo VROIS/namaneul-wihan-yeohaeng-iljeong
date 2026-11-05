@@ -9,6 +9,7 @@ const OUT = path.join(ROOT, "public-dist");
 const SRC_DIST = path.join(ROOT, "dist");
 const SRC_ASSETS = path.join(ROOT, "assets");
 const SRC_ADMIN = path.join(ROOT, "worker", "admin", "admin-dashboard.html");
+const SRC_PROMO = path.join(ROOT, "worker", "admin", "admin-promo.js");
 
 const EXCLUDE_DIRS = new Set(["test-screenshots"]);
 const EXCLUDE_EXTS = new Set([".psd"]);
@@ -69,6 +70,7 @@ for (const [label, p] of [
   ["dist/ (Expo 웹빌드)", SRC_DIST],
   ["assets/ (앱 에셋)", SRC_ASSETS],
   ["worker/admin/admin-dashboard.html", SRC_ADMIN],
+  ["worker/admin/admin-promo.js", SRC_PROMO],
 ]) {
   if (!fs.existsSync(p)) {
     console.error(`[중단] 원본이 없습니다: ${label} -> ${p}`);
@@ -108,11 +110,14 @@ fs.mkdirSync(outAssets, { recursive: true });
 const nAssets = copyDir(SRC_ASSETS, outAssets).length;
 console.log(`2) assets/ -> public-dist/assets/ (머지)        ${nAssets}개`);
 
-// ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 관리자 화면 = worker/admin 1벌 (정본 9-25)
+// ⚠️ 수정금지(승인필요) 2026-11-05 사장님 결정 = 관리자 화면 = worker/admin 1벌(화면 + 홍보 탭 스크립트) (정본 2026-11-05)
 const outAdmin = path.join(OUT, "admin");
 fs.mkdirSync(outAdmin, { recursive: true });
 fs.copyFileSync(SRC_ADMIN, path.join(outAdmin, "index.html"));
-console.log(`3) admin-dashboard.html -> public-dist/admin/index.html  1개`);
+fs.copyFileSync(SRC_PROMO, path.join(outAdmin, "promo.js"));
+console.log(
+  `3) worker/admin -> public-dist/admin/ (index.html · promo.js)  2개`,
+);
 
 const allFiles = listRel(OUT);
 const bytes = dirSizeBytes(OUT);
