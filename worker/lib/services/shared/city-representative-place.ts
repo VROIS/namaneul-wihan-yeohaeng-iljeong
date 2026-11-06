@@ -1,7 +1,57 @@
-// ⚠️ 수정금지(승인필요) 2026-09-04 사장님 결정 = 도시 얼굴 = heritage 고정 / 하이라이트 = 식당·쇼핑만 제외 = 앱 전체 1벌.
-import { desc, eq, and, notInArray } from "drizzle-orm";
-import { placeSeedRaw } from "@shared/schema";
+// ⚠️ 수정금지(승인필요) 2026-11-07 사장님 결정 = 도시 얼굴(heritage 고정)·하이라이트(식당·쇼핑만 제외)·대표 여정 고르기 = 앱 전체 1벌 (정본 2026-11-07)
+import { desc, eq, and, or, sql, notInArray } from "drizzle-orm";
+import { placeSeedRaw, cities, itineraries } from "@shared/schema";
 import { bestRankOrder } from "./best-rank";
+import type { Db } from "../../../db-types";
+
+// ⚠️ 수정금지(승인필요) 2026-11-07 사장님 결정 = 도시 대표 여정 고르는 순서 1벌 = 도시 카드·공개 여정 글 페이지가 같이 쓴다 (정본 2026-11-07)
+export async function cityWithRepresentative(db: Db, cityId: number) {
+  const [row] = await db
+    .select({
+      nameKo: cities.name,
+      nameEn: cities.nameEn,
+      country: cities.country,
+      countryCode: cities.countryCode,
+      itineraryId: itineraries.id,
+      rawData: itineraries.rawData,
+      videoByDay: itineraries.videoByDay,
+      companionType: itineraries.companionType,
+      curationFocus: itineraries.curationFocus,
+      travelPace: itineraries.travelPace,
+      updatedAt: itineraries.updatedAt,
+      overrideHeroPlaceId: cities.overrideHeroPlaceId,
+      overrideHighlightPlaceIds: cities.overrideHighlightPlaceIds,
+      overrideVideoId: cities.overrideVideoId,
+    })
+    .from(cities)
+    .leftJoin(
+      itineraries,
+      and(
+        eq(itineraries.cityId, cities.id),
+        or(
+          eq(itineraries.status, "representative"),
+          sql`EXISTS (SELECT 1 FROM jsonb_each(${itineraries.videoByDay}) e
+                    WHERE e.value->>'status' = 'succeeded')`,
+        ),
+      ),
+    )
+    .where(eq(cities.id, cityId))
+    .orderBy(
+      sql`CASE
+          WHEN ${itineraries.status} = 'representative'
+               AND EXISTS (SELECT 1 FROM jsonb_each(${itineraries.videoByDay}) e WHERE e.value->>'status'='succeeded')
+               THEN 0
+          WHEN EXISTS (SELECT 1 FROM jsonb_each(${itineraries.videoByDay}) e WHERE e.value->>'status'='succeeded')
+               THEN 1
+          WHEN ${itineraries.status} = 'representative' THEN 2
+          ELSE 3
+        END`,
+      sql`(SELECT MAX(sv.created_at) FROM saved_videos sv WHERE sv.itinerary_id = ${itineraries.id}) DESC NULLS LAST`,
+      desc(itineraries.id),
+    )
+    .limit(1);
+  return row ?? null;
+}
 
 // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 결정 = 얼굴은 heritage 하나만. 사진·격리·도심으로 거르지 않는다
 export function cityRepresentativeWhere(cityId: number) {

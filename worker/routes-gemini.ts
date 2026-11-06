@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 // ⚠️ 수정금지(승인필요) 2026-09-06 = 반드시 "@google/genai/web" (기본 진입점 금지).
 import { GoogleGenAI } from "@google/genai/web";
 import { env, waitUntil } from "cloudflare:workers";
@@ -16,7 +16,8 @@ import {
   STANDARD_TS_FIELD_MASK,
   validateFieldMask,
 } from "./lib/services/shared/google-places-sku";
-import { getFirstAdmin, getUserIdFromReq } from "./auth-user";
+import { getUserIdFromReq } from "./auth-user";
+import { warehouseGuideOrder } from "./lib/warehouse-guide-order";
 import { computeItineraryFingerprint } from "./itinerary-fingerprint";
 import { chargeOnSuccess, precheckFeature } from "../shared/credits";
 import { readGeminiKey, readMapsKey } from "./keys";
@@ -588,8 +589,6 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
       }
       const lang = String(req.query.lang || "ko");
 
-      const warehouseOwner = (await getFirstAdmin(db))?.id || null;
-
       const rows = await db
         .select({
           id: guides.id,
@@ -609,12 +608,8 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
         .from(guides)
         .leftJoin(placeSeedRaw, eq(guides.placeId, placeSeedRaw.id))
         .where(and(eq(guides.placeId, placeId), eq(guides.language, lang)))
-        .orderBy(
-          warehouseOwner
-            ? sql`CASE WHEN ${guides.userId} = ${warehouseOwner} THEN 0 ELSE 1 END`
-            : sql`0`,
-          desc(guides.createdAt),
-        )
+        // ⚠️ 수정금지(승인필요) 2026-11-07 사장님 결정 = 창고 해설 순서 = warehouseGuideOrder 1벌 (정본 2026-11-07)
+        .orderBy(...(await warehouseGuideOrder(db)))
         .limit(1);
       const row = rows[0];
       if (!row) return res.status(204).end(); // 창고에 없음 = 화면이 새로 만든다

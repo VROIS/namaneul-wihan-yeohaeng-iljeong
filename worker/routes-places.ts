@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import { eq, sql, desc, and, or, inArray } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import * as schema from "../shared/schema";
 import type { DayVideo } from "../shared/schema";
 import {
@@ -7,6 +7,7 @@ import {
   cityHighlightWhere,
   cityRepresentativeOrder,
   pickDisplayName,
+  cityWithRepresentative,
 } from "./lib/services/shared/city-representative-place";
 import type { OpenDb } from "./db-types";
 
@@ -31,50 +32,9 @@ export function registerPlaceRoutes(app: Express, openDb: OpenDb): void {
         }
         const lang = String(req.query.lang || "ko");
 
-        // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 결정 = 얼굴(heritage 고정)과 하이라이트(식당·쇼핑만 제외)는 기준이 다르므로 따로 조회한다.
-        const [[row], repRows, highlightPool] = await Promise.all([
-          db
-            .select({
-              nameKo: cities.name,
-              nameEn: cities.nameEn,
-              country: cities.country,
-              // ⚠️ 수정금지(승인필요) 2026-08-20 사장님 승인 = 도시대표카드 국가명 영어통일용.
-              countryCode: cities.countryCode,
-              itineraryId: itineraries.id, // 대표여정 없으면 null = 그대로 "없음" 신호
-              rawData: itineraries.rawData,
-              videoByDay: itineraries.videoByDay,
-              overrideHeroPlaceId: cities.overrideHeroPlaceId,
-              overrideHighlightPlaceIds: cities.overrideHighlightPlaceIds,
-              overrideVideoId: cities.overrideVideoId,
-            })
-            .from(cities)
-            // ⚠️ 수정금지(승인필요) 2026-08-20 사장님 SSOT = 대표여정 고르는 순서 1벌(재정정).
-            .leftJoin(
-              itineraries,
-              and(
-                eq(itineraries.cityId, cities.id),
-                or(
-                  eq(itineraries.status, "representative"),
-                  sql`EXISTS (SELECT 1 FROM jsonb_each(${itineraries.videoByDay}) e
-                            WHERE e.value->>'status' = 'succeeded')`,
-                ),
-              ),
-            )
-            .where(eq(cities.id, cityId))
-            .orderBy(
-              sql`CASE
-                  WHEN ${itineraries.status} = 'representative'
-                       AND EXISTS (SELECT 1 FROM jsonb_each(${itineraries.videoByDay}) e WHERE e.value->>'status'='succeeded')
-                       THEN 0
-                  WHEN EXISTS (SELECT 1 FROM jsonb_each(${itineraries.videoByDay}) e WHERE e.value->>'status'='succeeded')
-                       THEN 1
-                  WHEN ${itineraries.status} = 'representative' THEN 2
-                  ELSE 3
-                END`,
-              sql`(SELECT MAX(sv.created_at) FROM saved_videos sv WHERE sv.itinerary_id = ${itineraries.id}) DESC NULLS LAST`,
-              desc(itineraries.id),
-            )
-            .limit(1),
+        // ⚠️ 수정금지(승인필요) 2026-11-07 사장님 결정 = 대표여정 = cityWithRepresentative 1벌 · 얼굴(heritage)·하이라이트(식당·쇼핑 제외)는 기준이 달라 따로 조회 (정본 2026-11-07)
+        const [row, repRows, highlightPool] = await Promise.all([
+          cityWithRepresentative(db, cityId),
           db
             .select({
               id: placeSeedRaw.id,

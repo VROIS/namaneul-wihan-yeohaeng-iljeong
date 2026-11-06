@@ -47,6 +47,7 @@ import {
 import { env, waitUntil } from "cloudflare:workers";
 import { ensureKeys } from "./keys";
 import { registerPlaceRoutes } from "./routes-places";
+import { registerPublicPageRoutes } from "./routes-public-pages";
 import { registerItineraryRoutes } from "./routes-itinerary";
 import { registerGuideVideoRoutes } from "./routes-guide-video";
 import { registerExpertBtsRoutes } from "./routes-expert-bts";
@@ -186,6 +187,8 @@ registerAdminKeyTestRoutes(app, openDb);
 registerRestRoutes(app, openDb);
 registerItineraryGenerateDbRoutes(app, openDb, sql);
 registerVideoGenerateRoutes(app, openDb);
+// ⚠️ 수정금지(승인필요) 2026-11-07 사장님 결정 = 검색·AI 검색·LLM 공개 글 페이지 (정본 2026-11-07)
+registerPublicPageRoutes(app, openDb);
 
 app.get("/api/cities/:id", async (req, res) => {
   const { db, close } = openDb();

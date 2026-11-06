@@ -139,8 +139,7 @@
     //    GET * 핸들러가 없어 웹화면이 전부 404 가 된다.
     //    근거: gotchas.md:3-22 "Use Selective Worker-First Routing" (true 대신 배열 패턴)
     //          configuration.md:66-106 (배열 문법 + 부정 패턴), 공식문서 예시도 배열.
-    //    패턴 산정 = worker/src.ts + routes-*.ts 를 전수 grep 한 결과
-    //    등록된 라우트 35개가 **전부** "/api/..." 이고 non-/api 라우트는 0건이므로 "/api/*" 1개면 충분하다.
-    "run_worker_first": ["/api/*"]
+    //    ⚠️ 수정금지(승인필요) 2026-11-07 사장님 결정 = /api/* + 공개 글 페이지(/trips · /guides · sitemap.xml · llms.txt) (정본 2026-11-07)
+    "run_worker_first": ["/api/*", "/trips", "/trips/*", "/guides/*", "/sitemap.xml", "/llms.txt"]
   }
 }
