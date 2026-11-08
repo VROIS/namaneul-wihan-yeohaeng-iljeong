@@ -6,7 +6,7 @@ export interface GhibliCharacter {
   ageGroup: string;
   gender: "male" | "female";
   role: "traveler" | "guide";
-  assetPath: string; // 에셋 저장 경로
+  assetPath: string; // 세트 폴더 안 파일 이름 (경로 = characterImage)
 }
 
 export interface VehicleConfig {
@@ -21,7 +21,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     ageGroup: "20s",
     gender: "male",
     role: "traveler",
-    assetPath: "assets/characters/m_20s.jpg",
+    assetPath: "m_20s.jpg",
   },
   f_20s: {
     id: "f_20s",
@@ -29,7 +29,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     ageGroup: "20s",
     gender: "female",
     role: "traveler",
-    assetPath: "assets/characters/f_20s.jpg",
+    assetPath: "f_20s.jpg",
   },
 
   m_30s: {
@@ -38,7 +38,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     ageGroup: "30s",
     gender: "male",
     role: "traveler",
-    assetPath: "assets/characters/m_30s.jpg",
+    assetPath: "m_30s.jpg",
   },
   f_30s: {
     id: "f_30s",
@@ -46,7 +46,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     ageGroup: "30s",
     gender: "female",
     role: "traveler",
-    assetPath: "assets/characters/f_30s.jpg",
+    assetPath: "f_30s.jpg",
   },
 
   m_40s: {
@@ -55,7 +55,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     ageGroup: "40s",
     gender: "male",
     role: "traveler",
-    assetPath: "assets/characters/m_40s.jpg",
+    assetPath: "m_40s.jpg",
   },
   f_40s: {
     id: "f_40s",
@@ -63,7 +63,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     ageGroup: "40s",
     gender: "female",
     role: "traveler",
-    assetPath: "assets/characters/f_40s.jpg",
+    assetPath: "f_40s.jpg",
   },
 
   m_50s: {
@@ -72,7 +72,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     ageGroup: "50s",
     gender: "male",
     role: "traveler",
-    assetPath: "assets/characters/m_50s.jpg",
+    assetPath: "m_50s.jpg",
   },
   f_50s: {
     id: "f_50s",
@@ -80,7 +80,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     ageGroup: "50s",
     gender: "female",
     role: "traveler",
-    assetPath: "assets/characters/f_50s.jpg",
+    assetPath: "f_50s.jpg",
   },
 
   m_60s: {
@@ -89,7 +89,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     ageGroup: "60s",
     gender: "male",
     role: "traveler",
-    assetPath: "assets/characters/m_60s.jpg",
+    assetPath: "m_60s.jpg",
   },
   f_60s: {
     id: "f_60s",
@@ -97,7 +97,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     ageGroup: "60s",
     gender: "female",
     role: "traveler",
-    assetPath: "assets/characters/f_60s.jpg",
+    assetPath: "f_60s.jpg",
   },
 
   m_kids: {
@@ -106,7 +106,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     ageGroup: "kids",
     gender: "male",
     role: "traveler",
-    assetPath: "assets/characters/m_10s_kid.jpg",
+    assetPath: "m_10s_kid.jpg",
   },
   f_kids: {
     id: "f_kids",
@@ -114,7 +114,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     ageGroup: "kids",
     gender: "female",
     role: "traveler",
-    assetPath: "assets/characters/f_10s_kid.jpg",
+    assetPath: "f_10s_kid.jpg",
   },
 
   m_teen: {
@@ -123,7 +123,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     ageGroup: "teen",
     gender: "male",
     role: "traveler",
-    assetPath: "assets/characters/m_10s_teen.jpg",
+    assetPath: "m_10s_teen.jpg",
   },
   f_teen: {
     id: "f_teen",
@@ -131,7 +131,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     ageGroup: "teen",
     gender: "female",
     role: "traveler",
-    assetPath: "assets/characters/f_10s_teen.jpg",
+    assetPath: "f_10s_teen.jpg",
   },
 
   m_20s_sub: {
@@ -140,7 +140,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     ageGroup: "20s",
     gender: "male",
     role: "traveler",
-    assetPath: "assets/characters/m_couple_20s.jpg",
+    assetPath: "m_couple_20s.jpg",
   },
   f_20s_sub: {
     id: "f_20s_sub",
@@ -148,26 +148,32 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     ageGroup: "20s",
     gender: "female",
     role: "traveler",
-    assetPath: "assets/characters/f_couple_20s.jpg",
+    assetPath: "f_couple_20s.jpg",
   },
 
-  guide_korean_m_40s: {
-    id: "guide_korean_m_40s",
-    name: "민우 (40대 현지 거주 한국인 드라이빙 가이드)",
+  guide_m_40s: {
+    id: "guide_m_40s",
+    name: "가이드 (40대 남)",
     ageGroup: "guide",
     gender: "male",
     role: "guide",
-    assetPath: "assets/characters/guide_korean_m_40s.jpg",
+    assetPath: "guide_m_40s.jpg",
   },
-  guide_korean_f_40s: {
-    id: "guide_korean_f_40s",
-    name: "지은 (40대 현지 거주 한국인 VIP 가이드)",
+  guide_f_40s: {
+    id: "guide_f_40s",
+    name: "가이드 (40대 여)",
     ageGroup: "guide",
     gender: "female",
     role: "guide",
-    assetPath: "assets/characters/guide_korean_f_40s.jpg",
+    assetPath: "guide_f_40s.jpg",
   },
 };
+
+// ⚠️ 수정금지(승인필요) 2026-11-08 사장님 결정 = 기준 그림 2세트(jpg, 같은 파일 이름) · 영상 언어 ko·ja·zh = 동양인(asian) · en·fr·es·de = 서양인(western) (정본 2026-11-08)
+export function characterImage(c: GhibliCharacter, lang: string): string {
+  const set = ["ko", "ja", "zh"].includes(lang) ? "asian" : "western";
+  return `assets/characters/${set}/${c.assetPath}`;
+}
 
 // ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 차량 = 종류(type)만 = 안 쓰는 이름·설명·지시문 칸 삭제 (정본 §)
 export function getVehicleConfigByCompanionCount(
@@ -203,7 +209,7 @@ function characterByAge(
 export interface GhibliCast {
   travelers: GhibliCharacter[];
   totalTravelerCount: number;
-  koreanGuide: GhibliCharacter;
+  guide: GhibliCharacter;
   vehicle: VehicleConfig;
 }
 
@@ -267,7 +273,7 @@ export function selectGhibliCast(opts: {
   return {
     travelers: travelers.slice(0, 4),
     totalTravelerCount: count,
-    koreanGuide: GHIBLI_CHARACTER_ROSTER_18.guide_korean_m_40s,
+    guide: GHIBLI_CHARACTER_ROSTER_18.guide_m_40s,
     vehicle: getVehicleConfigByCompanionCount(count),
   };
 }

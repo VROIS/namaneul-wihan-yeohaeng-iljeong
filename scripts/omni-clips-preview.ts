@@ -75,7 +75,7 @@ async function main() {
     flag("guide") === "f"
       ? {
           ...matrixCast,
-          koreanGuide: GHIBLI_CHARACTER_ROSTER_18.guide_korean_f_40s,
+          guide: GHIBLI_CHARACTER_ROSTER_18.guide_f_40s,
         }
       : matrixCast;
   const city = await videoCity(itin);

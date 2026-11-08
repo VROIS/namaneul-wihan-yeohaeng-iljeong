@@ -39,10 +39,7 @@ export async function makeClips(
     const mp4 = await generateSceneClip(prompt, {
       apiKey,
       referenceImages: [
-        {
-          path: latestIn(sc.folder, `_${city}_scene${s.n}.jpg`),
-          mimeType: "image/jpeg",
-        },
+        { path: latestIn(sc.folder, `_${city}_scene${s.n}.jpg`) },
       ],
       aspectRatio: "9:16",
       resolution,

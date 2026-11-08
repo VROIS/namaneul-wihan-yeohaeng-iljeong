@@ -27,7 +27,7 @@ RUN npx esbuild worker/container/generate.ts --bundle --platform=node --format=c
     && rm -rf shared worker
 
 # 실행 중 읽는 파일만 남긴다. 경로는 process.cwd()=/app 기준.
-#   character-roster-ghibli.ts assetPath = assets/characters/*.jpg
+#   character-roster-ghibli.ts characterImage = assets/characters/{asian,western}/*.jpg
 #   omni-day-clips.ts vehicleAssetPath = assets/vehicles/vehicle_*.jpg
 COPY assets/characters ./assets/characters
 COPY assets/vehicles ./assets/vehicles

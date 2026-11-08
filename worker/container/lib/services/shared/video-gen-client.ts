@@ -13,7 +13,7 @@ const PER_MINUTE_RETRY_MS = Array(9).fill(60_000);
 
 export interface SceneClipOpts {
   apiKey: string; // issueApiKey 출입증 (직접 env 조회 금지)
-  referenceImages: { path?: string; url?: string; mimeType?: string }[];
+  referenceImages: { path?: string; url?: string }[];
   aspectRatio?: "9:16" | "16:9"; // 디폴트 9:16 세로 숏폼
   resolution?: "360p" | "720p"; // 디폴트 360p (앱 하루 영상)
   task?: "reference_to_video" | "image_to_video"; // 디폴트 참고 그림 방식, image_to_video = 첫 그림이 첫 화면
@@ -45,11 +45,12 @@ export async function generateSceneClip(
   const sku =
     resolution === "360p" ? OMNI_MODEL : `${OMNI_MODEL}@${resolution}`;
   const input: any[] = [];
+  // ⚠️ 수정금지(승인필요) 2026-11-08 사장님 결정 = 참조 그림 형식 = jpg 한 벌(image/jpeg) (정본 2026-11-08)
   for (const img of opts.referenceImages)
     input.push({
       type: "image",
       data: await toBase64(img),
-      mime_type: img.mimeType || "image/jpeg",
+      mime_type: "image/jpeg",
     });
   input.push({ type: "text", text: prompt });
 

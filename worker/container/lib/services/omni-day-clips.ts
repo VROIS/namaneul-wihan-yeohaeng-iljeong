@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { calculateAge } from "./protagonist-generator";
 import {
+  characterImage,
   selectGhibliCast,
   type GhibliCast,
   type GhibliCharacter,
@@ -70,7 +71,7 @@ const FAREWELL: Record<string, string> = {
 
 // ⚠️ 수정금지(승인필요) 2026-11-03 최적값 = 사람 목록 순서 = 일행 순서 + 가이드 마지막, 주인공 = 그 번호 (정본 2026-11-03)
 function castLineup(cast: GhibliCast): GhibliCharacter[] {
-  return [...cast.travelers, cast.koreanGuide];
+  return [...cast.travelers, cast.guide];
 }
 
 // ⚠️ 수정금지(승인필요) 2026-11-03 최적값 = 차 그림 파일 고르기 1벌 (정본 2026-11-03)
@@ -230,7 +231,7 @@ function placeLine(
   };
 }
 
-// ⚠️ 수정금지(승인필요) 2026-11-05 사장님 결정 = 참조 그림 = 사람마다 1장 + 차(가이드 여정에서 조각 안 운전 장소가 있을 때, 그 장소 칸에 "차가 근처에 서 있다" 1문장) · 장소 사진 없음(이름만) · 대중교통 여정 = 차 0 · 최대 6장 (정본 2026-11-05)
+// ⚠️ 수정금지(승인필요) 2026-11-08 사장님 결정 = 참조 그림 = 사람마다 1장(영상 언어 세트 = characterImage) + 차(가이드 여정에서 조각 안 운전 장소가 있을 때, 그 장소 칸에 "차가 근처에 서 있다" 1문장) · 장소 사진 없음(이름만) · 대중교통 여정 = 차 0 · 최대 6장 (정본 2026-11-08)
 export interface ClipOpts {
   city: string;
   tripKind?: string;
@@ -289,7 +290,7 @@ export function omniClipRequest(
   const roles = people.map((c) => roleOf(c, people, opts.tripKind));
   const extra = Math.max(0, cast.totalTravelerCount - cast.travelers.length);
   const images: { path?: string; url?: string }[] = people.map((c) => ({
-    path: path.join(opts.root, c.assetPath),
+    path: path.join(opts.root, characterImage(c, opts.lang)),
   }));
   const carAt = (s: any) => drives(s) && !isMeal(s) && !isIndoor(s);
   const withCar = opts.transport === "guide" && clip.slots.some(carAt);
