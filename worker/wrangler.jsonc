@@ -68,8 +68,8 @@
       //   실체 = worker/routes-video-generate.ts 의 `export class VideoStitchContainer extends Container`.
       "class_name": "VideoStitchContainer",
 
-      // ⚠️ 수정금지(승인필요) 2026-11-05 사장님 결정 = 이미지 = 구워 올린 것을 digest 주소로 가리킨다(이 PC 에서 도커 없이 배포 §24) = 옴니 1.2 하루 영상 이미지(Workers Builds 0896b7e0, 커밋 3e70400, 굽기 자가시험 성공) (정본 2026-11-05)
-      "image": "registry.cloudflare.com/51bcbc629c76db55d6a9aac934b2195f/tripis-api-videostitchcontainer@sha256:2dc5fca9d5078d705ea801d84dbd51f6245af61997ea53b3c2ffa9faa57203e5",
+      // ⚠️ 수정금지(승인필요) 2026-11-08 사장님 결정 = 이미지 = 구워 올린 것을 digest 주소로 가리킨다(이 PC 에서 도커 없이 배포 §24) = 기준 그림 2세트·머리말 최종안 이미지(Workers Builds 7694c107, 커밋 8e61dee, 굽기 자가시험 성공) (정본 2026-11-08)
+      "image": "registry.cloudflare.com/51bcbc629c76db55d6a9aac934b2195f/tripis-api-videostitchcontainer@sha256:0d3b990e7d3f28cac1c9fa3dd190050405195bdce25674d3045997d519a17c39",
 
       // 근거: get-started 공식 예시의 max_instances. 동시에 뜰 수 있는 인스턴스 상한.
       "max_instances": 5,
