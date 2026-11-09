@@ -159,6 +159,7 @@ export const resultStyles = StyleSheet.create({
     borderColor: Brand.primary,
   },
   shareFooterBtnText: { fontSize: 14, fontFamily: Fonts.semiBold },
+  affiliateNote: { fontSize: 11, fontFamily: Fonts.sans, textAlign: "center" },
   placesList: { paddingHorizontal: Spacing.sm },
   placeItem: { flexDirection: "row", marginBottom: Spacing.sm }, // 간격 최소화
   // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = 44→38(원 36+여유2) = 슬롯 텍스트칸 폭 추가 확보(§ placeCard 근거 동일).

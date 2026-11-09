@@ -94,3 +94,8 @@ export const adminSnapshotKey = "system/admin-metrics/latest.json";
 // ⚠️ 수정금지(승인필요) 2026-11-04 최적값 = 도시 보고서 이름도 맨 앞 = 시각 초까지(이름에 시각이 없으면 올리는 순간의 시각을 붙인다) (정본 2026-11-04)
 export const cityReportKey = (cityId: Id, fileName: string): string =>
   `${cityId}/reports/${STAMP_HEAD.test(fileName) ? fileName : `${fileStamp()}_${fileName}`}`;
+
+// ⚠️ 수정금지(승인필요) 2026-11-09 사장님 결정 = 예약 제휴 연결표 = 시각 붙은 파일을 쌓고 가장 최근 1개를 쓴다 (정본 2026-11-09)
+export const affiliateLinksDir = "system/affiliate";
+export const affiliateLinksKey = (): string =>
+  `${affiliateLinksDir}/${fileStamp()}_links.json`;

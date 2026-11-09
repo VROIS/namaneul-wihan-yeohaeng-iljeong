@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet, Linking } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 // ⚠️ 수정금지(승인필요) 2026-05-19 = 이미지 NULL placeholder = BTS 맵 마커 동일 SVG (= 사용자 SSOT)
 import { SvgXml } from "react-native-svg";
@@ -11,6 +11,7 @@ import CityBadge, { GLOSS_COLORS } from "@/components/tripis/CityBadge";
 import { BADGE_COLORS } from "@/components/tripis/CityCardScreen";
 import { Itinerary, DayPlan } from "@/types/trip";
 import { openPlaceInMaps } from "@/lib/openPlaceInMaps";
+import { getApiUrl } from "@/lib/query-client";
 import { openGuideForPlace } from "@/components/tripis/openGuide";
 import { resultStyles as styles } from "../styles/result";
 import TransitPill from "./TransitPill";
@@ -69,6 +70,7 @@ export default function PlaceSlotCard({
     // 🔒 2026-08-05 사장님 SSOT = 여정 슬롯 해설 = 심화 = 로그인 필수(도시카드 샘플과 다름).
     isAuthed,
     requestLogin,
+    currentItineraryId,
   } = planner;
 
   // 🎙️ 2026-08-02 사장님 지시 = 이 슬롯의 우리 장소번호.
@@ -92,6 +94,12 @@ export default function PlaceSlotCard({
 
   const priceLabel = slotPriceLabel(place, isMeal, t);
   const canReserve = (slotPriceAmount(place, !!isMeal) ?? 0) > 0;
+  const openReserve = () => {
+    if (isMeal || guidePlaceId === null) return openPlaceInMaps(place);
+    Linking.openURL(
+      `${getApiUrl()}/go?place=${guidePlaceId}&trip=${currentItineraryId ?? 0}`,
+    );
+  };
   return (
     <View
       onLayout={(e) => {
@@ -159,29 +167,33 @@ export default function PlaceSlotCard({
           <View style={styles.placeCardContent}>
             {/* 🎙️ 2026-08-03 사장님 지시 = 썸네일(위) + 칸 맨 아래 [해설 듣기] 세로칸(치수 = slotStyles). */}
             <View style={slotStyles.thumbColumn}>
-              {/* ⚠️ 수정금지(승인필요) 2026-10-27 사장님 결정 = 썸네일 + 바로 밑 "예약" = 한 덩어리 = 어디를 눌러도 같은 구글맵 장소 페이지(openPlaceInMaps 1벌) · "예약" = 가격이 있는 곳(0 보다 큼)만 (정본 §2026-10-27) */}
+              {/* ⚠️ 수정금지(승인필요) 2026-11-09 사장님 결정 = 썸네일 = 구글맵 장소 페이지 · "예약"(가격 0 보다 큰 곳만) = 명소는 /go 제휴 한 곳, 식사는 구글맵 (정본 2026-11-09) */}
               {/* ⚠️ 수정금지(승인필요) 2026-05-12 = BTS 1주일 SSOT = resolveImageSource (= UA + bucket + Platform 분기) */}
-              <Pressable onPress={() => openPlaceInMaps(place)}>
-                <View style={styles.placeThumbnail}>
-                  <SlotThumbnail
-                    place={place}
-                    isMealSlot={isMealSlot}
-                    isMeal={!!isMeal}
-                    theme={theme}
-                    t={t}
-                  />
-                </View>
-                {canReserve && (
-                  <View style={slotStyles.reserve}>
-                    <Text
-                      style={slotStyles.reserveText}
-                      {...fitTextPropsSingleLine}
-                    >
-                      {t("trip.reserve")}
-                    </Text>
+              <View>
+                <Pressable onPress={() => openPlaceInMaps(place)}>
+                  <View style={styles.placeThumbnail}>
+                    <SlotThumbnail
+                      place={place}
+                      isMealSlot={isMealSlot}
+                      isMeal={!!isMeal}
+                      theme={theme}
+                      t={t}
+                    />
                   </View>
+                </Pressable>
+                {canReserve && (
+                  <Pressable onPress={openReserve}>
+                    <View style={slotStyles.reserve}>
+                      <Text
+                        style={slotStyles.reserveText}
+                        {...fitTextPropsSingleLine}
+                      >
+                        {t("trip.reserve")}
+                      </Text>
+                    </View>
+                  </Pressable>
                 )}
-              </Pressable>
+              </View>
 
               {/* 🎙️ [해설 듣기] = 이미지가 떠도 아이콘이 떠도 같은 자리(칸 맨 아래)에 뜬다(식사 슬롯도 동일).
                   부품·빛줄기·그라데이션 = 도시 카드 해설 배지와 **같은 CityBadge 1벌 그대로**(§16 재발명 금지),

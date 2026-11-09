@@ -432,6 +432,12 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
                   </Text>
                 </Pressable>
               </View>
+              {/* ⚠️ 수정금지(승인필요) 2026-11-09 사장님 결정 = 여정 맨 아래 한 줄 = "예약은 제휴 링크로 연결돼요"(돈 언급 없음) (정본 2026-11-09) */}
+              <Text
+                style={[styles.affiliateNote, { color: theme.textSecondary }]}
+              >
+                {t("trip.affiliateNote")}
+              </Text>
             </View>
           </ScrollView>
         </>

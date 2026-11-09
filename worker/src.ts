@@ -48,6 +48,7 @@ import { env, waitUntil } from "cloudflare:workers";
 import { ensureKeys } from "./keys";
 import { registerPlaceRoutes } from "./routes-places";
 import { registerPublicPageRoutes } from "./routes-public-pages";
+import { registerGoRoutes } from "./routes-go";
 import { registerItineraryRoutes } from "./routes-itinerary";
 import { registerGuideVideoRoutes } from "./routes-guide-video";
 import { registerExpertBtsRoutes } from "./routes-expert-bts";
@@ -189,6 +190,8 @@ registerItineraryGenerateDbRoutes(app, openDb, sql);
 registerVideoGenerateRoutes(app, openDb);
 // ⚠️ 수정금지(승인필요) 2026-11-07 사장님 결정 = 검색·AI 검색·LLM 공개 글 페이지 (정본 2026-11-07)
 registerPublicPageRoutes(app, openDb);
+// ⚠️ 수정금지(승인필요) 2026-11-09 사장님 결정 = 예약 버튼 제휴 /go (정본 2026-11-09)
+registerGoRoutes(app, openDb);
 
 app.get("/api/cities/:id", async (req, res) => {
   const { db, close } = openDb();

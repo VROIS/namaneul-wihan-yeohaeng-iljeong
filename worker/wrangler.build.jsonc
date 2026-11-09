@@ -142,7 +142,7 @@
     //    GET * 핸들러가 없어 웹화면이 전부 404 가 된다.
     //    근거: gotchas.md:3-22 "Use Selective Worker-First Routing" (true 대신 배열 패턴)
     //          configuration.md:66-106 (배열 문법 + 부정 패턴), 공식문서 예시도 배열.
-    //    ⚠️ 수정금지(승인필요) 2026-11-07 사장님 결정 = /api/* + 공개 글 페이지(/trips · /guides · sitemap.xml · llms.txt) (정본 2026-11-07)
-    "run_worker_first": ["/api/*", "/trips", "/trips/*", "/guides/*", "/sitemap.xml", "/llms.txt"]
+    //    ⚠️ 수정금지(승인필요) 2026-11-09 사장님 결정 = /api/* + 공개 글 페이지(/trips · /guides · sitemap.xml · llms.txt) + 예약 제휴 /go (정본 2026-11-09)
+    "run_worker_first": ["/api/*", "/trips", "/trips/*", "/guides/*", "/sitemap.xml", "/llms.txt", "/go"]
   }
 }
