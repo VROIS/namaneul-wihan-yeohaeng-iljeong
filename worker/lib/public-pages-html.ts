@@ -1,5 +1,6 @@
-// ⚠️ 수정금지(승인필요) 2026-11-07 사장님 결정 = 공개 글 페이지 HTML 틀 1벌 = 자바스크립트 없이 읽히는 글(AI 크롤러용) (정본 2026-11-07)
+// ⚠️ 수정금지(승인필요) 2026-11-09 사장님 결정 = 공개 글 페이지 HTML 틀 1벌 = 자바스크립트 없이 읽히는 글(AI 크롤러용) + head 에 Travelpayouts Drive 1벌(travelpayouts-drive.html) (정본 2026-11-09)
 import { PAGE_LANGS, pageText, type PageLang } from "./public-pages-text";
+import TP_DRIVE from "./travelpayouts-drive.html";
 
 export const SITE = "https://tripis.app";
 
@@ -86,7 +87,7 @@ export function renderPage(p: PageShell): string {
   return `<!doctype html><html lang="${t.htmlLang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(p.title)}</title><meta name="description" content="${esc(p.description)}"><link rel="canonical" href="${esc(url)}">${alt}${xdef}
 <meta property="og:type" content="article"><meta property="og:site_name" content="TRIPIS"><meta property="og:title" content="${esc(p.title)}"><meta property="og:description" content="${esc(p.description)}"><meta property="og:url" content="${esc(url)}"><meta name="twitter:card" content="summary">
-<style>${CSS}</style>${ld}</head><body><main>
+<style>${CSS}</style>${ld}${TP_DRIVE}</head><body><main>
 <header class="top"><a class="brand" href="${SITE}/?ref=web_page">TRIPIS</a>${langNav ? `<nav class="langs" aria-label="${esc(t.languages)}">${langNav}</nav>` : ""}</header>
 ${p.body}
 <p class="brandline">${esc(t.brand)}</p>

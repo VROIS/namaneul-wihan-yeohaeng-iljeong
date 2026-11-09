@@ -10,6 +10,7 @@ const SRC_DIST = path.join(ROOT, "dist");
 const SRC_ASSETS = path.join(ROOT, "assets");
 const SRC_ADMIN = path.join(ROOT, "worker", "admin", "admin-dashboard.html");
 const SRC_PROMO = path.join(ROOT, "worker", "admin", "admin-promo.js");
+const SRC_TP_DRIVE = path.join(ROOT, "worker", "lib", "travelpayouts-drive.html");
 
 const EXCLUDE_DIRS = new Set(["test-screenshots"]);
 const EXCLUDE_EXTS = new Set([".psd"]);
@@ -104,6 +105,15 @@ fs.mkdirSync(OUT, { recursive: true });
 
 const nDist = copyDir(SRC_DIST, OUT).length;
 console.log(`1) dist/ -> public-dist/                       ${nDist}개`);
+
+// ⚠️ 수정금지(승인필요) 2026-11-09 사장님 결정 = 앱 웹 화면 head 에 Travelpayouts Drive 1벌(worker/lib/travelpayouts-drive.html = 공개 글 페이지와 같은 파일) (정본 2026-11-09)
+const outIndex = path.join(OUT, "index.html");
+const tpDrive = fs.readFileSync(SRC_TP_DRIVE, "utf8");
+fs.writeFileSync(
+  outIndex,
+  fs.readFileSync(outIndex, "utf8").replace("</head>", `${tpDrive}</head>`),
+);
+console.log(`   index.html head <- travelpayouts-drive.html`);
 
 const outAssets = path.join(OUT, "assets");
 fs.mkdirSync(outAssets, { recursive: true });
