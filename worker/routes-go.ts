@@ -6,6 +6,8 @@ import type { OpenDb } from "./db-types";
 import { affiliateLinksDir } from "../shared/r2-paths";
 import {
   affiliateUrl,
+  APP_LANGS,
+  MAPS_HL,
   pickAffiliate,
   type AffiliateLinksFile,
 } from "../shared/affiliate-partners";
@@ -36,17 +38,18 @@ export function registerGoRoutes(app: Express, openDb: OpenDb): void {
   app.get("/go", async (req: Request, res: Response) => {
     const placeId = Number(req.query.place);
     const tripId = Number(req.query.trip) || 0;
+    const lang = APP_LANGS.find((l) => l === req.query.lang);
     if (!Number.isInteger(placeId) || placeId <= 0)
       return res.status(400).send("place");
     const entry = (await linksFile())?.places[String(placeId)];
     const link = entry ? pickAffiliate(entry.links) : null;
     if (link) {
       console.log(
-        `[go] place=${placeId} trip=${tripId} partner=${link.partner}`,
+        `[go] place=${placeId} trip=${tripId} partner=${link.partner} lang=${lang ?? "-"}`,
       );
       return res.redirect(
         302,
-        affiliateUrl(link, `tripis_${entry!.cityId}_${tripId}`),
+        affiliateUrl(link, `tripis_${entry!.cityId}_${tripId}`, lang),
       );
     }
     const { db, close } = openDb();
@@ -57,8 +60,12 @@ export function registerGoRoutes(app: Express, openDb: OpenDb): void {
         .where(eq(placeSeedRaw.id, placeId))
         .limit(1);
       if (!row?.uri) return res.status(404).send("place");
-      console.log(`[go] place=${placeId} trip=${tripId} partner=maps`);
-      return res.redirect(302, row.uri);
+      console.log(
+        `[go] place=${placeId} trip=${tripId} partner=maps lang=${lang ?? "-"}`,
+      );
+      const maps = new URL(row.uri);
+      if (lang) maps.searchParams.set("hl", MAPS_HL[lang]);
+      return res.redirect(302, maps.toString());
     } finally {
       close();
     }

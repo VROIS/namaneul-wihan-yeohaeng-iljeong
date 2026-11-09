@@ -4,7 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 // ⚠️ 수정금지(승인필요) 2026-05-19 = 이미지 NULL placeholder = BTS 맵 마커 동일 SVG (= 사용자 SSOT)
 import { SvgXml } from "react-native-svg";
 import { LUCIDE as BTS_MARKER_LUCIDE } from "@/components/bts/bts-marker-svg";
-import { Brand, Spacing } from "@/constants/theme";
+import { Brand } from "@/constants/theme";
 import { Icon } from "@/components/Icon";
 // 🎙️ 2026-08-02 사장님 지시 = 슬롯마다 [해설 듣기]. 부품·색 모두 **도시 카드 해설 배지와 같은 1벌**(§16 재발명 금지).
 import CityBadge, { GLOSS_COLORS } from "@/components/tripis/CityBadge";
@@ -17,7 +17,7 @@ import { resultStyles as styles } from "../styles/result";
 import TransitPill from "./TransitPill";
 import SlotThumbnail from "./SlotThumbnail";
 import { isMealPlace, slotPriceAmount, slotPriceLabel } from "./slot-price";
-import { fitTextPropsSingleLine } from "../utils";
+import i18n from "@/lib/i18n";
 import type { PlannerApi } from "../hooks/useTripPlanner";
 
 // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = [점심]/[저녁] 텍스트 프리픽스 폐기(식당명 노출공간
@@ -28,20 +28,20 @@ const slotStyles = StyleSheet.create({
   thumbColumn: {
     alignSelf: "stretch",
     alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: Spacing.sm,
+    justifyContent: "flex-start",
+    gap: 6,
   },
-  reserve: {
-    width: 48,
-    height: 18,
-    marginTop: 3,
-    borderRadius: 9,
+  thumbInfoWrap: { marginRight: 6 },
+  thumbInfoBlock: { width: 48, borderRadius: 8, overflow: "hidden" },
+  infoBar: {
+    height: 20,
     backgroundColor: Brand.primary,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 2,
   },
-  reserveText: { color: "#FFFFFF", fontSize: 11, fontWeight: "700" },
+  infoText: { color: "#FFFFFF", fontSize: 11, fontWeight: "700" },
+  timeReviewRow: { flexDirection: "row", alignItems: "stretch", gap: 6 },
+  timeReviewLeft: { flexShrink: 1 },
 });
 
 export default function PlaceSlotCard({
@@ -93,11 +93,13 @@ export default function PlaceSlotCard({
   const hasTransit = index < places.length - 1;
 
   const priceLabel = slotPriceLabel(place, isMeal, t);
-  const canReserve = (slotPriceAmount(place, !!isMeal) ?? 0) > 0;
-  const openReserve = () => {
-    if (isMeal || guidePlaceId === null) return openPlaceInMaps(place);
+  const canTicket =
+    !isMeal &&
+    guidePlaceId !== null &&
+    (slotPriceAmount(place, false) ?? 0) > 0;
+  const openTicket = () => {
     Linking.openURL(
-      `${getApiUrl()}/go?place=${guidePlaceId}&trip=${currentItineraryId ?? 0}`,
+      `${getApiUrl()}/go?place=${guidePlaceId}&trip=${currentItineraryId ?? 0}&lang=${encodeURIComponent(i18n.language || "ko")}`,
     );
   };
   return (
@@ -167,11 +169,19 @@ export default function PlaceSlotCard({
           <View style={styles.placeCardContent}>
             {/* 🎙️ 2026-08-03 사장님 지시 = 썸네일(위) + 칸 맨 아래 [해설 듣기] 세로칸(치수 = slotStyles). */}
             <View style={slotStyles.thumbColumn}>
-              {/* ⚠️ 수정금지(승인필요) 2026-11-09 사장님 결정 = 썸네일 = 구글맵 장소 페이지 · "예약"(가격 0 보다 큰 곳만) = 명소는 /go 제휴 한 곳, 식사는 구글맵 (정본 2026-11-09) */}
+              {/* ⚠️ 수정금지(승인필요) 2026-11-09 사장님 결정 = 썸네일 + Info 한 블록 = 구글맵 장소 페이지 · Ticket(가격 있는 명소) = /go 제휴 한 곳(앱 언어 전달) (정본 2026-11-09) */}
               {/* ⚠️ 수정금지(승인필요) 2026-05-12 = BTS 1주일 SSOT = resolveImageSource (= UA + bucket + Platform 분기) */}
-              <View>
-                <Pressable onPress={() => openPlaceInMaps(place)}>
-                  <View style={styles.placeThumbnail}>
+              <View style={slotStyles.thumbInfoWrap}>
+                <Pressable
+                  onPress={() => openPlaceInMaps(place)}
+                  style={slotStyles.thumbInfoBlock}
+                >
+                  <View
+                    style={[
+                      styles.placeThumbnail,
+                      { marginRight: 0, borderRadius: 0 },
+                    ]}
+                  >
                     <SlotThumbnail
                       place={place}
                       isMealSlot={isMealSlot}
@@ -180,19 +190,10 @@ export default function PlaceSlotCard({
                       t={t}
                     />
                   </View>
+                  <View style={slotStyles.infoBar}>
+                    <Text style={slotStyles.infoText}>{t("trip.info")}</Text>
+                  </View>
                 </Pressable>
-                {canReserve && (
-                  <Pressable onPress={openReserve}>
-                    <View style={slotStyles.reserve}>
-                      <Text
-                        style={slotStyles.reserveText}
-                        {...fitTextPropsSingleLine}
-                      >
-                        {t("trip.reserve")}
-                      </Text>
-                    </View>
-                  </Pressable>
-                )}
               </View>
 
               {/* 🎙️ [해설 듣기] = 이미지가 떠도 아이콘이 떠도 같은 자리(칸 맨 아래)에 뜬다(식사 슬롯도 동일).
@@ -258,25 +259,43 @@ export default function PlaceSlotCard({
               })()}
 
               {/* ⚠️ 수정금지(승인필요) 2026-09-02 사장님 확정 = 시작 시각만 노출(종료는 감춤) = 사람이 스스로 조정 (정본 B4 v23) */}
-              <View style={styles.placeTimeRow}>
-                <Icon name="clock" size={12} color={theme.textSecondary} />
-                <Text
-                  style={[styles.placeTimeText, { color: theme.textSecondary }]}
-                >
-                  {place.startTime}
-                </Text>
-              </View>
+              {/* ⚠️ 수정금지(승인필요) 2026-11-09 사장님 결정 = Ticket 알약 = 시간·구글 리뷰 오른쪽 빈 공간 · 해설 듣기를 눕힌 큰 알약 · 영상 카드 3번 색 + 샤이니 (정본 2026-11-09) */}
+              <View style={slotStyles.timeReviewRow}>
+                <View style={slotStyles.timeReviewLeft}>
+                  <View style={styles.placeTimeRow}>
+                    <Icon name="clock" size={12} color={theme.textSecondary} />
+                    <Text
+                      style={[
+                        styles.placeTimeText,
+                        { color: theme.textSecondary },
+                      ]}
+                    >
+                      {place.startTime}
+                    </Text>
+                  </View>
 
-              {/* ④ 구글리뷰 (별점 폐기 = RC만, 사용자 SSOT) */}
-              {(place as any).userRatingCount > 0 ? (
-                <View style={styles.placeStars}>
-                  <Icon name="star" size={12} color={theme.textSecondary} />
-                  <Text style={styles.placeStarsText}>
-                    {t("trip.googleReviews")}{" "}
-                    {(place as any).userRatingCount.toLocaleString()}
-                  </Text>
+                  {/* ④ 구글리뷰 (별점 폐기 = RC만, 사용자 SSOT) */}
+                  {(place as any).userRatingCount > 0 ? (
+                    <View style={styles.placeStars}>
+                      <Icon name="star" size={12} color={theme.textSecondary} />
+                      <Text style={styles.placeStarsText}>
+                        {t("trip.googleReviews")}{" "}
+                        {(place as any).userRatingCount.toLocaleString()}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
-              ) : null}
+                {canTicket && (
+                  <CityBadge
+                    icon="ticket"
+                    label={t("trip.ticket")}
+                    colors={BADGE_COLORS.course}
+                    visible
+                    onPress={openTicket}
+                    layout="wide"
+                  />
+                )}
+              </View>
 
               {/* ⑤ 한줄요약 = editorial_summary 단일 (차별화 포인트). 옛 description·geminiReason·personaFitReason·summaryKo 노출 완전삭제(§19). summary_ko = 숏폼 재료 = 별도 보전.
                   ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = numberOfLines 제한 폐기(비한국어

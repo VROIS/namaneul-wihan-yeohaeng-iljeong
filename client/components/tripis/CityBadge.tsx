@@ -43,8 +43,8 @@ interface Props {
   visible: boolean;
   delay?: number; // 빛줄기 시작 시차(ms) = 셋이 동시에 번쩍이지 않게. 배지 1개짜리 자리는 안 넘긴다
   onPress(): void;
-  // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = 슬롯카드 좁은 폭 전용 세로형(아이콘 위 + 글자 아래,
-  layout?: "row" | "column";
+  // ⚠️ 수정금지(승인필요) 2026-11-09 사장님 결정 = layout = 세로형(column) · 가로형(wide, Ticket 알약) (정본 2026-11-09)
+  layout?: "row" | "column" | "wide";
   width?: number; // column일 때 고정 폭(호출부가 지정, 예: 슬롯 썸네일과 동일값)
 }
 
@@ -91,7 +91,10 @@ export default function CityBadge({
     outputRange: [-BEAM_WIDTH, (pillWidth || 72) + BEAM_WIDTH],
   });
 
+  // ⚠️ 수정금지(승인필요) 2026-11-09 사장님 결정 = 가로형(wide) = Ticket 알약 = 세로형과 같은 부품(광택·빛줄기·3D)을 눕힌 것 (정본 2026-11-09)
   const isColumn = layout === "column";
+  const isWide = layout === "wide";
+  const is3d = isColumn || isWide;
   const [labelLine1, labelLine2] = isColumn
     ? splitLabelForColumn(label)
     : [label, ""];
@@ -101,9 +104,10 @@ export default function CityBadge({
       style={({ pressed }) => [
         styles.badge,
         isColumn && styles.badgeColumn,
+        isWide && styles.badgeWide,
         isColumn && width ? { width } : null,
-        // 실제 버튼처럼 눌리는 느낌(2026-08-16 사장님 승인 = "이 앱의 꽃"급 = 세로형 전용).
-        isColumn && pressed && styles.badgePressed,
+        // ⚠️ 수정금지(승인필요) 2026-11-09 사장님 결정 = 눌리면 살짝 오그라듦 = 세로형·가로형 공통 (정본 2026-11-09)
+        is3d && pressed && styles.badgePressed,
         !visible && styles.hidden,
       ]}
       onPress={onPress}
@@ -123,7 +127,7 @@ export default function CityBadge({
       />
 
       {/* 유리광택(위 밝음) + 림쉐이드(아래 어둠) = 볼록한 3D 단추 느낌(세로형 전용, 아래 §16 근거 참조). */}
-      {isColumn && (
+      {is3d && (
         <>
           <LinearGradient
             colors={GLOSS_COLORS}
@@ -161,7 +165,11 @@ export default function CityBadge({
       )}
 
       <View style={[styles.content, isColumn && styles.contentColumn]}>
-        <Icon name={icon} size={isColumn ? 14 : 12} color="#FFFFFF" />
+        <Icon
+          name={icon}
+          size={isWide ? 16 : isColumn ? 14 : 12}
+          color="#FFFFFF"
+        />
         {isColumn ? (
           <>
             <Text style={styles.textColumn}>{labelLine1}</Text>
@@ -170,18 +178,19 @@ export default function CityBadge({
             </Text>
           </>
         ) : (
-          <Text style={styles.text}>{label}</Text>
+          <Text style={isWide ? styles.textWide : styles.text}>{label}</Text>
         )}
       </View>
     </Pressable>
   );
 
-  if (!isColumn) return pressable;
+  if (!is3d) return pressable;
   return (
     <View
       style={[
         styles.badge3dShadow,
-        width ? { width } : null,
+        isColumn && width ? { width } : null,
+        isWide && styles.wideOuter,
         !visible && styles.hidden,
       ]}
     >
@@ -209,6 +218,22 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
     ...Shadows.elevated,
   },
+  wideOuter: {
+    flex: 1,
+    minWidth: 72,
+    maxWidth: 112,
+    minHeight: 44,
+    alignSelf: "stretch",
+  },
+  badgeWide: {
+    flex: 1,
+    minHeight: 44,
+    paddingHorizontal: 8,
+    paddingVertical: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  textWide: { color: "#FFFFFF", fontSize: 14, fontFamily: Fonts.bold },
   hidden: { opacity: 0 },
   beam: {
     position: "absolute",
