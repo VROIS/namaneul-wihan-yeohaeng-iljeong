@@ -182,7 +182,12 @@ export default function CityBadge({
             </Text>
           </>
         ) : (
-          <Text style={isWide ? styles.textWide : styles.text}>{label}</Text>
+          <Text
+            style={isWide ? styles.textWide : styles.text}
+            numberOfLines={isWide ? 1 : undefined}
+          >
+            {label}
+          </Text>
         )}
       </View>
     </Pressable>
@@ -226,12 +231,11 @@ const styles = StyleSheet.create({
   wideOuter: {
     flexGrow: 0,
     flexShrink: 0,
-    width: 60,
-    height: 31,
+    minHeight: 31,
   },
   badgeWide: {
     flex: 1,
-    paddingHorizontal: 3,
+    paddingHorizontal: 8,
     paddingVertical: 0,
     alignItems: "center",
     justifyContent: "center",

@@ -254,7 +254,7 @@ export default function PlaceSlotCard({
                     fontSize: 11,
                     color: theme.textTertiary,
                     marginBottom: 2,
-                    marginRight: canTicket ? 78 : 0,
+                    marginRight: canTicket ? 86 : 0,
                   }}
                 >
                   {(place as any).nameLocal}
@@ -298,7 +298,7 @@ export default function PlaceSlotCard({
                     layout="wide"
                     outerStyle={{
                       marginTop: hasLocalName ? -16 : -4,
-                      marginRight: 14,
+                      marginRight: 20,
                     }}
                   />
                 )}
