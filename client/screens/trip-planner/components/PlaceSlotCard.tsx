@@ -29,7 +29,7 @@ const slotStyles = StyleSheet.create({
     alignSelf: "stretch",
     alignItems: "flex-start",
     justifyContent: "flex-start",
-    gap: 6,
+    gap: 24,
   },
   thumbInfoWrap: { marginRight: 6 },
   thumbInfoBlock: { width: 48, borderRadius: 8, overflow: "hidden" },
@@ -40,7 +40,12 @@ const slotStyles = StyleSheet.create({
     justifyContent: "center",
   },
   infoText: { color: "#FFFFFF", fontSize: 11, fontWeight: "700" },
-  timeReviewRow: { flexDirection: "row", alignItems: "stretch", gap: 6 },
+  timeReviewRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 6,
+  },
   timeReviewLeft: { flexShrink: 1 },
 });
 
@@ -93,6 +98,10 @@ export default function PlaceSlotCard({
   const hasTransit = index < places.length - 1;
 
   const priceLabel = slotPriceLabel(place, isMeal, t);
+  const mainName =
+    (place as any).nameEn || (place as any).nameLocal || place.name;
+  const hasLocalName =
+    !!(place as any).nameLocal && (place as any).nameLocal !== mainName;
   const canTicket =
     !isMeal &&
     guidePlaceId !== null &&
@@ -239,24 +248,18 @@ export default function PlaceSlotCard({
                 </Text>
               </View>
               {/* ② 로컬명 (보조 = 작게, 있고 메인과 다를 때만) */}
-              {(() => {
-                const mainName =
-                  (place as any).nameEn ||
-                  (place as any).nameLocal ||
-                  place.name;
-                const localName = (place as any).nameLocal;
-                return localName && localName !== mainName ? (
-                  <Text
-                    style={{
-                      fontSize: 11,
-                      color: theme.textTertiary,
-                      marginBottom: 2,
-                    }}
-                  >
-                    {localName}
-                  </Text>
-                ) : null;
-              })()}
+              {hasLocalName ? (
+                <Text
+                  style={{
+                    fontSize: 11,
+                    color: theme.textTertiary,
+                    marginBottom: 2,
+                    marginRight: canTicket ? 78 : 0,
+                  }}
+                >
+                  {(place as any).nameLocal}
+                </Text>
+              ) : null}
 
               {/* ⚠️ 수정금지(승인필요) 2026-09-02 사장님 확정 = 시작 시각만 노출(종료는 감춤) = 사람이 스스로 조정 (정본 B4 v23) */}
               {/* ⚠️ 수정금지(승인필요) 2026-11-09 사장님 결정 = Ticket 알약 = 시간·구글 리뷰 오른쪽 빈 공간 · 해설 듣기를 눕힌 큰 알약 · 영상 카드 3번 색 + 샤이니 (정본 2026-11-09) */}
@@ -293,6 +296,10 @@ export default function PlaceSlotCard({
                     visible
                     onPress={openTicket}
                     layout="wide"
+                    outerStyle={{
+                      marginTop: hasLocalName ? -16 : -4,
+                      marginRight: 14,
+                    }}
                   />
                 )}
               </View>

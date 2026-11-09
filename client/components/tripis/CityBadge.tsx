@@ -5,6 +5,8 @@ import {
   Pressable,
   StyleSheet,
   Animated,
+  StyleProp,
+  ViewStyle,
   Easing,
   Platform,
 } from "react-native";
@@ -45,6 +47,7 @@ interface Props {
   onPress(): void;
   // ⚠️ 수정금지(승인필요) 2026-11-09 사장님 결정 = layout = 세로형(column) · 가로형(wide, Ticket 알약) (정본 2026-11-09)
   layout?: "row" | "column" | "wide";
+  outerStyle?: StyleProp<ViewStyle>; // wide 알약 바깥 틀 위치(호출부가 지정)
   width?: number; // column일 때 고정 폭(호출부가 지정, 예: 슬롯 썸네일과 동일값)
 }
 
@@ -57,6 +60,7 @@ export default function CityBadge({
   onPress,
   layout = "row",
   width,
+  outerStyle,
 }: Props) {
   const shimmer = useRef(new Animated.Value(0)).current;
   const [pillWidth, setPillWidth] = useState(0);
@@ -167,7 +171,7 @@ export default function CityBadge({
       <View style={[styles.content, isColumn && styles.contentColumn]}>
         <Icon
           name={icon}
-          size={isWide ? 16 : isColumn ? 14 : 12}
+          size={isWide ? 14 : isColumn ? 14 : 12}
           color="#FFFFFF"
         />
         {isColumn ? (
@@ -191,6 +195,7 @@ export default function CityBadge({
         styles.badge3dShadow,
         isColumn && width ? { width } : null,
         isWide && styles.wideOuter,
+        isWide && outerStyle,
         !visible && styles.hidden,
       ]}
     >
@@ -219,21 +224,19 @@ const styles = StyleSheet.create({
     ...Shadows.elevated,
   },
   wideOuter: {
-    flex: 1,
-    minWidth: 72,
-    maxWidth: 112,
-    minHeight: 44,
-    alignSelf: "stretch",
+    flexGrow: 0,
+    flexShrink: 0,
+    width: 60,
+    height: 31,
   },
   badgeWide: {
     flex: 1,
-    minHeight: 44,
-    paddingHorizontal: 8,
+    paddingHorizontal: 3,
     paddingVertical: 0,
     alignItems: "center",
     justifyContent: "center",
   },
-  textWide: { color: "#FFFFFF", fontSize: 14, fontFamily: Fonts.bold },
+  textWide: { color: "#FFFFFF", fontSize: 12, fontFamily: Fonts.bold },
   hidden: { opacity: 0 },
   beam: {
     position: "absolute",

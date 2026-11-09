@@ -39,6 +39,7 @@ export const AFFILIATE_PARTNERS: PartnerSpec[] = [
     params: (sub) => ({ partner_id: "PITH2ZG", cmp: sub }),
     locales: {
       ko: "ko-kr",
+      en: "en-us",
       ja: "ja-jp",
       zh: "zh-cn",
       fr: "fr-fr",
