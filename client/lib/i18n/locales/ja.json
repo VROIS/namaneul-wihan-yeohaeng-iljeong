@@ -182,7 +182,14 @@
     "searchCloseA11y": "検索を閉じる",
     "mealLunch": "昼食",
     "mealDinner": "夕食",
-    "mealEstimateNote": "最終旅程でレストランもご提案します"
+    "mealEstimateNote": "最終旅程でレストランもご提案します",
+    "regionFrance": "フランス",
+    "regionEurope": "ヨーロッパ",
+    "regionAsia": "アジア",
+    "regionNorthAmerica": "北米",
+    "regionSouthAmerica": "南米",
+    "regionAfrica": "アフリカ",
+    "regionOceania": "オセアニア"
   },
   "bts": {
     "placeCart": {

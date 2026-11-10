@@ -1,13 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { View, Text, Pressable, ScrollView, Platform } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import {
-  Brand,
-  Spacing,
-  Shadows,
-  BorderRadius,
-  Fonts,
-} from "@/constants/theme";
+import { Brand, Spacing, Shadows } from "@/constants/theme";
 import { Icon } from "@/components/Icon";
 import {
   VIBE_OPTIONS,
@@ -24,7 +17,11 @@ import PlaceAutocompleteWidget, {
 import { inputStyles as styles } from "./styles/input";
 import CitySearchAndroid from "./components/CitySearchAndroid";
 import { WebInputModal, NativePicker } from "./components/DateTimePickers";
-import TripisModal, { type RepCard } from "@/components/tripis/TripisModal";
+import TripisModal, {
+  type RepCard,
+  type TripisOpenParams,
+} from "@/components/tripis/TripisModal";
+import { openGuideForPlace } from "@/components/tripis/openGuide";
 import type { PlannerApi } from "./hooks/useTripPlanner";
 import { apiRequest } from "@/lib/query-client";
 import { takeCityFromUrl } from "@/lib/cityLink";
@@ -34,13 +31,10 @@ import { fitTextProps } from "./utils";
 import GenerateButtons from "./components/GenerateButtons";
 import ShinyPillBanner from "@/components/ShinyPillBanner";
 import AppGetButton, { HAS_APP_GET } from "@/components/AppGetButton";
-
-// ⚠️ 수정금지(승인필요) 2026-07-30 사장님 SSOT = 도시버튼 목록 = **서버가 DB 실측으로 내려주는 것만.**
-type ReadyCity = {
-  id: number;
-  nameKo: string;
-  nameEn: string;
-};
+import CityAccordionCarousel, {
+  type AccordionStage,
+  type ReadyCity,
+} from "./components/CityAccordionCarousel";
 
 export default function InputStep({ planner }: { planner: PlannerApi }) {
   const {
@@ -49,6 +43,8 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
     insets,
     t,
     i18n,
+    isAuthed,
+    requestLogin,
     formData,
     setFormData,
     toggleVibe,
@@ -56,13 +52,20 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
     openBestList,
   } = planner;
 
-  const [repCard, setRepCard] = useState<RepCard | null>(null);
+  const [videoParams, setVideoParams] = useState<TripisOpenParams | null>(null);
+  const [accordionStage, setAccordionStage] = useState<AccordionStage>(1);
   const lastCityRef = useRef<number>(0);
+  const dragStartYRef = useRef<number>(0);
+
+  const collapseCards = () => {
+    setAccordionStage((prev) => (prev === 0 ? prev : 0));
+  };
 
   // ⌨️ 2026-08-13 사장님 확정 = AOS 숙소·도시 검색 = 독립 전체화면 모달(CitySearchAndroid, ResultStep 숙소 Modal 과 같은 검증 구조).
   const searchPlaceholder = t("trip.searchPlaceholder");
-  // ⚠️ 수정금지(승인필요) 2026-10-27 사장님 결정 = 위젯이 준 구글 종류·주소 조각(destinationPlace, 나라 포함)을 서버로 보낸다 = 나라 코드 한 벌 · 서버가 도시를 잘라 새 폴더를 판정 (정본 §2026-10-27)
+  // ⚠️ 수정금지(승인필요) 2026-11-10 최적값 = 위젯이 준 구글 종류·주소 조각(destinationPlace, 나라 포함)을 서버로 보내고 도시 카드는 즉시 숨김(0단)으로 접는다 (정본 2026-11-10)
   const handlePlaceSelect = (place: PlaceSelection) => {
+    collapseCards();
     setFormData((prev) => ({
       ...prev,
       destination: place.name || prev.destination,
@@ -77,6 +80,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
     }));
   };
 
+  // ⚠️ 수정금지(승인필요) 2026-07-30 사장님 SSOT = 도시버튼 목록 = **서버가 DB 실측으로 내려주는 것만.**
   const [readyCities, setReadyCities] = useState<ReadyCity[]>([]);
   useEffect(() => {
     let alive = true;
@@ -94,30 +98,23 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
     };
   }, []);
 
-  // 도시 칩 = 그 도시를 목적지로 잡고 **항상** 카드를 띄운다(2026-08-02 사장님 지시 = 옛 "대표여정 없으면 안 띄움" 폐기 §19).
-  const handleCityPress = async (city: ReadyCity) => {
+  const selectCity = (city: ReadyCity, collapseToPill: boolean) => {
     lastCityRef.current = city.id;
     setFormData(cityDestination(city));
-    try {
-      const res = await apiRequest(
-        "GET",
-        `/api/cities/${city.id}/representative?lang=${encodeURIComponent(i18n.language || "ko")}`,
-      );
-      if (lastCityRef.current !== city.id) return;
-      setRepCard(await res.json());
-    } catch (e) {
-      console.error("[InputStep] 도시 카드 조회 실패:", e);
-    }
+    if (collapseToPill) setAccordionStage(0);
   };
 
-  // ⚠️ 수정금지(승인필요) 2026-10-29 사장님 결정 = 링크 `?city=` = 도시 목록이 오면 그 도시 칩을 누른 상태로 연다 (정본 §큰 일 4)
-  const cityPressRef = useRef(handleCityPress);
-  cityPressRef.current = handleCityPress;
+  // ⚠️ 수정금지(승인필요) 2026-11-10 최적값 = 링크 `?city=` = 도시 목록이 오면 그 도시를 목적지로 잡고 1단 캐러셀로 연다 (정본 2026-11-10)
+  const selectCityRef = useRef(selectCity);
+  selectCityRef.current = selectCity;
   useEffect(() => {
     if (!readyCities.length) return;
     const linked = takeCityFromUrl();
     const city = readyCities.find((c) => c.id === linked);
-    if (city) void cityPressRef.current(city);
+    if (city) {
+      selectCityRef.current(city, false);
+      setAccordionStage(1);
+    }
   }, [readyCities]);
   useVideoLinkCity(readyCities, setFormData, lastCityRef);
   // ⚠️ 수정금지(승인필요) 2026-11-05 사장님 결정 = 링크 `?bts` = 메인이 뜬 뒤 BTS 랜딩으로 바로(BTS 버튼과 같은 이동) (정본 2026-11-05)
@@ -125,6 +122,36 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
     if (navigation && takeBtsFromUrl())
       (navigation as any).navigate("BTSLanding");
   }, [navigation]);
+
+  const handleOpenVideo = (city: ReadyCity, rep: RepCard) => {
+    selectCity(city, false);
+    const targetId = rep.videoItineraryId ?? rep.itineraryId;
+    if (targetId == null) return;
+    setVideoParams({
+      mode: "itinerary",
+      itineraryId: targetId,
+      day: rep.videoDay ?? undefined,
+    });
+  };
+
+  const handleOpenGuide = (city: ReadyCity, rep: RepCard) => {
+    selectCity(city, false);
+    if (rep.placeId == null) return;
+    openGuideForPlace(
+      navigation,
+      rep.placeId,
+      rep.hasGuide ? "sample" : { isAuthed, requestLogin },
+    );
+  };
+
+  const handleOpenCourse = (city: ReadyCity, rep: RepCard) => {
+    selectCity(city, false);
+    if (rep.itineraryId == null) return;
+    navigation.navigate("Main", {
+      screen: "Home",
+      params: { itineraryId: rep.itineraryId },
+    } as any);
+  };
 
   const renderSectionHeader = (title: string, subtitle: string) => (
     <View style={styles.sectionHeader}>
@@ -137,12 +164,12 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.backgroundRoot }}>
-      {/* 📌 1~5 상단 고정 섹션 (최상단 여백 쾌적·여유롭게 확대) */}
+      {/* 📌 1~5 상단 고정 섹션 = 운영앱과 동일한 1개 헤더 컨테이너 (회색 구분 막대기 없음) */}
       <View
         style={{
-          paddingTop: Math.max(22, insets.top + 14),
+          paddingTop: Math.max(16, insets.top + 8),
           paddingHorizontal: Spacing.md,
-          paddingBottom: 12,
+          paddingBottom: 10,
           backgroundColor: theme.backgroundDefault,
           borderBottomWidth: 1,
           borderBottomColor: theme.border,
@@ -151,245 +178,176 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
         }}
       >
         {/* 🌟 OriginKit Shiny Pill 스타일 '지금 핫한 [TRIPIS Mark + TRIPIS] 여정' 3D 쉬머 빔 알약 배너 */}
-        <View style={{ marginBottom: 12, marginTop: 2 }}>
+        <View style={{ marginBottom: 8, marginTop: 2 }}>
           <ShinyPillBanner alignStart={HAS_APP_GET} />
           <AppGetButton />
         </View>
 
-        {/* 1. 완비 도시 버튼 = 서버가 내려준 목록 그대로(개수 고정 아님). 가로 스와이프 */}
-        <View style={{ marginBottom: 8 }}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            bounces={true}
-            overScrollMode="always"
-            contentContainerStyle={{ gap: 8, paddingRight: 24 }}
-          >
-            {/* 💜 0. BTS 콘서트 도시 (정식 BTS 랜딩 및 아미봉 무대 라이트쇼 스택 연결 = BTSLanding) */}
-            <Pressable
-              onPress={() => {
-                if (navigation) {
-                  (navigation as any).navigate("BTSLanding");
+        {/* 1. 완비 도시 3단 아코디언 캐러셀 = 0단(알약) · 1단(대륙탭+1줄 카드) · 2단(대륙별 줄줄줄 펼침) */}
+        <CityAccordionCarousel
+          readyCities={readyCities}
+          selectedDestination={formData.destination}
+          stage={accordionStage}
+          onStageChange={setAccordionStage}
+          onPressBts={() => {
+            if (navigation) (navigation as any).navigate("BTSLanding");
+          }}
+          onSelectCity={selectCity}
+          onCreatePopularTrip={(city) => {
+            selectCity(city, true);
+            void openBestList(city);
+          }}
+          onOpenVideo={handleOpenVideo}
+          onOpenGuide={handleOpenGuide}
+          onOpenCourse={handleOpenCourse}
+        />
+
+        {/* 3~5. 도시 입력창 + 날짜/시간 입력 컨테이너 = 터치(도시입력·날짜/시간 변경 등 무엇을 하든) 시 즉시 도시 카드 숨김(0단) */}
+        <View
+          onTouchEnd={collapseCards}
+          {...(Platform.OS === "web"
+            ? ({
+                onClick: collapseCards,
+                onFocusCapture: collapseCards,
+              } as any)
+            : {})}
+        >
+          {/* 3-4번 통합: 구글맵 위젯 통합 1개 필드 ('숙소명이나 도시명을 한글이나 원어로 입력해주세요')
+              ⌨️ 2026-08-13 사장님 확정 = AOS 만 돋보기 필드 → 독립 전체화면 모달(CitySearchAndroid). iOS·웹 = 인라인 그대로 무변경. */}
+          <View style={{ marginBottom: 8, zIndex: 30 }}>
+            {Platform.OS === "android" ? (
+              <CitySearchAndroid
+                theme={theme}
+                topInset={insets.top}
+                // 🏙️ iOS 인라인과 동일 UX(사장님 지적 2026-08-13) = 숙소 선택 전엔 도시명(디폴트 파리·칩/도시카드 선택 즉시 반영)이 필드에 보인다
+                selectedName={
+                  formData.accommodationName || formData.destination
                 }
-              }}
-              style={({ pressed }) => ({
-                opacity: pressed ? 0.85 : 1,
-                transform: [{ scale: pressed ? 0.97 : 1 }],
-              })}
-            >
-              <LinearGradient
-                colors={["#4C1D95", "#6D28D9", "#7C3AED"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={{
-                  paddingHorizontal: 16,
-                  paddingVertical: 8,
-                  borderRadius: BorderRadius.full,
-                  borderWidth: 1.5,
-                  borderColor: "#C084FC",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  ...Shadows.card,
+                placeholder={searchPlaceholder}
+                language={i18n.language || "ko"}
+                cityPrefix={
+                  formData.destination ? `${formData.destination} ` : undefined
+                }
+                onSelect={handlePlaceSelect}
+              />
+            ) : (
+              <PlaceAutocompleteWidget
+                placeholder={searchPlaceholder}
+                language={i18n.language || "ko"}
+                includedPrimaryTypes={CITY_LEVEL_TYPES}
+                cityPrefix={
+                  formData.destination ? `${formData.destination} ` : undefined
+                }
+                onSelect={handlePlaceSelect}
+              />
+            )}
+          </View>
+
+          {/* 5. 일정 및 시간 선택 (디폴트 시작 09:00, 종료 21:00) */}
+          <View style={{ flexDirection: "row", gap: 8, marginBottom: 4 }}>
+            {(["startDate", "endDate"] as const).map((field) => (
+              <Pressable
+                key={field}
+                style={[
+                  styles.dateBox,
+                  styles.flex1,
+                  {
+                    backgroundColor: "#F8FAFC",
+                    borderWidth: 1,
+                    borderColor: "#E2E8F0",
+                    borderRadius: 12,
+                    paddingVertical: 8,
+                  },
+                ]}
+                onPress={() => {
+                  collapseCards();
+                  openPicker(field);
                 }}
               >
+                <Icon name="calendar" size={15} color={Brand.primary} />
                 <Text
-                  style={{
-                    fontSize: 13,
-                    fontFamily: Fonts.bold,
-                    fontWeight: "800",
-                    color: "#FFFFFF",
-                    letterSpacing: -0.2,
-                    textShadowColor: "rgba(0, 0, 0, 0.4)",
-                    textShadowOffset: { width: 0, height: 1 },
-                    textShadowRadius: 2,
-                  }}
+                  style={[
+                    styles.dateText,
+                    { color: theme.text, fontSize: 12.5 },
+                  ]}
                 >
-                  {t("trip.btsConcertCity")}
+                  {formData[field]}
                 </Text>
-              </LinearGradient>
-            </Pressable>
+              </Pressable>
+            ))}
+          </View>
 
-            {readyCities.map((city) => {
-              const isSelected = formData.destination === city.nameEn;
-              // ⚠️ 수정금지(승인필요) 2026-08-14 = 도시명 = 고유명사라 t() 번역 대상이 아니다.
-              const cityLabel =
-                i18n.language === "ko" ? city.nameKo : city.nameEn;
-              return (
-                <Pressable
-                  key={city.id}
-                  style={{
-                    paddingHorizontal: 13,
-                    paddingVertical: 7,
-                    borderRadius: BorderRadius.full,
-                    backgroundColor: isSelected ? Brand.primary : "#F8FAFC",
-                    borderWidth: 1.5,
-                    borderColor: isSelected ? Brand.primary : "#E2E8F0",
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 5,
-                    ...Shadows.card,
-                  }}
-                  onPress={() => handleCityPress(city)}
-                  hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
-                  accessibilityRole="button"
-                  accessibilityLabel={cityLabel}
-                  accessibilityState={{ selected: isSelected }}
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            {(
+              [
+                ["startTime", "09:00"],
+                ["endTime", "21:00"],
+              ] as const
+            ).map(([field, fallback]) => (
+              <Pressable
+                key={field}
+                style={[
+                  styles.dateBox,
+                  styles.flex1,
+                  {
+                    backgroundColor: "#F8FAFC",
+                    borderWidth: 1,
+                    borderColor: "#E2E8F0",
+                    borderRadius: 12,
+                    paddingVertical: 8,
+                  },
+                ]}
+                onPress={() => {
+                  collapseCards();
+                  openPicker(field);
+                }}
+              >
+                <Icon name="clock" size={15} color={Brand.primary} />
+                <Text
+                  style={[
+                    styles.dateText,
+                    { color: theme.text, fontSize: 12.5 },
+                  ]}
                 >
-                  <Icon
-                    name="map-pin"
-                    size={13}
-                    color={isSelected ? "#FFFFFF" : Brand.primary}
-                  />
-                  <Text
-                    style={{
-                      fontSize: 12.5,
-                      fontFamily: Fonts.bold,
-                      color: isSelected ? "#FFFFFF" : "#0F172A",
-                    }}
-                  >
-                    {cityLabel}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
-
-        {/* 3-4번 통합: 구글맵 위젯 통합 1개 필드 ('숙소명이나 도시명을 한글이나 원어로 입력해주세요')
-            ⌨️ 2026-08-13 사장님 확정 = AOS 만 돋보기 필드 → 독립 전체화면 모달(CitySearchAndroid). iOS·웹 = 인라인 그대로 무변경. */}
-        <View style={{ marginBottom: 10, zIndex: 30 }}>
-          {Platform.OS === "android" ? (
-            <CitySearchAndroid
-              theme={theme}
-              topInset={insets.top}
-              // 🏙️ iOS 인라인과 동일 UX(사장님 지적 2026-08-13) = 숙소 선택 전엔 도시명(디폴트 파리·칩/도시카드 선택 즉시 반영)이 필드에 보인다
-              selectedName={formData.accommodationName || formData.destination}
-              placeholder={searchPlaceholder}
-              language={i18n.language || "ko"}
-              cityPrefix={
-                formData.destination ? `${formData.destination} ` : undefined
-              }
-              onSelect={handlePlaceSelect}
-            />
-          ) : (
-            <PlaceAutocompleteWidget
-              placeholder={searchPlaceholder}
-              language={i18n.language || "ko"}
-              includedPrimaryTypes={CITY_LEVEL_TYPES}
-              cityPrefix={
-                formData.destination ? `${formData.destination} ` : undefined
-              }
-              onSelect={handlePlaceSelect}
-            />
-          )}
-        </View>
-
-        {/* 5. 일정 및 시간 선택 (디폴트 시작 09:00, 종료 21:00) */}
-        <View style={{ flexDirection: "row", gap: 8, marginBottom: 4 }}>
-          <Pressable
-            style={[
-              styles.dateBox,
-              styles.flex1,
-              {
-                backgroundColor: "#F8FAFC",
-                borderWidth: 1,
-                borderColor: "#E2E8F0",
-                borderRadius: 14,
-                paddingVertical: 10,
-              },
-            ]}
-            onPress={() => openPicker("startDate")}
-          >
-            <Icon name="calendar" size={16} color={Brand.primary} />
-            <Text
-              style={[styles.dateText, { color: theme.text, fontSize: 13 }]}
-            >
-              {formData.startDate}
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={[
-              styles.dateBox,
-              styles.flex1,
-              {
-                backgroundColor: "#F8FAFC",
-                borderWidth: 1,
-                borderColor: "#E2E8F0",
-                borderRadius: 14,
-                paddingVertical: 10,
-              },
-            ]}
-            onPress={() => openPicker("endDate")}
-          >
-            <Icon name="calendar" size={16} color={Brand.primary} />
-            <Text
-              style={[styles.dateText, { color: theme.text, fontSize: 13 }]}
-            >
-              {formData.endDate}
-            </Text>
-          </Pressable>
-        </View>
-
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          <Pressable
-            style={[
-              styles.dateBox,
-              styles.flex1,
-              {
-                backgroundColor: "#F8FAFC",
-                borderWidth: 1,
-                borderColor: "#E2E8F0",
-                borderRadius: 14,
-                paddingVertical: 10,
-              },
-            ]}
-            onPress={() => openPicker("startTime")}
-          >
-            <Icon name="clock" size={16} color={Brand.primary} />
-            <Text
-              style={[styles.dateText, { color: theme.text, fontSize: 13 }]}
-            >
-              {formData.startTime || "09:00"}
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={[
-              styles.dateBox,
-              styles.flex1,
-              {
-                backgroundColor: "#F8FAFC",
-                borderWidth: 1,
-                borderColor: "#E2E8F0",
-                borderRadius: 14,
-                paddingVertical: 10,
-              },
-            ]}
-            onPress={() => openPicker("endTime")}
-          >
-            <Icon name="clock" size={16} color={Brand.primary} />
-            <Text
-              style={[styles.dateText, { color: theme.text, fontSize: 13 }]}
-            >
-              {formData.endTime || "21:00"}
-            </Text>
-          </Pressable>
+                  {formData[field] || fallback}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
       </View>
 
-      {/* 📜 6~11 하단 스크롤 영역 (3D 애플 스타일 tactile 버튼) */}
+      {/* 📜 6~11 하단 스크롤 영역 (터치/스크롤 시 도시 카드 숨김 · 맨 위에서 아래로 당기면 카드 펼침) */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
           styles.inputContainer,
           {
-            paddingTop: Spacing.md,
+            paddingTop: Spacing.sm,
             paddingBottom: insets.bottom + 100,
           },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        scrollEventThrottle={16}
+        onTouchStart={(e) => {
+          dragStartYRef.current = e.nativeEvent.pageY;
+        }}
+        onTouchEnd={(e) => {
+          const dy = e.nativeEvent.pageY - dragStartYRef.current;
+          if (dy > 45 && accordionStage === 0) setAccordionStage(1);
+          else if (accordionStage !== 0) collapseCards();
+        }}
+        onScroll={(e) => {
+          const y = e.nativeEvent.contentOffset.y;
+          if (y > 10 && accordionStage !== 0) {
+            collapseCards();
+          } else if (y < -25 && accordionStage === 0) {
+            setAccordionStage(1);
+          } else if (y < -55 && accordionStage === 1) {
+            setAccordionStage(2);
+          }
+        }}
       >
         {/* 6. 누구랑 (동행) */}
         <View style={styles.section}>
@@ -683,13 +641,11 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
         <GenerateButtons planner={planner} />
       </ScrollView>
 
-      {/* 🏙️ 도시 카드 = TRIPIS 통합 모달 1벌(§16). ▶ 배지를 누르면 같은 모달이 대표 숏폼 재생으로 바뀐다 */}
-      {/* ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 도시 카드 "인기 명소 여정" = 곧바로 인기 명소 목록(고정값 주입은 useBestList) (정본 §) */}
+      {/* 🎬 도시 카드 [▷ 영상] 배지 = TRIPIS 통합 모달 1벌(§16)로 대표 숏폼 재생 */}
       <TripisModal
-        visible={repCard !== null}
-        params={repCard ? { mode: "city", rep: repCard } : null}
-        onClose={() => setRepCard(null)}
-        onCreateTrip={openBestList}
+        visible={videoParams !== null}
+        params={videoParams}
+        onClose={() => setVideoParams(null)}
       />
       <WebInputModal planner={planner} />
       <NativePicker planner={planner} />

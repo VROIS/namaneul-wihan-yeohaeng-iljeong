@@ -1,5 +1,5 @@
-// = 사장님 SSOT 2026-08-01: "껍데기 안에 숏폼 혹은 TRIPIS 콘텐츠를 끼우는 것" —
-import React, { useState, useEffect, useCallback } from "react";
+// ⚠️ 수정금지(승인필요) 2026-11-10 최적값 = TRIPIS 통합 모달 껍데기(숏폼 영상 · 가이드 해설) (정본 2026-11-10)
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -29,8 +29,6 @@ import {
 } from "@/constants/theme";
 import VideoPlaySlot, { type DayVideo } from "./VideoPlaySlot";
 import GuideViewSlot from "./GuideViewSlot";
-import CityCardScreen from "./CityCardScreen";
-import { openGuideForPlace } from "./openGuide";
 // 📥 저장(프로필 담기)·열람해제 = savedVideosApi 1벌(2026-08-03 사장님 확정 = 영상은 회사 자산, 저장 = 담기)
 import { listSavedVideos, saveVideo, markVideoSeen } from "./savedVideosApi";
 import { useMapToggle } from "@/contexts/MapToggleContext";
@@ -64,9 +62,8 @@ export interface GuideRow {
   createdAt: string;
 }
 
-// ⚠️ 2026-08-03 사장님 확정 = `canGenerate` = **영상을 만들 수 있는 자리인가**(생성기 / 감상).
+// ⚠️ 수정금지(승인필요) 2026-11-10 최적값 = 통합 모달 = 숏폼 영상(itinerary) · 가이드 해설(guide) 재생 (정본 2026-11-10)
 export type TripisOpenParams =
-  | { mode: "city"; rep: RepCard }
   | {
       mode: "itinerary";
       itineraryId: number;
@@ -79,7 +76,6 @@ interface Props {
   visible: boolean;
   params: TripisOpenParams | null;
   onClose(): void;
-  onCreateTrip?(): void;
   onCity?(cityId: number): void;
 }
 
@@ -87,18 +83,12 @@ export default function TripisModal({
   visible,
   params,
   onClose,
-  onCreateTrip,
   onCity,
 }: Props) {
   if (!visible || !params) return null;
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <TripisModalInner
-        params={params}
-        onClose={onClose}
-        onCreateTrip={onCreateTrip}
-        onCity={onCity}
-      />
+      <TripisModalInner params={params} onClose={onClose} onCity={onCity} />
     </Modal>
   );
 }
@@ -106,12 +96,10 @@ export default function TripisModal({
 function TripisModalInner({
   params,
   onClose,
-  onCreateTrip,
   onCity,
 }: {
   params: TripisOpenParams;
   onClose(): void;
-  onCreateTrip?(): void;
   onCity?(cityId: number): void;
 }) {
   const { t, i18n } = useTranslation();
@@ -120,9 +108,7 @@ function TripisModalInner({
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const showCreditShortfall = useCreditShortfall();
 
-  const [viewMode, setViewMode] = useState<TripisOpenParams["mode"]>(
-    params.mode,
-  );
+  const viewMode = params.mode;
 
   const [itinerary, setItinerary] = useState<any | null>(null);
   const [videoByDay, setVideoByDay] = useState<Record<string, DayVideo>>({});
@@ -135,13 +121,14 @@ function TripisModalInner({
   const [pauseSignal, setPauseSignal] = useState(0);
   const { bumpVideoData, isAuthed, requestLogin } = useMapToggle();
 
-  const [itineraryId, setItineraryId] = useState<number | null>(
-    params.mode === "itinerary"
-      ? params.itineraryId
-      : params.mode === "city"
-        ? params.rep.itineraryId
-        : null,
-  );
+  const itineraryId = params.mode === "itinerary" ? params.itineraryId : null;
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const loadAll = useCallback(async () => {
     if (itineraryId == null || viewMode !== "itinerary") return;
@@ -152,15 +139,17 @@ function TripisModalInner({
         apiRequest("GET", `/api/itineraries/${itineraryId}/video`),
       ]);
       const it = await ir.json();
+      if (!mountedRef.current) return;
       setItinerary(it);
       // ⚠️ 수정금지(승인필요) 2026-11-04 최적값 = 받은 여정의 도시 번호를 여는 쪽에 넘긴다(영상 링크 → 메인 검색창 = 같은 조회 한 번) (정본 2026-11-04)
       if (it?.cityId) onCity?.(it.cityId);
       const v = await vr.json();
+      if (!mountedRef.current) return;
       setVideoByDay(v.videoByDay || {});
     } catch (e) {
       console.error("[TripisModal] 로드 오류:", e);
     }
-  }, [itineraryId, viewMode, onCity]);
+  }, [itineraryId, viewMode, onCity, i18n.language]);
 
   useEffect(() => {
     loadAll();
@@ -243,6 +232,7 @@ function TripisModalInner({
     if (itineraryId == null) return;
     setIsSaving(true);
     const r = await saveVideo(itineraryId, effectiveDay);
+    if (!mountedRef.current) return;
     setIsSaving(false);
     if (r.ok)
       setSavedDays((prev) => new Set(prev).add(effectiveDay)); // → "저장됨" 비활성
@@ -277,50 +267,8 @@ function TripisModalInner({
     } as any);
   };
 
-  // ⚠️ 수정금지(승인필요) 2026-08-20 사장님 승인 = [해설 만들기]를 관리자 전용에서 누구나(로그인만)로 확장.
-  const handleOpenGuide = (placeId: number, hasGuide: boolean) => {
-    if (!hasGuide && !isAuthed) {
-      onClose();
-      requestLogin();
-      return;
-    }
-    onClose();
-    openGuideForPlace(
-      navigation,
-      placeId,
-      hasGuide ? "sample" : { isAuthed, requestLogin },
-    );
-  };
-
   const currentGuide =
     params.mode === "guide" ? params.guides[params.index] : undefined;
-
-  //   배지 3단(영상·해설·코스) = 셋 다 같은 흐름 = 카드는 사라지고 화면만 갈린다(2026-08-02 사장님).
-  if (viewMode === "city" && params.mode === "city") {
-    return (
-      <CityCardScreen
-        rep={params.rep}
-        onCreateTrip={() => {
-          onCreateTrip?.();
-          onClose();
-        }}
-        onVideo={() => {
-          if (params.rep.videoItineraryId != null) {
-            setItineraryId(params.rep.videoItineraryId);
-            setSelectedDay(params.rep.videoDay);
-          }
-          setViewMode("itinerary");
-        }}
-        // [해설]·[해설 만들기] = **같은 곳** = 가이드 미니앱 해설 화면을 그 장소번호로 연다(2026-08-02 사장님 확정).
-        onGuide={() => {
-          if (params.rep.placeId !== null)
-            handleOpenGuide(params.rep.placeId, params.rep.hasGuide);
-        }}
-        onCourse={handleViewItinerary}
-        onClose={onClose}
-      />
-    );
-  }
 
   return (
     <View style={styles.backdrop}>

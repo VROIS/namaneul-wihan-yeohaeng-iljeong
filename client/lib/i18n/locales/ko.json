@@ -182,7 +182,14 @@
     "searchCloseA11y": "검색 닫기",
     "mealLunch": "점심",
     "mealDinner": "저녁",
-    "mealEstimateNote": "최종 여정에서 식당도 추천해 드립니다"
+    "mealEstimateNote": "최종 여정에서 식당도 추천해 드립니다",
+    "regionFrance": "프랑스",
+    "regionEurope": "유럽",
+    "regionAsia": "아시아",
+    "regionNorthAmerica": "북미",
+    "regionSouthAmerica": "남미",
+    "regionAfrica": "아프리카",
+    "regionOceania": "오세아니아"
   },
   "bts": {
     "placeCart": {

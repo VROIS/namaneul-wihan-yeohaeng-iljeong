@@ -182,7 +182,14 @@
     "searchCloseA11y": "Suche schließen",
     "mealLunch": "Mittagessen",
     "mealDinner": "Abendessen",
-    "mealEstimateNote": "Restaurants werden in der endgültigen Reise vorgeschlagen"
+    "mealEstimateNote": "Restaurants werden in der endgültigen Reise vorgeschlagen",
+    "regionFrance": "Frankreich",
+    "regionEurope": "Europa",
+    "regionAsia": "Asien",
+    "regionNorthAmerica": "Nordamerika",
+    "regionSouthAmerica": "Südamerika",
+    "regionAfrica": "Afrika",
+    "regionOceania": "Ozeanien"
   },
   "bts": {
     "placeCart": {

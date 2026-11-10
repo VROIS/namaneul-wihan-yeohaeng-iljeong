@@ -182,7 +182,14 @@
     "searchCloseA11y": "关闭搜索",
     "mealLunch": "午餐",
     "mealDinner": "晚餐",
-    "mealEstimateNote": "最终行程中将推荐餐厅"
+    "mealEstimateNote": "最终行程中将推荐餐厅",
+    "regionFrance": "法国",
+    "regionEurope": "欧洲",
+    "regionAsia": "亚洲",
+    "regionNorthAmerica": "北美",
+    "regionSouthAmerica": "南美",
+    "regionAfrica": "非洲",
+    "regionOceania": "大洋洲"
   },
   "bts": {
     "placeCart": {

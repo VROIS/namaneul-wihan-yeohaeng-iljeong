@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 도시 찾기 = 거점 100km 구조 1벌(city-hub.ts) = 읽기만, 도시를 만들지 않음 · 준비됨은 출발점 풀 기준 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-11-10 최적값 = 도시 찾기 = 거점 100km 구조 1벌(city-hub.ts) · 완비도시 목록에 국가 코드 동봉 (정본 2026-11-10)
 
 import { and, desc, eq, sql } from "drizzle-orm";
 import * as schema from "../../shared/schema";
@@ -19,6 +19,7 @@ export function readyCities(db: Db) {
       id: cities.id,
       nameKo: cities.name,
       nameEn: cities.nameEn,
+      countryCode: cities.countryCode,
       rows: sql<number>`COUNT(*)::int`,
     })
     .from(cities)
@@ -26,7 +27,7 @@ export function readyCities(db: Db) {
       placeSeedRaw,
       and(eq(placeSeedRaw.cityId, cities.id), servingGateSql()),
     )
-    .groupBy(cities.id, cities.name, cities.nameEn)
+    .groupBy(cities.id, cities.name, cities.nameEn, cities.countryCode)
     .having(readySql())
     .orderBy(desc(sql`COUNT(*)`));
 }

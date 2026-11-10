@@ -4,6 +4,7 @@ import { apiRequest } from "@/lib/query-client";
 import type { TripFormData } from "@/types/trip";
 import type { ScreenState } from "./useTripPlanner";
 import { formatDate } from "../utils";
+import { cityDestination } from "./useVideoLinkCity";
 
 export type BestListPlace = {
   id: number;
@@ -42,7 +43,7 @@ const popularForm = (f: TripFormData): TripFormData => {
   };
 };
 
-// ⚠️ 수정금지(승인필요) 2026-10-21 사장님 결정 = 인기 명소 여정 버튼 = 하나의 목록(순위순 · 좌표 · 체류분)과 날짜 창을 받아 목록 화면으로 간다 · 체크한 순서(ids)가 슬롯 순서 · 화면을 오가도 유지 · 도시·날짜·시각·숙소·예산·이동 수단이 바뀌면 비움(배정이 달라짐) · 생성 성공 시 비움 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-11-10 최적값 = 인기 명소 여정 버튼 = 하나의 목록(순위순 · 좌표 · 체류분)과 날짜 창을 받아 목록 화면으로 간다 · 도시 카드에서 바로 누를 때는 그 도시를 목적지로 적용 (정본 2026-11-10)
 export function useBestList({
   formData,
   isAuthed,
@@ -65,13 +66,14 @@ export function useBestList({
     ids: number[];
   }>({ key: "", ids: [] });
 
-  const openBestList = async () => {
+  const openBestList = async (city?: { id: number; nameEn: string }) => {
     if (!isAuthed) {
       requestLogin();
       return;
     }
     setScreen("Loading");
-    const form = popularForm(formData);
+    const base = city ? cityDestination(city)(formData) : formData;
+    const form = popularForm(base);
     try {
       const res = await apiRequest("POST", "/api/best/list", {
         ...form,

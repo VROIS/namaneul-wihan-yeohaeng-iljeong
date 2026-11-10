@@ -1,4 +1,4 @@
-// = 카드는 도시 칩을 누르면 **항상** 뜬다(2026-08-02 사장님 지시). 채우는 값은 전부 서버 조립분
+// ⚠️ 수정금지(승인필요) 2026-11-10 최적값 = 도시 대표 카드 = 기존 카드 부품(3단 배지·도시명·하이라이트·인기 명소 여정 버튼) 그대로 유지하고 320px 폰 폭 기준 가로 캐러셀 카드로 축소 (정본 2026-11-10)
 import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { useTranslation } from "react-i18next";
@@ -11,7 +11,6 @@ import { resolveImageSource } from "@/lib/wikimedia-image";
 import CityBadge from "./CityBadge";
 import type { RepCard } from "./TripisModal";
 
-//   순서 = 영상 1번째 · 해설 2번째 · 코스 3번째. 새 색 발명 금지(사장님 2026-08-02 = 톤앤매너 유지).
 export const BADGE_COLORS = {
   video: ["#4F46E5", "#7C3AED"],
   guide: ["#06B6D4", "#3B82F6"],
@@ -67,33 +66,48 @@ const COUNTRY_NAMES_EN: Record<string, string> = {
   VN: "Vietnam",
 };
 
+export const CITY_CARD_WIDTH = 166;
+export const CITY_CARD_GAP = 8;
+
 interface Props {
   rep: RepCard;
-  onCreateTrip(): void; // [인기 명소 여정] = 카드를 닫고 인기 명소 목록으로
-  onVideo(): void; // [영상] = 같은 모달 안에서 숏폼 영상 화면으로 전환(카드는 사라짐)
+  selected?: boolean;
+  onSelect?(): void;
+  onCreateTrip(): void;
+  onVideo(): void;
   onGuide(): void;
-  onCourse(): void; // [코스] = 그 여정 화면(프로필 '나의 여정' 카드와 같은 경로)
-  onClose(): void;
+  onCourse(): void;
 }
 
 export default function CityCardScreen({
   rep,
+  selected = false,
+  onSelect,
   onCreateTrip,
   onVideo,
   onGuide,
   onCourse,
-  onClose,
 }: Props) {
   const { t } = useTranslation();
-
-  //   · 없고 + 그 도시에 쓸 장소가 있으면 = [해설 만들기] = 누구나 보이는 만들기 입구(2026-08-20 사장님 승인 =
   const canCreateGuide = !rep.hasGuide && rep.placeId !== null;
+  const cityTitle = (() => {
+    const name = rep.nameEn || rep.nameKo;
+    const countryName = rep.countryCode
+      ? COUNTRY_NAMES_EN[rep.countryCode]
+      : null;
+    return countryName ? `${name} (${countryName})` : name;
+  })();
 
   return (
-    <View style={styles.overlay}>
-      <View style={styles.modalCard}>
-        {/* 사진 + 그 위에 얹히는 배지 줄·닫기·도시명 */}
-        <View style={styles.imageContainer}>
+    <View style={[styles.card, selected && styles.cardSelected]}>
+      <View style={styles.imageContainer}>
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={onSelect}
+          accessibilityRole="button"
+          accessibilityLabel={cityTitle}
+          accessibilityState={{ selected }}
+        >
           <Image
             source={resolveImageSource(rep.imageUrl, "card")}
             style={styles.cityImage}
@@ -102,13 +116,17 @@ export default function CityCardScreen({
             transition={150}
           />
           <LinearGradient
-            colors={["transparent", "rgba(15, 23, 42, 0.9)"]}
+            colors={["rgba(15, 23, 42, 0.2)", "rgba(15, 23, 42, 0.85)"]}
             style={styles.imageOverlay}
           />
-          {/* 배지 3단 = 영상 · 해설 · 코스 (2026-08-02 사장님 확정 순서·이름).
-              누르면 셋 다 같은 흐름 = 카드는 닫히고 같은 모달 안에서 화면만 갈린다.
-              없는 것은 안 보이되 자리는 그대로 = 줄 높이가 흔들리지 않고, 생기면 그 자리에 켜진다. */}
-          <View style={styles.badgeRow}>
+          <View style={styles.imageContent}>
+            <Text style={styles.cityName} numberOfLines={1}>
+              {cityTitle}
+            </Text>
+          </View>
+        </Pressable>
+        <View style={styles.badgeRow} pointerEvents="box-none">
+          <View style={styles.badgeScaleWrap} pointerEvents="box-none">
             <CityBadge
               icon="play"
               label={t("trip.cityCardVideo")}
@@ -138,82 +156,65 @@ export default function CityCardScreen({
               onPress={onCourse}
             />
           </View>
-
-          <Pressable
-            style={styles.closeBtn}
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel={t("common.close")}
-          >
-            <Icon name="x" size={20} color="#FFFFFF" />
-          </Pressable>
-
-          <View style={styles.imageContent}>
-            {/* ⚠️ 수정금지(승인필요) 2026-08-20 사장님 승인 = 도시명·국가명 영어 일괄통일(§ COUNTRY_NAMES_EN).
-                한국어 분기 폐기 = 2026-08-20 §19 — 도시명은 고유명사, 뷰어 언어와 무관하게 항상 nameEn.
-                nameEn 이 비어있는 도시 대비 = nameKo 폴백(city-resolver.ts 의 nameEn||name 관례와 동일 §16). */}
-            <Text style={styles.cityName}>
-              {(() => {
-                const name = rep.nameEn || rep.nameKo;
-                const countryName = rep.countryCode
-                  ? COUNTRY_NAMES_EN[rep.countryCode]
-                  : null;
-                return countryName ? `${name} (${countryName})` : name;
-              })()}
-            </Text>
-          </View>
         </View>
+      </View>
 
-        {/* 하단 세부 하이라이트 = 서버가 골라 내려준 장소명 3줄 그대로(대표여정 있으면 그 여정 것, 없으면 도심 상위 3곳) */}
-        <View style={styles.bodyContent}>
-          <Text style={styles.sectionTitle}>
+      <View style={styles.bodyContent}>
+        <Pressable onPress={onSelect}>
+          <Text style={styles.sectionTitle} numberOfLines={1}>
             {t("trip.cityCardHighlights")}
           </Text>
-          {rep.highlights.map((item, idx) => (
-            <View key={idx} style={styles.highlightRow}>
-              <View style={styles.bulletDot} />
-              <Text style={styles.highlightText}>{item}</Text>
-            </View>
-          ))}
+          <View style={styles.highlightsWrap}>
+            {rep.highlights.slice(0, 3).map((item, idx) => (
+              <View key={idx} style={styles.highlightRow}>
+                <View style={styles.bulletDot} />
+                <Text style={styles.highlightText} numberOfLines={1}>
+                  {item}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </Pressable>
 
-          <Pressable style={styles.selectBtn} onPress={onCreateTrip}>
-            <LinearGradient
-              colors={[Brand.primary, Brand.secondary]}
-              style={styles.selectGradient}
-            >
-              <Icon name="check-circle" size={18} color="#FFFFFF" />
-              <Text style={styles.selectBtnText}>
-                {/* ⚠️ 수정금지(승인필요) 2026-10-23 사장님 결정 = 카드 버튼 = "인기 명소 여정" · 누르면 곧바로 인기 명소 목록 (정본 §) */}
-                {t("trip.pickPopular")}
-              </Text>
-            </LinearGradient>
-          </Pressable>
-        </View>
+        <Pressable
+          style={styles.selectBtn}
+          onPress={onCreateTrip}
+          accessibilityRole="button"
+          accessibilityLabel={t("trip.pickPopular")}
+        >
+          <LinearGradient
+            colors={[Brand.primary, Brand.secondary]}
+            style={styles.selectGradient}
+          >
+            <Icon name="check-circle" size={12} color="#FFFFFF" />
+            <Text style={styles.selectBtnText}>{t("trip.pickPopular")}</Text>
+          </LinearGradient>
+        </Pressable>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.65)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  modalCard: {
-    width: "100%",
-    maxWidth: 360,
+  card: {
+    width: CITY_CARD_WIDTH,
     backgroundColor: "#FFFFFF",
-    borderRadius: 28,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
     overflow: "hidden",
-    ...Shadows.elevated,
+    flexShrink: 0,
+    ...Shadows.card,
+  },
+  cardSelected: {
+    borderWidth: 2,
+    borderColor: Brand.primary,
   },
   imageContainer: {
-    height: 200,
+    height: 104,
     width: "100%",
     position: "relative",
+    backgroundColor: "#0F172A",
   },
   cityImage: {
     width: "100%",
@@ -224,61 +225,64 @@ const styles = StyleSheet.create({
   },
   badgeRow: {
     position: "absolute",
-    top: 14,
-    left: 14,
-    flexDirection: "row",
-    gap: 8,
+    top: 7,
+    left: 7,
+    right: 7,
+    overflow: "hidden",
   },
-  closeBtn: {
-    position: "absolute",
-    top: 14,
-    right: 14,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "rgba(15, 23, 42, 0.5)",
-    justifyContent: "center",
+  badgeScaleWrap: {
+    flexDirection: "row",
     alignItems: "center",
+    gap: 4,
+    transform: [{ scale: 0.72 }],
+    transformOrigin: "left top",
   },
   imageContent: {
     position: "absolute",
-    bottom: 14,
-    left: 16,
-    right: 16,
+    bottom: 7,
+    left: 9,
+    right: 9,
   },
   cityName: {
     color: "#FFFFFF",
-    fontSize: 22,
+    fontSize: 12.5,
     fontFamily: Fonts.bold,
   },
   bodyContent: {
-    padding: 18,
+    paddingHorizontal: 9,
+    paddingVertical: 8,
   },
   sectionTitle: {
-    fontSize: 14,
+    fontSize: 9.5,
     fontFamily: Fonts.bold,
     color: "#0F172A",
-    marginBottom: 12,
+    marginBottom: 4,
+  },
+  highlightsWrap: {
+    minHeight: 40,
+    justifyContent: "flex-start",
   },
   highlightRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginBottom: 8,
+    gap: 4,
+    marginBottom: 2.5,
   },
   bulletDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
     backgroundColor: Brand.primary,
+    flexShrink: 0,
   },
   highlightText: {
-    fontSize: 13,
+    fontSize: 9.5,
     fontFamily: Fonts.medium,
     color: "#334155",
+    flex: 1,
   },
   selectBtn: {
-    marginTop: 16,
+    marginTop: 6,
     borderRadius: BorderRadius.full,
     overflow: "hidden",
     ...Shadows.card,
@@ -287,12 +291,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    paddingVertical: 13,
+    gap: 4,
+    paddingVertical: 6.5,
   },
   selectBtnText: {
     color: "#FFFFFF",
-    fontSize: 15,
+    fontSize: 10.5,
     fontFamily: Fonts.bold,
   },
 });

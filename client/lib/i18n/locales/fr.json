@@ -182,7 +182,14 @@
     "searchCloseA11y": "Fermer la recherche",
     "mealLunch": "Déjeuner",
     "mealDinner": "Dîner",
-    "mealEstimateNote": "Les restaurants seront proposés dans l’itinéraire final"
+    "mealEstimateNote": "Les restaurants seront proposés dans l’itinéraire final",
+    "regionFrance": "France",
+    "regionEurope": "Europe",
+    "regionAsia": "Asie",
+    "regionNorthAmerica": "Amérique du Nord",
+    "regionSouthAmerica": "Amérique du Sud",
+    "regionAfrica": "Afrique",
+    "regionOceania": "Océanie"
   },
   "bts": {
     "placeCart": {
