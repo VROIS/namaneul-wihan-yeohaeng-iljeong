@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-11-10 최적값 = 상단 도시 3단 아코디언 캐러셀 = 운영앱 알약 버튼(이모지 금지, map-pin 아이콘) 그대로 문구만 대륙명으로 · 1초 간격 탁탁탁탁 자동 스냅 + 마우스 드래그 가로 스크롤 · 설명 글씨 버튼 금지 (정본 2026-11-10)
+// ⚠️ 수정금지(승인필요) 2026-11-11 사장님 결정 = 상단 도시 3단 아코디언 = 한 벌 트리 + 높이 애니메이션 · 대표 카드 병렬 조회 · 사진 선로딩 뒤 자동 스냅 (정본 2026-11-11)
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
@@ -8,8 +8,18 @@ import {
   StyleSheet,
   Platform,
 } from "react-native";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
+import Animated, {
+  Easing,
+  Extrapolation,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
+import { resolveImageSource } from "@/lib/wikimedia-image";
 import { Brand, BorderRadius, Fonts, Shadows } from "@/constants/theme";
 import { Icon } from "@/components/Icon";
 import { apiRequest } from "@/lib/query-client";
@@ -127,6 +137,29 @@ function fallbackRep(city: ReadyCity): RepCard {
 }
 
 const STEP_PX = CITY_CARD_WIDTH + CITY_CARD_GAP;
+const STAGE_MS = 220;
+const STAGE1_ESTIMATE_PX = 214;
+const STAGE2_ESTIMATE_PX = 280;
+
+// 앱을 켜 둔 동안 한 번 받은 대표 카드는 다시 받지 않는다
+const repCache = new Map<string, RepCard>();
+
+async function fetchRep(city: ReadyCity, lang: string): Promise<RepCard> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await apiRequest(
+        "GET",
+        `/api/cities/${city.id}/representative?lang=${encodeURIComponent(lang)}`,
+      );
+      const data: RepCard = await res.json();
+      repCache.set(`${city.id}:${lang}`, data);
+      return data;
+    } catch {
+      if (attempt === 0) await new Promise((r) => setTimeout(r, 1200));
+    }
+  }
+  return fallbackRep(city);
+}
 
 interface Props {
   readyCities: ReadyCity[];
@@ -156,12 +189,43 @@ export default function CityAccordionCarousel({
   const { t, i18n } = useTranslation();
   const lang = i18n.language || "ko";
   const [activeRegion, setActiveRegion] = useState<RegionKey>("france");
-  const [repMap, setRepMap] = useState<Record<string, RepCard>>({});
+  const [repMap, setRepMap] = useState<Record<string, RepCard>>(() =>
+    Object.fromEntries(repCache),
+  );
+  const [photosReady, setPhotosReady] = useState(false);
+  const [stage2Mounted, setStage2Mounted] = useState(stage === 2);
   const inflightRef = useRef<Set<string>>(new Set());
   const mountedRef = useRef(true);
   const carouselScrollRef = useRef<ScrollView | null>(null);
   const autoIdxRef = useRef(0);
-  const pausedUntilRef = useRef(0);
+  const userTouchedRef = useRef(false);
+  const stageSv = useSharedValue<number>(stage);
+  const h1 = useSharedValue(STAGE1_ESTIMATE_PX);
+  const h2 = useSharedValue(STAGE2_ESTIMATE_PX);
+
+  useEffect(() => {
+    stageSv.value = withTiming(stage, {
+      duration: STAGE_MS,
+      easing: Easing.out(Easing.cubic),
+    });
+    if (stage === 2) setStage2Mounted(true);
+  }, [stage, stageSv]);
+
+  const bodyStyle = useAnimatedStyle(() => ({
+    height: interpolate(
+      stageSv.value,
+      [0, 1, 2],
+      [0, h1.value, h2.value],
+      Extrapolation.CLAMP,
+    ),
+    marginTop: interpolate(stageSv.value, [0, 1], [0, 6], Extrapolation.CLAMP),
+  }));
+  const stage1Style = useAnimatedStyle(() => ({
+    opacity: interpolate(stageSv.value, [0, 1, 2], [0, 1, 0]),
+  }));
+  const stage2Style = useAnimatedStyle(() => ({
+    opacity: interpolate(stageSv.value, [0, 1, 2], [0, 0, 1]),
+  }));
 
   useEffect(() => {
     mountedRef.current = true;
@@ -208,12 +272,31 @@ export default function CityAccordionCarousel({
     carouselScrollRef.current?.scrollTo({ x: 0, animated: false });
   }, [activeRegion]);
 
-  // ⏱️ 1초 간격으로 "탁, 탁, 탁, 탁" 한 칸씩 자동 스냅 이동 (사람들에게 옆에 카드가 있다는 것을 시각적으로 보여줌)
-  const activeCount = citiesByRegion[activeRegion].length;
+  // 첫 3장 사진을 미리 받아 둔 뒤에만 자동 스냅을 시작한다(빈 카드 위를 달리지 않게)
+  const activeCities = citiesByRegion[activeRegion];
+  const activeCount = activeCities.length;
   useEffect(() => {
-    if (stage !== 1 || activeCount <= 1) return;
+    if (photosReady) return;
+    const firstThree = activeCities
+      .slice(0, 3)
+      .map((c) => repMap[`${c.id}:${lang}`]);
+    if (!firstThree.length || firstThree.some((r) => !r)) return;
+    const urls = firstThree
+      .map((r) => resolveImageSource(r.imageUrl, "card")?.uri)
+      .filter((u): u is string => !!u);
+    void Promise.race([
+      Image.prefetch(urls, "memory-disk"),
+      new Promise((r) => setTimeout(r, 2500)),
+    ]).then(() => {
+      if (mountedRef.current) setPhotosReady(true);
+    });
+  }, [photosReady, activeCities, repMap, lang]);
+
+  // ⏱️ 1초 간격으로 "탁, 탁, 탁, 탁" 한 칸씩 자동 스냅 이동 (사람들에게 옆에 카드가 있다는 것을 시각적으로 보여줌). 사용자가 한 번 만지면 멈춘다
+  useEffect(() => {
+    if (stage !== 1 || !photosReady || activeCount <= 1) return;
     const timer = setInterval(() => {
-      if (Date.now() < pausedUntilRef.current) return;
+      if (userTouchedRef.current) return;
       autoIdxRef.current = (autoIdxRef.current + 1) % activeCount;
       carouselScrollRef.current?.scrollTo({
         x: autoIdxRef.current * STEP_PX,
@@ -221,54 +304,32 @@ export default function CityAccordionCarousel({
       });
     }, 1100);
     return () => clearInterval(timer);
-  }, [stage, activeRegion, activeCount]);
+  }, [stage, photosReady, activeRegion, activeCount]);
 
-  // 현재 단계에서 보이는 도시들의 대표 카드 데이터를 4개씩 순차 조회
+  // 현재 단계에서 보이는 도시들의 대표 카드 데이터를 한꺼번에(병렬) 조회, 오는 대로 반영
   useEffect(() => {
     if (!readyCities.length || stage === 0) return;
     const targets =
       stage === 2
         ? readyCities
-        : citiesByRegion[activeRegion].length > 0
-          ? citiesByRegion[activeRegion]
+        : activeCities.length > 0
+          ? activeCities
           : readyCities;
     const missing = targets.filter((c) => {
       const key = `${c.id}:${lang}`;
       return !repMap[key] && !inflightRef.current.has(key);
     });
-    if (!missing.length) return;
-
-    const batch = missing.slice(0, 4);
-    for (const c of batch) inflightRef.current.add(`${c.id}:${lang}`);
-    void (async () => {
-      const results = await Promise.all(
-        batch.map(async (c) => {
-          const key = `${c.id}:${lang}`;
-          try {
-            const res = await apiRequest(
-              "GET",
-              `/api/cities/${c.id}/representative?lang=${encodeURIComponent(lang)}`,
-            );
-            const data: RepCard = await res.json();
-            return { key, data };
-          } catch {
-            return { key, data: fallbackRep(c) };
-          } finally {
-            inflightRef.current.delete(key);
-          }
-        }),
-      );
-      if (!mountedRef.current) return;
-      const next: Record<string, RepCard> = {};
-      for (const r of results) {
-        next[r.key] = r.data;
-      }
-      setRepMap((prev) => ({ ...prev, ...next }));
-    })();
-  }, [readyCities, stage, activeRegion, citiesByRegion, repMap, lang]);
+    for (const c of missing) {
+      const key = `${c.id}:${lang}`;
+      inflightRef.current.add(key);
+      void fetchRep(c, lang).then((data) => {
+        if (mountedRef.current) setRepMap((prev) => ({ ...prev, [key]: data }));
+      });
+    }
+  }, [readyCities, stage, activeCities, repMap, lang]);
 
   const pauseAutoTick = () => {
-    pausedUntilRef.current = Date.now() + 4000;
+    userTouchedRef.current = true;
   };
 
   // 웹에서 마우스 드래그 및 휠로 가로 스크롤 지원
@@ -391,64 +452,6 @@ export default function CityAccordionCarousel({
     );
   };
 
-  if (stage === 0) {
-    return (
-      <View style={styles.stageWrap}>
-        <ScrollView
-          ref={bindWebDragScroll}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          bounces={true}
-          overScrollMode="always"
-          contentContainerStyle={styles.pillRowContent}
-        >
-          {renderBtsButton()}
-          {renderRegionPills()}
-        </ScrollView>
-      </View>
-    );
-  }
-
-  if (stage === 1) {
-    const activeCities = citiesByRegion[activeRegion];
-    return (
-      <View style={styles.stageWrap}>
-        <ScrollView
-          ref={bindWebDragScroll}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          bounces={true}
-          overScrollMode="always"
-          contentContainerStyle={styles.tabRowContent}
-        >
-          {renderBtsButton()}
-          {renderRegionPills()}
-        </ScrollView>
-
-        <ScrollView
-          ref={(el) => {
-            carouselScrollRef.current = el;
-            bindWebDragScroll(el);
-          }}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          snapToInterval={Platform.OS === "web" ? undefined : STEP_PX}
-          decelerationRate="fast"
-          onTouchStart={pauseAutoTick}
-          onScrollBeginDrag={pauseAutoTick}
-          onScroll={(e) => {
-            const x = e.nativeEvent.contentOffset.x;
-            autoIdxRef.current = Math.max(0, Math.round(x / STEP_PX));
-          }}
-          scrollEventThrottle={32}
-          contentContainerStyle={styles.carouselContent}
-        >
-          {activeCities.map(renderCityCard)}
-        </ScrollView>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.stageWrap}>
       <ScrollView
@@ -457,40 +460,92 @@ export default function CityAccordionCarousel({
         showsHorizontalScrollIndicator={false}
         bounces={true}
         overScrollMode="always"
-        contentContainerStyle={styles.tabRowContent}
+        contentContainerStyle={styles.pillRowContent}
       >
         {renderBtsButton()}
         {renderRegionPills()}
       </ScrollView>
 
-      <ScrollView
-        style={styles.stage2Scroll}
-        nestedScrollEnabled
-        showsVerticalScrollIndicator={false}
-      >
-        {REGION_TABS.map((tab) => {
-          const list = citiesByRegion[tab.id];
-          if (!list.length) return null;
-          return (
-            <View key={tab.id} style={styles.stage2Section}>
-              <View style={styles.stage2Header}>
-                <Icon name="map-pin" size={12} color={Brand.primary} />
-                <Text style={styles.stage2Title}>
-                  {`${t(tab.labelKey)} (${list.length})`}
-                </Text>
-              </View>
-              <ScrollView
-                ref={bindWebDragScroll}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.carouselContent}
-              >
-                {list.map(renderCityCard)}
-              </ScrollView>
-            </View>
-          );
-        })}
-      </ScrollView>
+      <Animated.View style={[styles.body, bodyStyle]}>
+        <Animated.View
+          style={[
+            styles.bodyLayer,
+            stage1Style,
+            { pointerEvents: stage === 1 ? "auto" : "none" },
+          ]}
+          aria-hidden={stage !== 1}
+          onLayout={(e) => {
+            h1.value = Math.max(
+              h1.value,
+              Math.ceil(e.nativeEvent.layout.height),
+            );
+          }}
+        >
+          <ScrollView
+            ref={(el) => {
+              carouselScrollRef.current = el;
+              bindWebDragScroll(el);
+            }}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            snapToInterval={Platform.OS === "web" ? undefined : STEP_PX}
+            decelerationRate="fast"
+            onTouchStart={pauseAutoTick}
+            onScrollBeginDrag={pauseAutoTick}
+            onScroll={(e) => {
+              const x = e.nativeEvent.contentOffset.x;
+              autoIdxRef.current = Math.max(0, Math.round(x / STEP_PX));
+            }}
+            scrollEventThrottle={32}
+            contentContainerStyle={styles.carouselContent}
+          >
+            {activeCities.map(renderCityCard)}
+          </ScrollView>
+        </Animated.View>
+
+        {stage2Mounted && (
+          <Animated.View
+            style={[
+              styles.bodyLayer,
+              stage2Style,
+              { pointerEvents: stage === 2 ? "auto" : "none" },
+            ]}
+            aria-hidden={stage !== 2}
+            onLayout={(e) => {
+              h2.value = Math.ceil(e.nativeEvent.layout.height);
+            }}
+          >
+            <ScrollView
+              style={styles.stage2Scroll}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator={false}
+            >
+              {REGION_TABS.map((tab) => {
+                const list = citiesByRegion[tab.id];
+                if (!list.length) return null;
+                return (
+                  <View key={tab.id} style={styles.stage2Section}>
+                    <View style={styles.stage2Header}>
+                      <Icon name="map-pin" size={12} color={Brand.primary} />
+                      <Text style={styles.stage2Title}>
+                        {`${t(tab.labelKey)} (${list.length})`}
+                      </Text>
+                    </View>
+                    <ScrollView
+                      ref={bindWebDragScroll}
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.carouselContent}
+                    >
+                      {list.map(renderCityCard)}
+                    </ScrollView>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </Animated.View>
+        )}
+      </Animated.View>
     </View>
   );
 }
@@ -504,11 +559,14 @@ const styles = StyleSheet.create({
     paddingRight: 24,
     alignItems: "center",
   },
-  tabRowContent: {
-    gap: 8,
-    paddingRight: 24,
-    paddingBottom: 6,
-    alignItems: "center",
+  body: {
+    overflow: "hidden",
+  },
+  bodyLayer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
   },
   btsPill: {
     paddingHorizontal: 16,

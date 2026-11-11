@@ -56,10 +56,19 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
   const [accordionStage, setAccordionStage] = useState<AccordionStage>(1);
   const lastCityRef = useRef<number>(0);
   const dragStartYRef = useRef<number>(0);
+  const stageRef = useRef<AccordionStage>(1);
+  const lockUntilRef = useRef(0);
+  const scrollYRef = useRef(0);
 
-  const collapseCards = () => {
-    setAccordionStage((prev) => (prev === 0 ? prev : 0));
+  // 단계 변경 한 곳 = 직후 0.3초는 스크롤 감지가 단계를 또 바꾸지 못하게 잠근다(깜빡임 방지)
+  const changeStage = (next: AccordionStage) => {
+    if (stageRef.current === next) return;
+    stageRef.current = next;
+    lockUntilRef.current = Date.now() + 300;
+    setAccordionStage(next);
   };
+  const stageLocked = () => Date.now() < lockUntilRef.current;
+  const collapseCards = () => changeStage(0);
 
   // ⌨️ 2026-08-13 사장님 확정 = AOS 숙소·도시 검색 = 독립 전체화면 모달(CitySearchAndroid, ResultStep 숙소 Modal 과 같은 검증 구조).
   const searchPlaceholder = t("trip.searchPlaceholder");
@@ -101,7 +110,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
   const selectCity = (city: ReadyCity, collapseToPill: boolean) => {
     lastCityRef.current = city.id;
     setFormData(cityDestination(city));
-    if (collapseToPill) setAccordionStage(0);
+    if (collapseToPill) changeStage(0);
   };
 
   // ⚠️ 수정금지(승인필요) 2026-11-10 최적값 = 링크 `?city=` = 도시 목록이 오면 그 도시를 목적지로 잡고 1단 캐러셀로 연다 (정본 2026-11-10)
@@ -113,7 +122,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
     const city = readyCities.find((c) => c.id === linked);
     if (city) {
       selectCityRef.current(city, false);
-      setAccordionStage(1);
+      changeStage(1);
     }
   }, [readyCities]);
   useVideoLinkCity(readyCities, setFormData, lastCityRef);
@@ -188,7 +197,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
           readyCities={readyCities}
           selectedDestination={formData.destination}
           stage={accordionStage}
-          onStageChange={setAccordionStage}
+          onStageChange={changeStage}
           onPressBts={() => {
             if (navigation) (navigation as any).navigate("BTSLanding");
           }}
@@ -335,18 +344,26 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
         }}
         onTouchEnd={(e) => {
           const dy = e.nativeEvent.pageY - dragStartYRef.current;
-          if (dy > 45 && accordionStage === 0) setAccordionStage(1);
-          else if (accordionStage !== 0) collapseCards();
+          if (dy > 45) {
+            if (
+              stageRef.current === 0 &&
+              scrollYRef.current <= 2 &&
+              !stageLocked()
+            )
+              changeStage(1);
+          } else if (stageRef.current !== 0) collapseCards();
         }}
         onScroll={(e) => {
           const y = e.nativeEvent.contentOffset.y;
-          if (y > 10 && accordionStage !== 0) {
+          scrollYRef.current = y;
+          if (y > 24 && stageRef.current !== 0 && !stageLocked())
             collapseCards();
-          } else if (y < -25 && accordionStage === 0) {
-            setAccordionStage(1);
-          } else if (y < -55 && accordionStage === 1) {
-            setAccordionStage(2);
-          }
+        }}
+        onScrollEndDrag={(e) => {
+          const y = e.nativeEvent.contentOffset.y;
+          if (stageLocked()) return;
+          if (y < -55 && stageRef.current === 1) changeStage(2);
+          else if (y < -25 && stageRef.current === 0) changeStage(1);
         }}
       >
         {/* 6. 누구랑 (동행) */}

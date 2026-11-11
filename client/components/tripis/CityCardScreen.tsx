@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-11-10 최적값 = 도시 대표 카드 = 기존 카드 부품(3단 배지·도시명·하이라이트·인기 명소 여정 버튼) 그대로 유지하고 320px 폰 폭 기준 가로 캐러셀 카드로 축소 (정본 2026-11-10)
+// ⚠️ 수정금지(승인필요) 2026-11-11 사장님 결정 = 도시 대표 카드 사진 자리 바탕 = 밝은 회색(검은 화면 깜빡임 제거) (정본 2026-11-11)
 import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { useTranslation } from "react-i18next";
@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
     height: 104,
     width: "100%",
     position: "relative",
-    backgroundColor: "#0F172A",
+    backgroundColor: "#CBD5E1",
   },
   cityImage: {
     width: "100%",
