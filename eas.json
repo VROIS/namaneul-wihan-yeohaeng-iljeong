@@ -20,6 +20,21 @@
         "buildType": "apk"
       }
     },
+    "emulator-android": {
+      "extends": "preview",
+      "environment": "development"
+    },
+    "review-android": {
+      "extends": "emulator-android",
+      "channel": "review"
+    },
+    "emulator-ios": {
+      "extends": "preview",
+      "environment": "development",
+      "ios": {
+        "simulator": true
+      }
+    },
     "production": {
       "channel": "main",
       "environment": "development",

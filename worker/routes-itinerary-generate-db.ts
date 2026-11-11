@@ -237,11 +237,8 @@ export function registerItineraryGenerateDbRoutes(
       if (!cityCheck.cityId && !cut)
         return res.status(400).json({ error: "pick_city" });
 
-      if (
-        !isPinnedDbOnly &&
-        !isFinal &&
-        !(await precheckFeature(db, res, payerId, "route_generate"))
-      )
+      // ⚠️ 수정금지(승인필요) 2026-11-11 사장님 결정 = 여정 생성 차감 = 외부 호출 경로(MIX)만 · 완비 도시(DB 방식)는 차감 0 (정본 2026-11-11)
+      if (isMix && !(await precheckFeature(db, res, payerId, "route_generate")))
         return; // 402 는 위에서 이미 보냈다(§9 금지 4번 = 헤더 나가기 전).
 
       if (cut) {
@@ -415,7 +412,7 @@ export function registerItineraryGenerateDbRoutes(
         }
       }
 
-      if (!isPinnedDbOnly && !isFinal && totalPlacesInDays > 0)
+      if (isMix && totalPlacesInDays > 0)
         await chargeOnSuccess(
           db,
           payerId,

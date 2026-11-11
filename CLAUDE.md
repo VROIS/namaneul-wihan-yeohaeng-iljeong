@@ -7,7 +7,7 @@
 3. 그다음 **제1조부터** 읽어라.
 4. 그다음 DB 실측 → 정본 문서(아래 📌) → 맨 마지막이 코드다. 기억 파일(메모리)은 쓰지도 보지도 않는다.
 
-📌 **정본 문서 = [`docs/2026-11-03 앱 활성화 방안 v1.md`](docs/2026-11-03%20앱%20활성화%20방안%20v1.md)** — 지금 무엇이 열려 있고 무엇부터 할지는 여기에만 있다. 이걸 보지 않고 "뭐부터 할까요"를 묻지 마라. 작업 기록도 여기에만 쓴다(별도 문서 파일 금지). 새 정본이 생기면 이 한 줄만 교체한다.
+📌 **정본 문서 = [`docs/2026-11-11 앱 수익화 방안 v1.md`](docs/2026-11-11%20앱%20수익화%20방안%20v1.md)** — 지금 무엇이 열려 있고 무엇부터 할지는 여기에만 있다. 이걸 보지 않고 "뭐부터 할까요"를 묻지 마라. 작업 기록도 여기에만 쓴다(별도 문서 파일 금지). 새 정본이 생기면 이 한 줄만 교체한다.
 
 ---
 
@@ -71,10 +71,10 @@
 
 ## 제9조: 크레딧 과금 = 켬 (정본 = [`docs/2026-07-29 결제·크레딧 구현.md`](docs/2026-07-29%20결제·크레딧%20구현.md))
 
-- **차감 켬.** 유료 외부호출 5지점. 단가 = 여정생성 5 / AI의견 5 / Tripis 해설 5 / 전문가검증 10 / 일별영상 60.
-- **충전 켬.** Stripe €10 = 140 크레딧(100 + 보너스 40). 충전 확정 = **Stripe 웹훅 1경로만**. 클라이언트가 부르는 충전은 존재하지 않는다.
-- **가입 보너스 50**(새 계정 만든 직후 `grantSignupBonus()` 1회). 50 = 영상(60)은 충전해야만 가능.
-- **관리자(`users.is_admin`)·비로그인 = 차감 없음.**
+- **차감 켬.** 유료 외부호출 5지점. 단가 = 여정생성 5(외부 호출 경로 MIX 만 · 완비 도시 DB 방식은 0) / AI의견 5 / Tripis 해설 5 / 전문가검증 10 / 일별영상 50.
+- **충전 켬.** Stripe €10 = 140 크레딧(100 + 보너스 40). 충전 확정 = **`fulfillFromStripeRecord()` 1벌**(`worker/routes-payments.ts`). 진입 3곳 = Stripe 웹훅 · 결제 시트 닫힘 확인 `POST /api/payments/confirm`(Stripe 서버에서 결제를 다시 조회해 성공·본인 것임을 확인한 뒤에만 적립) · 관리자 원장 대조 `POST /api/admin/payments/reconcile`. 클라이언트가 금액·적립을 직접 지정하는 엔드포인트는 존재하지 않는다.
+- **가입 보너스 50**(새 계정 만든 직후 `grantSignupBonus()` 1회). 가입 보너스 50 = 첫 영상 1편(50).
+- **관리자(`users.role = 'admin'` = 관리자 계정 1개)·비로그인 = 차감 없음.**
 - **카드 정보를 보관·표시하지 않는다**(Stripe 호스티드 결제).
 - 단가·금액·면제 대상 변경 = 사장님 명시 승인.
 
@@ -82,7 +82,7 @@
 |---|---|
 | 차감 | `shared/credits.ts` → `precheckFeature()`(잔액 확인) · `chargeOnSuccess()`(완성 시점 차감) |
 | 단가표 | `shared/credits.ts` → `CREDIT_COSTS` (화면은 `GET /api/credits/pricing`) |
-| 충전 | `worker/routes-payments.ts` → `POST /api/payments/webhook` |
+| 충전 | `worker/routes-payments.ts` → `fulfillFromStripeRecord()` (웹훅 · confirm · reconcile 이 모두 이 함수) |
 | 장부 | `shared/credits.ts` → `addCredits()` |
 | 이중충전 차단 | DB 규칙 `credit_transactions_purchase_ref_uniq` (`WHERE type='purchase'`) |
 | 토큰 → userId | `worker/auth-user.ts` → `getUserIdFromReq()` (역할 = `getRoleFromDb()`) |
@@ -90,7 +90,7 @@
 
 | # | 금지 |
 |---|---|
-| 1 | 클라이언트가 부르는 충전·적립 엔드포인트 추가 |
+| 1 | 클라이언트 값으로 금액·적립을 정하는 엔드포인트 추가 |
 | 2 | 라우트에서 `addCredits()` 를 직접 불러 차감 |
 | 3 | 단가·잔액을 화면에 하드코딩 |
 | 4 | 응답 헤더(`setHeader`/`write`)를 내보낸 뒤 차감 배치(402 를 못 보냄) |
@@ -119,19 +119,12 @@
 ```ts
 import { upsertPlace } from 'worker/lib/services/place-upsert';
 const r = await upsertPlace({ cityId, seedCategory, nameEn, address, latitude, longitude, googlePlaceId, priceEur, /* ... */ });
-// r.action = 'inserted' | 'updated' | 'skipped' / r.matchedBy = 'pid' | 'address' | 'coords' | 'name' | 'none'
+// r.action = 'inserted' | 'updated' | 'skipped' / r.matchedBy = 'pid' | 'uri' | 'address' | 'coords' | 'name_local' | 'name_en' | 'name_ko' | 'none'
 ```
 
-**매칭 단계 (같은 장소 확률 순, 변경 금지)**
-
-| 순위 | 기준 |
-|---|---|
-| 0 | google_place_id 일치 |
-| 1 | 풀 주소 정규화 100%(번지 + 우편번호) |
-| 2 | 좌표 10m |
-| 3 | 장소명 LOWER+trim(보조, 체인 위험) |
-
-- PID 가 달라도 보조 매칭(주소·좌표·현지 이름)이 맞으면 같은 장소다(우리 PID 오류). 거부권은 URI(cid)만.
+- **알아보는 문** = 제미니가 준 이름·주소·좌표로 원창고에 이미 있는 행을 **최대한 많이** 알아봐서 그 행을 쓰게 한다(유료 호출 0 · `shared/recognize-place.ts`).
+- **중복 방지 기준 = CID**(사장님 2026-11-11 · 10-16 대원칙) = 이미 들어와 있는 재료끼리 겹치지 않게 하는 기준이다. CID 가 다르면 다른 장소이고, 합치는 것은 CID 가 같은 행끼리만이다. 식당과 비식당은 서로 합치지 않는다(분류 관문).
+- **PID** = TS(외부 호출)에서만 나오는 보조 열쇠. **CID** = 시드 발굴에서 구글맵 페이지 주소를 잘라 입력한다(외부 호출 없음). 중복 방지의 본체 = DB 트리거 `place_seed_raw_prevent_dup` 하나이고, 단계 표는 문서에 따로 적지 않는다.
 
 **매칭 시 UPDATE = 무조건 새것 우선, 예외 없음**
 
@@ -140,7 +133,7 @@ const r = await upsertPlace({ cityId, seedCategory, nameEn, address, latitude, l
 - COALESCE 를 두는 유일한 이유 = job 에 **안 온 컬럼**(`?? null`)만 옛값 보존(부분 갱신이 다른 컬럼을 NULL 로 미는 파괴 방지).
 - 가격 0·리뷰수 0·거리 0 = 정상 새값 = 보존(`?? null`, `|| null` 아님).
 - tags = UNION(누적).
-- 매칭(ag3) 동점이면 큰 id(최신) 우선. 제미니 응답은 매칭돼도 버리지 않고 전부 저장.
+- 제미니 응답은 매칭돼도 버리지 않고 전부 저장.
 
 | # | 금지 |
 |---|---|
@@ -149,7 +142,7 @@ const r = await upsertPlace({ cityId, seedCategory, nameEn, address, latitude, l
 | 3 | 임시 스크립트에서 직접 INSERT |
 | 4 | "한 번만 우회" |
 
-- 최종 안전망 = DB BEFORE INSERT 트리거(누가 우회해도 EXCEPTION). 매칭 알고리즘 변경 = 사장님 명시 승인.
+- 최종 안전망 = DB BEFORE INSERT OR UPDATE 트리거(누가 우회해도 EXCEPTION). 매칭 알고리즘 변경 = 사장님 명시 승인.
 
 ## 제15조: Google Places SKU = Enterprise 까지, Atmosphere 절대 금지
 
@@ -167,16 +160,16 @@ const r = await upsertPlace({ cityId, seedCategory, nameEn, address, latitude, l
 ## 제16조: 폴더 구조 강제 + 1회용 스크립트 금지
 
 ```
-worker/lib/services/                  ← 엔진 (워커와 필시티 CLI 가 같이 쓴다)
+worker/lib/services/                  ← 엔진 (워커와 필시티 CLI 가 같이 쓴다 · 주요 폴더만, route/ transport/ verify/ 도 있다)
   ├─ shared/                          ← 단일 진입점 헬퍼
   │   ├─ google-places-sku.ts         (Atmosphere 가드)
   │   ├─ geminiClient.ts              (Gemini 단일 진입점)
-  │   ├─ ts-client.ts                 (TS Enterprise + languageCode='ko')
+  │   ├─ ts-client.ts                 (TS Enterprise 호출 단일 진입점)
   │   ├─ recognize-place.ts           (알아보는 문 = 제미니 값으로 창고 행 찾기)
   │   ├─ save-raw.ts                  (외부호출 raw 저장 관문, 제18조)
   │   └─ r2-client.ts                 (R2 창고 접근 1벌)
   ├─ place-upsert.ts                  (INSERT/UPDATE 단일 진입점, 제14조)
-  ├─ agents/                          ← 여정 엔진 (ag1~4 · pipeline-v3, 여정 매칭 = ag3-match-core.ts)
+  ├─ agents/                          ← 여정 엔진 (ag1~3 · pipeline-v3)
   ├─ itinerary/                       ← 여정 도우미 (동선 최적화)
   └─ fill/                            ← 창고 채움 결손별 도구 (카탈로그 = 재발명 가드)
 fillcity/                             ← 창고 채움 WF(fill-city-v3.ts) · 제미니 프롬프트(prompts/ = 1 글자 변경 금지) · 단계(steps/)
@@ -185,11 +178,11 @@ fillcity/                             ← 창고 채움 WF(fill-city-v3.ts) · �
 | # | 금지 |
 |---|---|
 | 1 | 1회용 임시 스크립트를 저장소에 만들기(`_migration-*.mjs`, `_diag-*.mjs` 등) |
-| 2 | 1,000줄 넘는 메가 파일 |
+| 2 | 700줄 넘는 파일(`scripts/guard-max-file-lines.mjs`) |
 | 3 | `shared/` 를 우회해 Gemini·TS 를 직접 부르기 |
 | 4 | `db.insert(placeSeedRaw)` 직접(제14조) |
 | 5 | "Recommended" 옵션 제시 |
-| 6 | 매칭 코드 재발명(매칭 = `shared/recognize-place.ts` · `agents/ag3-match-core.ts` 만) |
+| 6 | 매칭 코드 재발명(매칭 = DB 트리거 `place_seed_raw_prevent_dup` + 알아보는 문 `shared/recognize-place.ts` 만) |
 
 - 새 작업 = `shared/` 헬퍼를 부르고, 새 컴포넌트는 `agents/` · `itinerary/` · `fill/` 안에만. 도시 채움 = `fillcity/fill-city-v3.ts --city-id=<N>` 한 줄.
 - **재발명은 기계가 막는다** = `scripts/guard-no-reinvention.mjs`(pre-commit, `--catalog` = 도구 목록 실시간). 도구를 지우거나 바꾸면 그 턴에 카탈로그를 다시 쓴다.
@@ -198,28 +191,28 @@ fillcity/                             ← 창고 채움 WF(fill-city-v3.ts) · �
 ## 제18조: 외부호출 raw = `saveRaw()` 하나, 형식 고정
 
 - 모든 유료 외부호출(TS·Gemini) 응답은 `worker/lib/services/shared/save-raw.ts` 의 `saveRaw()` 로 저장한다. 저장 없이 부르는 것 = 금지(돈이 증발한다).
-- 자리 = `R2 {cityId}/raw/{YYYY-MM-DD_HHMMSS}_{source}-{tag}.json` + 로컬 `docs/raw/{cityId}/` **2곳 같은 모양**(자리·시각 = `shared/r2-paths.ts` 의 `rawPlace`·`fileStamp` 1벌).
+- 자리 = `R2 {cityId}/raw/{YYYY-MM-DD_HHMMSS}_{source}-{tag}.json` + 로컬 `docs/raw/{cityId}/` **2곳 같은 모양**(자리·시각 = 저장소 루트 `shared/r2-paths.ts` 의 `rawPlace`·`fileStamp` 1벌 · 예외 = 건건 TS 호출은 R2 만 저장 `localSkip`).
 - 사진·영상·보고서·사용자 사진도 파일 이름 맨 앞 = 시각 초까지(`{시각}_{원래 이름}`). 예외 = 관리 통계 하루 장부(`system/admin-metrics/{날짜}.jsonl`).
 
 | 요소 | 값 |
 |---|---|
-| cityId | 도시 번호 / 도시 없는 여정 = `itinerary-{번호}` → `system/itineraries/{번호}/raw/` / 장소 없는 사진 해설 = `user-{번호}` → `users/raw/`(끝 `_{사용자 번호}`) / 맥락 없음 → `system/runtime/raw/` |
+| cityId | 도시 번호 / 도시 없는 여정 = `itinerary-{번호}` → `system/itineraries/{번호}/raw/` / 장소 없는 사진 해설 = `user-{번호}` → `users/raw/`(끝 `_{사용자 번호}`) / 마케팅 = `marketing` → `system/marketing/raw/` / 맥락 없음 → `system/runtime/raw/` |
 | 시각 | `YYYY-MM-DD_HHMMSS` 세계 표준시, 맨 앞 |
-| source | `ts` \| `gemini` |
+| source | `ts` \| `gemini` \| `routes` \| `gmaps` \| `clef` |
 | tag | 호출 맥락(영숫자, `-` 치환, 48자), 없으면 `call` |
 
 ```json
-{ "savedAt": "<ISO>", "source": "ts | gemini", "contextId": "<cityId | runtime>",
+{ "savedAt": "<ISO>", "source": "ts | gemini | routes | gmaps | clef", "contextId": "<cityId | runtime>",
   "request": { "prompt": "...", "model": "..." }, "raw": { "parsed": {}, "text": "...", "finishReason": "..." } }
 ```
 
 - 들여쓰기 2(사람이 읽을 수 있게). `request` = 프롬프트 원본 통째, `raw` = 응답 원본 그대로.
-- 같은 초·같은 tag = `md5(raw)` 비교: 같으면 1개, 다르면 `_1`·`_2` 로 분리 보존(`shared/raw-filename.ts` 의 `rawHash`·`versionedName`).
+- 같은 초·같은 tag = `md5(raw)` 비교: 같으면 1개, 다르면 `_1`·`_2` 로 분리 보존(`shared/raw-filename.ts` 의 `rawHash`·`versionedNameR2` = R2 에 있는 같은 이름 기준).
 
 | # | 금지 |
 |---|---|
 | 1 | 한 줄(minified) 저장 |
-| 2 | 로컬만 / R2 만 저장 |
+| 2 | 로컬만 저장 / (건건 TS 호출 외에) R2 만 저장 |
 | 3 | 파일 이름에서 시각을 빼거나 같은 이름으로 덮어쓰기 |
 | 4 | `saveRaw()` 우회 |
 | 5 | `request`/`raw` 구조 변경·필드 누락 |
@@ -233,7 +226,7 @@ fillcity/                             ← 창고 채움 WF(fill-city-v3.ts) · �
 5. 새 규칙을 적용할 때는 **전수 grep → 옛것 완전 삭제 → 새것**. "딱 그것만" 고치고 나머지를 남기지 마라.
 6. 옛것을 남겨 두는 "혹시 몰라서"는 없다. 문제가 생기면 사장님이 책임지고 다시 만든다.
 
-- **기계가 막는다** = `scripts/guard-no-old-artifacts.mjs`(Edit/Write 직후 훅 + pre-commit). 통과 모양 = 옛 내용 인용 없이 "사유 + 날짜/§" 1줄. 가드 자체도 수정금지.
+- **기계가 막는다** = `scripts/guard-no-old-artifacts.mjs`(pre-commit 과 기계검증 가드 안에서 집행 · 파일 하나만 검사하는 `--file` 모드는 스크립트에 있으나 프로젝트 훅에는 연결돼 있지 않다). 통과 모양 = 옛 내용 인용 없이 "사유 + 날짜/§" 1줄. 가드 자체도 수정금지.
 
 ## 제20조: 모든 외부호출 WF = 같은 양식으로 `place_seed_raw` 에 모인다
 
@@ -259,21 +252,22 @@ fillcity/                             ← 창고 채움 WF(fill-city-v3.ts) · �
 | 2 | "웹에서 되니 앱도 될 것" 추정 |
 | 3 | 배포 안 된 상태에서 시험 강행 |
 
+- **에뮬레이터(Appetize · 정본 8번) = 우리(공장장·어사이드)용 검수 도구(사장님 2026-11-11)** = 수정이나 작업을 하면 이것을 열어 앱 화면에서 어떻게 보이는지 공장장이 직접 확인한다 · 기기는 **가장 작고 오래된 것**으로 한다(사람들은 최신 폰이 아니다) = iOS 는 iPhone 11 Pro · iOS 17.2, 안드로이드는 Nexus 5 · Android 8.1(Appetize 목록에서 가장 작고 오래된 것 · 폭 320 기기는 목록에 없음) · 사장님이 같이 보실 때는 Chrome 에 열어 둔다 · 운영 배포 전 확인은 `review` 채널 · 한도가 차면 멈춘다(정본 8번).
 - iOS·Android 실기기는 AI 가 못 돈다. 웹으로 공통 로직을 확인하고, 앱 전용 동작은 공식 문서로 확정 → 실기기 최종 확인은 사장님.
 
 ## 제22조: 커밋 전 검증 = 기계가 강제한다 (정본 = [`docs/2026-08-06 검증·커밋 게이트 자동화.md`](docs/2026-08-06%20검증·커밋%20게이트%20자동화.md))
 
 ```
-수정 → 기계검증(6) → 크롬 실증(사용자 관점) → 미비하면 다시 → 판단 3종 → 표 제시 → 정본 문서 기록 → 대기
+수정 → 기계검증(7) → 크롬 실증(사용자 관점) → 미비하면 다시 → 판단 3종 → 표 제시 → 정본 문서 기록 → 대기
     → 커밋 승인(도장) → 빌드 필요 확인 → 커밋·푸시
 ```
 
 - 집행 = `scripts/verify-pipeline.mjs` 1벌(단계 통과 = 코드 지문 마커, `.verify-state.json`). 같은 검증을 두 번 돌리지 않는다.
-  - `machine` = 가드 3(§19 박제·§16 재발명·§0 줄 수) + 기계 7(tsc 신규 0·**워커 전용 tsc 신규 0**·**컨테이너 타입검사 0건, 모든 모드**·웹빌드·lint·워커 번들·MIX 스모크).
+  - `machine` = 가드 5(§19 박제·§16 재발명·§0 줄 수·배포 설정 2벌 동일·영상 지시문 지문) + 기계 7(tsc 신규 0·**워커 전용 tsc 신규 0**·**컨테이너 타입검사 0건, 모든 모드**·웹빌드·lint·워커 번들·MIX 스모크).
   - `evidence "근거 1줄"` = 크롬/실호출 실증 기록(대상 서버를 먼저 확인).
   - `judge-pass` = 판단 3종(`Workflow({scriptPath: "scripts/verify-workflow.mjs"})` = simplify·code-review·react-best 병렬) **`allPassed: true` 가 나온 그 턴에만**.
   - `status` = 단계별 상태 표.
-- pre-commit = 도장(제10조) → 가드 3 → 지문 대조(코드 커밋인데 실증·판단 마커가 없거나 낡으면 물리 차단, 문서만 면제). post-commit = 도장·마커 1회용 소멸.
+- pre-commit = 도장(제10조) → 가드 5 → 지문 대조(코드 커밋인데 실증·판단 마커가 없거나 낡으면 물리 차단, 문서만 면제). post-commit = 도장·마커 1회용 소멸.
 - 하나라도 실패 = 통과할 때까지 고친다.
 - 보고 표 = **문제점 · 해결책 · 사용자 관점 개선 효과** 3열. 기록은 그 작업의 정본 문서에.
 
@@ -309,7 +303,7 @@ node scripts/release.mjs <커밋메시지파일>        (메시지 파일은 저
 ```
 
 - 같은 커밋이 두 번 올라간다 = 설계대로(푸시 뒤 Workers Builds 가 한 번 더 = 안전장치).
-- 로컬 시험 서버(8787)가 켜져 있으면 ②에서 멈춘다 → 끄고 다시.
+- 로컬 시험 서버(8787)가 켜져 있으면 ②(자산 조립)에서 파일이 잠겨 멈춘다(실제로 겪음 · 코드가 포트를 검사하는 것은 아님) → 끄고 다시.
 - 푸시만 실패 = `git push origin tripis1` 만 다시. 커밋 뒤 배포 실패 = ④만 다시.
 - **로그는 반드시 본다** = `scripts/worker-logs.mjs` 1벌(`--min`, `--errors`, `--path`, `--find`). 실시간이 필요할 때만 `npx wrangler tail --config worker/wrangler.jsonc`.
 - 설정 2벌: `worker/wrangler.jsonc` = 정본(구운 이미지 주소) / `worker/wrangler.build.jsonc` = 도커 있는 곳에서 굽는 길. 이미지 말고 다른 칸을 고치면 **두 파일에 같이**. 컨테이너 코드를 고치면 이미지를 새로 굽고 digest 갱신.

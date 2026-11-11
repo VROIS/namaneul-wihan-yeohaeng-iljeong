@@ -6,9 +6,9 @@ import { creditTransactions, users } from "./schema";
 type Db = PgDatabase<PgQueryResultHKT, any>;
 type JsonRes = { status(code: number): { json(body: unknown): unknown } };
 
-// ⚠️ 수정금지(승인필요) 2026-11-05 사장님 결정 = 크레딧 단가표 · 일별영상 50 = 가입 보너스 50으로 첫 영상 1편 (정본 2026-11-05)
+// ⚠️ 수정금지(승인필요) 2026-11-11 사장님 결정 = 크레딧 단가표 · 일별영상 50 · 여정 생성 차감은 외부 호출 경로(MIX)만 (정본 2026-11-11)
 export const CREDIT_COSTS = {
-  route_generate: 5, // 여정 생성 (DB-only 포함 = 동일)
+  route_generate: 5, // 여정 생성 = 외부 호출 경로(MIX)만 차감
   ai_opinion: 5, // AI 의견
   guide_explain: 5, // Tripis 해설 (가이드 미니앱)
   expert_verify: 10, // 전문가 검증·문의
