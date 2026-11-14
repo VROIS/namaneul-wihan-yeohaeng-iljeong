@@ -115,6 +115,43 @@ fs.writeFileSync(
 );
 console.log(`   index.html head <- travelpayouts-drive.html`);
 
+// ⚠️ 수정금지(승인필요) 2026-11-14 사장님 결정 = 홈 index.html = 머리말 링크 미리보기 태그 묶음(그림 = 가장 가벼운 JPEG) + #root 정적 소개문(자바스크립트가 켜지기 전에 읽히는 글) (정본 사이트 검진 1단계)
+const HOME_HEAD = `<link rel="canonical" href="https://tripis.app/">
+<meta name="theme-color" content="#4285F4">
+<link rel="apple-touch-icon" href="https://tripis.app/assets/images/apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="TRIPIS">
+<meta property="og:title" content="TRIPIS - Your AI travel friend">
+<meta property="og:description" content="Plan your trip day by day, let an AI check it, and have a local expert verify it. Times, routes and costs included.">
+<meta property="og:url" content="https://tripis.app/">
+<meta property="og:image" content="https://tripis.app/assets/images/og-tripis.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="TRIPIS: plan the route, AI checks it, a local expert verifies it">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="TRIPIS - Your AI travel friend">
+<meta name="twitter:description" content="Plan your trip day by day, let an AI check it, and have a local expert verify it.">
+<meta name="twitter:image" content="https://tripis.app/assets/images/og-tripis.jpg">
+`;
+const HOME_ROOT = `<div id="root"><main style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:32px 20px;color:#14202b;line-height:1.6">
+<h1>TRIPIS - Your AI travel friend</h1>
+<p>TRIPIS plans your trip day by day: which places to visit, in what order, at what time, how long it takes to get from one stop to the next, and roughly what it costs. An AI can then check your plan, and a local expert can verify it before you go.</p>
+<ul>
+<li>Plan: choose a city, dates, who you travel with and what you like.</li>
+<li>AI check: an AI reads your plan and gives its opinion.</li>
+<li>Local expert: a local expert verifies your plan and answers your questions.</li>
+</ul>
+<p><a href="/trips/en">Ready-made city itineraries</a> · <a href="/about/en">What is TRIPIS?</a></p>
+</main></div>`;
+fs.writeFileSync(
+  outIndex,
+  fs
+    .readFileSync(outIndex, "utf8")
+    .replace("</head>", `${HOME_HEAD}</head>`)
+    .replace(`<div id="root"></div>`, HOME_ROOT),
+);
+console.log(`   index.html head <- 미리보기 태그 16줄 · #root <- 정적 소개문`);
+
 const outAssets = path.join(OUT, "assets");
 fs.mkdirSync(outAssets, { recursive: true });
 const nAssets = copyDir(SRC_ASSETS, outAssets).length;

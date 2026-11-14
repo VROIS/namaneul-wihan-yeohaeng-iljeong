@@ -18,6 +18,7 @@ import {
   whoKey,
   type PageLang,
 } from "./lib/public-pages-text";
+import { pageAbout } from "./lib/public-pages-about";
 import {
   SITE,
   esc,
@@ -308,6 +309,45 @@ ${daysHtml}
     }
   });
 
+  // ⚠️ 수정금지(승인필요) 2026-11-13 사장님 결정 = /about/{언어} 질문·답 페이지 7개 언어 + FAQPage 구조화 데이터 (정본 사이트 검진 1단계)
+  app.get("/about/:lang", (req: Request, res: Response) => {
+    const lang = String(req.params.lang);
+    if (!isPageLang(lang)) return res.status(404).send("Not found");
+    const L = lang as PageLang;
+    const a = pageAbout(L);
+    const body =
+      `<h1>${esc(a.title)}</h1>` +
+      a.qa
+        .map(
+          (x) =>
+            `<h2>${esc(x.q)}</h2>${x.a ? `<p>${esc(x.a)}</p>` : ""}${x.list ? `<ul>${x.list.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>` : ""}`,
+        )
+        .join("");
+    sendHtml(
+      res,
+      renderPage({
+        lang: L,
+        title: `${a.title} | TRIPIS`,
+        description: a.description,
+        path: `/about/${L}`,
+        alternates: allLangPaths((l) => `/about/${l}`),
+        jsonLd: {
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: a.qa.map((x) => ({
+            "@type": "Question",
+            name: x.q,
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: x.a || (x.list || []).join("\n"),
+            },
+          })),
+        },
+        body,
+      }),
+    );
+  });
+
   app.get("/guides/:lang/:slug", async (req: Request, res: Response) => {
     const lang = String(req.params.lang);
     const placeId = leadingId(String(req.params.slug));
@@ -423,7 +463,7 @@ ${daysHtml}
           ),
         );
       const urls: string[] = [];
-      for (const l of PAGE_LANGS) urls.push(`/trips/${l}`);
+      for (const l of PAGE_LANGS) urls.push(`/trips/${l}`, `/about/${l}`);
       for (const c of list)
         for (const l of PAGE_LANGS) urls.push(tripPath(l, c.id, c.nameEn));
       for (const g of guideRows)
@@ -471,6 +511,7 @@ ${daysHtml}
         "",
         "## More",
         `- All itineraries by language: ${PAGE_LANGS.map((l) => `${SITE}/trips/${l}`).join(" , ")}`,
+        `- What is TRIPIS? Questions and Answers: ${PAGE_LANGS.map((l) => `${SITE}/about/${l}`).join(" , ")}`,
         `- Sitemap: ${SITE}/sitemap.xml`,
         "",
       ];

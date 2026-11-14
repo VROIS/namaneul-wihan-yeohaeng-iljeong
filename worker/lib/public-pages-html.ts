@@ -61,6 +61,9 @@ const LANG_LABEL: Record<PageLang, string> = {
   de: "Deutsch",
 };
 
+// ⚠️ 수정금지(승인필요) 2026-11-14 사장님 결정 = 공개 글 페이지 링크 미리보기 = 큰 카드(summary_large_image) + og:image·twitter:image 1벌(가장 가벼운 JPEG) (정본 사이트 검진 1단계)
+const OG_IMAGE = `${SITE}/assets/images/og-tripis.jpg`;
+
 export function renderPage(p: PageShell): string {
   const t = pageText(p.lang);
   const url = SITE + p.path;
@@ -86,7 +89,7 @@ export function renderPage(p: PageShell): string {
     : "";
   return `<!doctype html><html lang="${t.htmlLang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(p.title)}</title><meta name="description" content="${esc(p.description)}"><link rel="canonical" href="${esc(url)}">${alt}${xdef}
-<meta property="og:type" content="article"><meta property="og:site_name" content="TRIPIS"><meta property="og:title" content="${esc(p.title)}"><meta property="og:description" content="${esc(p.description)}"><meta property="og:url" content="${esc(url)}"><meta name="twitter:card" content="summary">
+<meta property="og:type" content="article"><meta property="og:site_name" content="TRIPIS"><meta property="og:title" content="${esc(p.title)}"><meta property="og:description" content="${esc(p.description)}"><meta property="og:url" content="${esc(url)}"><meta property="og:image" content="${OG_IMAGE}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="${OG_IMAGE}">
 <style>${CSS}</style>${ld}${TP_DRIVE}</head><body><main>
 <header class="top"><a class="brand" href="${SITE}/?ref=web_page">TRIPIS</a>${langNav ? `<nav class="langs" aria-label="${esc(t.languages)}">${langNav}</nav>` : ""}</header>
 ${p.body}
