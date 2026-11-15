@@ -115,8 +115,9 @@ fs.writeFileSync(
 );
 console.log(`   index.html head <- travelpayouts-drive.html`);
 
-// ⚠️ 수정금지(승인필요) 2026-11-14 사장님 결정 = 홈 index.html = 머리말 링크 미리보기 태그 묶음(그림 = 가장 가벼운 JPEG) + #root 정적 소개문(자바스크립트가 켜지기 전에 읽히는 글) (정본 사이트 검진 1단계)
-const HOME_HEAD = `<link rel="canonical" href="https://tripis.app/">
+// ⚠️ 수정금지(승인필요) 2026-11-15 사장님 결정 = 홈 index.html 머리말 = 네이버 소유확인 태그 + 링크 미리보기 태그 묶음(그림 = 가장 가벼운 JPEG) + #root 정적 소개문(자바스크립트가 켜지기 전에 읽히는 글) (정본 사이트 검진 1단계)
+const HOME_HEAD = `<meta name="naver-site-verification" content="ee47d51f00eb5eeb3476c7dfd9ba9220ece4109e">
+<link rel="canonical" href="https://tripis.app/">
 <meta name="theme-color" content="#4285F4">
 <link rel="apple-touch-icon" href="https://tripis.app/assets/images/apple-touch-icon.png">
 <meta property="og:type" content="website">
