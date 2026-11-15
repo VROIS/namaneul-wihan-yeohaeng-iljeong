@@ -9,10 +9,14 @@ import {
   cityWithRepresentative,
 } from "./lib/services/shared/city-representative-place";
 import type { OpenDb } from "./db-types";
+import { readyCities } from "./best-itinerary/city-resolver";
+import { bestRankOrdinal } from "./lib/services/shared/best-rank";
+import { regionOfCountry } from "../shared/city-region";
 
 const { cities, placeSeedRaw, itineraries, guides, savedVideos } = schema;
 
 type HighlightName = {
+  id: number;
   nameEn: string | null;
   nameLocal: string | null;
   nameKo: string | null;
@@ -130,6 +134,7 @@ export function registerPlaceRoutes(app: Express, openDb: OpenDb): void {
           tagline,
           // ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = 표시명 = pickDisplayName 1벌(§16, 규칙·사유는
           highlights: highlightPlaces.map(pickDisplayName),
+          highlightIds: highlightPlaces.map((p) => p.id),
           dayCount: 0, // 0 = 화면이 "N일 코스" 배지를 안 그림
           imageUrl: heroPlace?.imageUrl ?? null,
           // 🎙️ 2026-08-02 사장님 순서 ㉠ = 관리자가 [해설 만들기] 로 여는 장소 = 위 사진과 **같은 1위 행**.
@@ -142,8 +147,6 @@ export function registerPlaceRoutes(app: Express, openDb: OpenDb): void {
             heroPlaceId: row.overrideHeroPlaceId,
             highlightPlaceIds: row.overrideHighlightPlaceIds,
             videoId: row.overrideVideoId,
-            countryOrder: row.countryOrder,
-            cityOrder: row.cityOrder,
           },
         };
 
@@ -212,11 +215,8 @@ export function registerPlaceRoutes(app: Express, openDb: OpenDb): void {
               .filter((v: number | null): v is number => v != null)
           : null;
         const videoId = toIdOrNull(req.body?.videoId);
-        const countryOrder = toIdOrNull(req.body?.countryOrder);
-        const cityOrder = toIdOrNull(req.body?.cityOrder);
 
-        // ⚠️ 수정금지(승인필요) 2026-11-15 사장님 결정 = 도시 카드 순서 지정 = 도시 순서는 그 도시에 · 나라 순서는 같은 나라 코드의 도시 전부에 한 번에 쓴다(나라 묶음은 깨지 않는다) (정본 2026-11-15)
-        const [me] = await db
+        await db
           .update(cities)
           .set({
             overrideHeroPlaceId: heroPlaceId,
@@ -225,25 +225,11 @@ export function registerPlaceRoutes(app: Express, openDb: OpenDb): void {
                 ? highlightPlaceIds
                 : null,
             overrideVideoId: videoId,
-            cityOrder,
           })
-          .where(eq(cities.id, cityId))
-          .returning({ countryCode: cities.countryCode });
-        if (me?.countryCode)
-          await db
-            .update(cities)
-            .set({ countryOrder })
-            .where(eq(cities.countryCode, me.countryCode));
+          .where(eq(cities.id, cityId));
 
         console.log(`[ContentOverride] 도시 ${cityId} 선별입력 저장 완료`);
-        res.json({
-          cityId,
-          heroPlaceId,
-          highlightPlaceIds,
-          videoId,
-          countryOrder,
-          cityOrder,
-        });
+        res.json({ cityId, heroPlaceId, highlightPlaceIds, videoId });
       } catch (error) {
         console.error("[ContentOverride] 저장 실패:", error);
         res.status(500).json({ error: "failed_to_save_content_override" });
@@ -252,4 +238,112 @@ export function registerPlaceRoutes(app: Express, openDb: OpenDb): void {
       }
     },
   );
+
+  // ⚠️ 수정금지(승인필요) 2026-11-15 사장님 결정 = 대시보드 사진·하이라이트 고르기 = 도시 카드와 같은 조건·순서(city-representative-place 1벌)의 후보 40곳을 사진·등수와 함께 (정본 2026-11-15)
+  app.get(
+    "/api/admin/cities/:id/candidates",
+    async (req: Request, res: Response) => {
+      const { db, close } = openDb();
+      try {
+        const cityId = parseInt(String(req.params.id));
+        if (Number.isNaN(cityId))
+          return res.status(404).json({ error: "City not found" });
+        const rows = await db
+          .select({
+            id: placeSeedRaw.id,
+            nameEn: placeSeedRaw.nameEn,
+            nameLocal: placeSeedRaw.nameLocal,
+            nameKo: placeSeedRaw.nameKo,
+            imageUrl: placeSeedRaw.imageUrl,
+            bestRank: placeSeedRaw.bestRank,
+            seedCategory: placeSeedRaw.seedCategory,
+          })
+          .from(placeSeedRaw)
+          .where(cityRepresentativeWhere(cityId))
+          .orderBy(...cityRepresentativeOrder("ko"))
+          .limit(40);
+        res.json(
+          rows.map((r) => ({
+            id: r.id,
+            name: pickDisplayName(r),
+            imageUrl: r.imageUrl,
+            rank: bestRankOrdinal(r.bestRank),
+            seedCategory: r.seedCategory,
+          })),
+        );
+      } catch (error) {
+        console.error("[admin/candidates] 후보 조회 실패:", error);
+        res.status(500).json({ error: "failed_to_fetch_candidates" });
+      } finally {
+        close();
+      }
+    },
+  );
+
+  // ⚠️ 수정금지(승인필요) 2026-11-15 사장님 결정 = 대시보드 카드 순서 화면 = 앱과 같은 순서(readyCities 1벌)를 대륙 탭(city-region 1벌) → 나라 묶음 → 도시로 묶어 보여 준다 (정본 2026-11-15)
+  app.get("/api/admin/cities/card-order", async (_req, res: Response) => {
+    const { db, close } = openDb();
+    try {
+      const [ready, names] = await Promise.all([
+        readyCities(db),
+        db
+          .selectDistinct({ code: cities.countryCode, name: cities.country })
+          .from(cities),
+      ]);
+      const nameOf = new Map(names.map((n) => [n.code, n.name]));
+      const tabs: Record<
+        string,
+        {
+          code: string;
+          name: string | null;
+          cities: { id: number; nameKo: string; nameEn: string | null }[];
+        }[]
+      > = {};
+      for (const c of ready) {
+        const tab = (tabs[regionOfCountry(c.countryCode)] ??= []);
+        const code = c.countryCode ?? "";
+        let group = tab[tab.length - 1];
+        if (!group || group.code !== code) {
+          group = { code, name: nameOf.get(code) ?? null, cities: [] };
+          tab.push(group);
+        }
+        group.cities.push({ id: c.id, nameKo: c.nameKo, nameEn: c.nameEn });
+      }
+      res.json(tabs);
+    } catch (error) {
+      console.error("[admin/card-order] 순서 조회 실패:", error);
+      res.status(500).json({ error: "failed_to_fetch_card_order" });
+    } finally {
+      close();
+    }
+  });
+
+  // ⚠️ 수정금지(승인필요) 2026-11-15 사장님 결정 = 카드 순서 저장 = 화면에서 옮긴 결과 순서를 그대로 1부터 쓴다 · 나라 순서는 같은 나라 코드의 도시 전부에 · 도시 순서는 그 나라 묶음 안에서 (정본 2026-11-15)
+  app.post("/api/admin/cities/order", async (req: Request, res: Response) => {
+    const { db, close } = openDb();
+    try {
+      const codes: string[] = Array.isArray(req.body?.countryCodes)
+        ? req.body.countryCodes.map(String)
+        : [];
+      const ids: number[] = Array.isArray(req.body?.cityIds)
+        ? req.body.cityIds.map(Number).filter(Number.isFinite)
+        : [];
+      for (const [i, code] of codes.entries())
+        await db
+          .update(cities)
+          .set({ countryOrder: i + 1 })
+          .where(eq(cities.countryCode, code));
+      for (const [i, id] of ids.entries())
+        await db
+          .update(cities)
+          .set({ cityOrder: i + 1 })
+          .where(eq(cities.id, id));
+      res.json({ countries: codes.length, cities: ids.length });
+    } catch (error) {
+      console.error("[admin/cities/order] 순서 저장 실패:", error);
+      res.status(500).json({ error: "failed_to_save_card_order" });
+    } finally {
+      close();
+    }
+  });
 }

@@ -28,6 +28,7 @@ import CityCardScreen, {
   CITY_CARD_GAP,
 } from "@/components/tripis/CityCardScreen";
 import type { RepCard } from "@/components/tripis/TripisModal";
+import { regionOfCountry, type RegionKey } from "@shared/city-region";
 
 export type ReadyCity = {
   id: number;
@@ -37,15 +38,6 @@ export type ReadyCity = {
 };
 
 export type AccordionStage = 0 | 1 | 2;
-
-export type RegionKey =
-  | "france"
-  | "europe"
-  | "asia"
-  | "northAmerica"
-  | "southAmerica"
-  | "africa"
-  | "oceania";
 
 export const REGION_TABS: readonly {
   id: RegionKey;
@@ -59,63 +51,6 @@ export const REGION_TABS: readonly {
   { id: "africa", labelKey: "trip.regionAfrica" },
   { id: "oceania", labelKey: "trip.regionOceania" },
 ] as const;
-
-const EUROPE_CODES = new Set([
-  "AD",
-  "AT",
-  "BE",
-  "CH",
-  "CZ",
-  "DE",
-  "DK",
-  "ES",
-  "FI",
-  "GB",
-  "GR",
-  "HR",
-  "HU",
-  "IE",
-  "IS",
-  "IT",
-  "LU",
-  "MC",
-  "NL",
-  "NO",
-  "PL",
-  "PT",
-  "SE",
-  "TR",
-]);
-const ASIA_CODES = new Set([
-  "CN",
-  "HK",
-  "ID",
-  "IN",
-  "JP",
-  "KR",
-  "MY",
-  "PH",
-  "SG",
-  "TH",
-  "TW",
-  "VN",
-]);
-const NORTH_AMERICA_CODES = new Set(["CA", "MX", "US"]);
-const SOUTH_AMERICA_CODES = new Set(["AR", "BR", "CL", "CO", "PE"]);
-const AFRICA_CODES = new Set(["KE", "MA", "TN"]);
-const OCEANIA_CODES = new Set(["AU", "NZ"]);
-
-export function regionOfCountry(code?: string | null): RegionKey {
-  const c = (code || "").toUpperCase();
-  if (c === "FR") return "france";
-  if (EUROPE_CODES.has(c)) return "europe";
-  if (ASIA_CODES.has(c)) return "asia";
-  if (NORTH_AMERICA_CODES.has(c)) return "northAmerica";
-  if (SOUTH_AMERICA_CODES.has(c)) return "southAmerica";
-  if (AFRICA_CODES.has(c)) return "africa";
-  if (OCEANIA_CODES.has(c)) return "oceania";
-  return "europe";
-}
 
 function fallbackRep(city: ReadyCity): RepCard {
   return {

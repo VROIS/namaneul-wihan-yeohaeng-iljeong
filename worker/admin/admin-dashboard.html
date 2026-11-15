@@ -559,6 +559,14 @@
            UI 패턴 = client/screens/guide/screens/MainCameraScreen.js "장소번호" 입력 흐름 재사용(신규 UI 발명 아님, §16).
            BE 배선 완료 = 조회 GET .../representative(overrides 칸), 저장 POST /api/admin/cities/:id/content-override
            (둘 다 city-place-routes.ts) 재사용, 새로 만들지 말 것(§16). -->
+      <!-- ⚠️ 수정금지(승인필요) 2026-11-15 사장님 결정 = 도시 카드 순서 = 앱과 같은 순서로 대륙 탭 → 나라 묶음 → 도시를 보여 주고 ▲▼ 로 옮기면 바로 저장 · 도시 이름을 누르면 아래 미리보기로 (정본 2026-11-15) -->
+      <div class="card" style="margin-bottom: 20px;">
+        <h2>📇 도시 카드 순서</h2>
+        <p style="color: #9ca3af; font-size: 14px; margin-bottom: 12px;">앱에 나가는 순서 그대로입니다. 나라 묶음과 도시를 ▲▼ 로 옮기면 바로 저장되고 앱에 반영됩니다. 손대지 않은 곳은 인구 많은 순입니다. 도시 이름을 누르면 아래에서 사진·하이라이트를 고칠 수 있습니다.</p>
+        <div id="order-tabs" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;"></div>
+        <div id="order-list"></div>
+      </div>
+
       <div class="card" style="margin-bottom: 20px;">
         <h2>🖼️ 콘텐츠별 미리보기 + ID 선별입력</h2>
         <p style="color: #9ca3af; font-size: 14px; margin-bottom: 16px;">평소엔 전부 자동 채움. 원하는 슬롯만 그 콘텐츠 자신의 id(장소id/영상id)로 교체해 저장하면 그 도시카드에 즉시 반영됩니다.</p>
@@ -585,6 +593,19 @@
           </div>
         </div>
 
+        <!-- ⚠️ 수정금지(승인필요) 2026-11-15 사장님 결정 = 사진·하이라이트 = 번호를 몰라도 후보(등수·사진)를 보고 눌러 고른다 · 고른 값은 아래 칸에 채워지고 [적용]으로 저장 (정본 2026-11-15) -->
+        <div style="margin-top: 20px;">
+          <div style="font-size: 13px; color: #9ca3af; margin-bottom: 6px;">지금 앱에 나가는 하이라이트</div>
+          <div id="content-now-highlights" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
+        </div>
+        <div style="margin-top: 16px;">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px;">
+            <span style="font-size: 13px; color: #9ca3af;">후보(인기 명소 등수순 · 식당 제외) = [대표] 를 누르면 대표 사진, [하이라이트] 를 세 번까지 누르면 그 순서로 하이라이트</span>
+            <button class="btn" style="padding: 4px 10px; font-size: 12px;" onclick="pickReset()">자동으로 되돌리기</button>
+          </div>
+          <div id="content-candidates" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; max-height: 420px; overflow-y: auto;"></div>
+        </div>
+
         <div style="margin-top: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
           <div>
             <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">대표사진 장소번호</label>
@@ -605,14 +626,6 @@
           <div>
             <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">영상 번호</label>
             <input type="number" id="override-video-id" class="form-input" placeholder="saved_videos.id">
-          </div>
-          <div>
-            <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">나라 순서(대륙 탭 안 · 비우면 나라 인구순)</label>
-            <input type="number" id="override-country-order" class="form-input" placeholder="1 = 맨 앞 · 같은 나라 도시 전부에 적용">
-          </div>
-          <div>
-            <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">도시 순서(나라 안 · 비우면 도시 인구순)</label>
-            <input type="number" id="override-city-order" class="form-input" placeholder="1 = 그 나라 안에서 맨 앞">
           </div>
         </div>
         <div style="margin-top: 16px;">
@@ -1510,7 +1523,7 @@
     //   이전 도시에 입력하던 값이 남아 있다가 다음 도시에 [적용]을 누를 때 같이 저장돼 엉뚱한 override 가 생김.
     //   도시가 바뀔 때는 무조건 5칸부터 전부 비운다(저장된 값 유무와 무관, 입력 중이던 것도 함께 삭제).
     function clearOverrideInputs() {
-      ['override-hero-place-id', 'override-highlight-1', 'override-highlight-2', 'override-highlight-3', 'override-video-id', 'override-country-order', 'override-city-order']
+      ['override-hero-place-id', 'override-highlight-1', 'override-highlight-2', 'override-highlight-3', 'override-video-id']
         .forEach((id) => { document.getElementById(id).value = ''; });
     }
 
@@ -1556,13 +1569,124 @@
         document.getElementById('override-highlight-2').value = highlights[1] ?? '';
         document.getElementById('override-highlight-3').value = highlights[2] ?? '';
         document.getElementById('override-video-id').value = ov.videoId ?? '';
-        document.getElementById('override-country-order').value = ov.countryOrder ?? '';
-        document.getElementById('override-city-order').value = ov.cityOrder ?? '';
 
         btn.dataset.cityId = cityId;
+        await loadCandidates(cityId, card);
       } catch (err) {
         console.error('콘텐츠 미리보기 로드 오류:', err);
       }
+    }
+
+    // ⚠️ 수정금지(승인필요) 2026-11-15 사장님 결정 = 사진·하이라이트 후보 = 서버가 도시 카드와 같은 순서로 준 40곳 · 누르면 입력 칸만 채운다(저장은 [적용]) (정본 2026-11-15)
+    const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    let pickCands = [];
+    function thumb(p, extra) {
+      return `<div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.05);border-radius:8px;padding:4px 8px 4px 4px;">
+        <div style="width:36px;height:36px;border-radius:6px;background:#333 center/cover url('${esc(p.imageUrl || '')}');flex-shrink:0;"></div>
+        <div style="font-size:12px;line-height:1.3;">${p.rank ? `<b style="color:#a78bfa">${p.rank}위</b> ` : ''}${esc(p.name)}${extra || ''}</div></div>`;
+    }
+    function renderPicks() {
+      const v = (id) => Number(document.getElementById(id).value) || null;
+      const hero = v('override-hero-place-id');
+      const hl = ['override-highlight-1', 'override-highlight-2', 'override-highlight-3'].map(v);
+      document.getElementById('content-candidates').innerHTML = pickCands.map((p) => {
+        const hi = hl.indexOf(p.id);
+        const on = (b) => b ? 'background:#7c3aed;color:#fff;' : '';
+        return `<div style="background:rgba(255,255,255,0.04);border:1px solid ${hero === p.id || hi >= 0 ? '#a78bfa' : 'rgba(255,255,255,0.08)'};border-radius:10px;overflow:hidden;">
+          <div style="height:84px;background:#333 center/cover url('${esc(p.imageUrl || '')}');"></div>
+          <div style="padding:6px 8px;font-size:12px;line-height:1.3;min-height:34px;">${p.rank ? `<b style="color:#a78bfa">${p.rank}위</b> ` : ''}${esc(p.name)}</div>
+          <div style="display:flex;gap:4px;padding:0 8px 8px;">
+            <button class="btn" style="padding:3px 8px;font-size:11px;${on(hero === p.id)}" onclick="pickHero(${p.id})">대표</button>
+            <button class="btn" style="padding:3px 8px;font-size:11px;${on(hi >= 0)}" onclick="pickHighlight(${p.id})">하이라이트${hi >= 0 ? ' ' + (hi + 1) : ''}</button>
+          </div></div>`;
+      }).join('') || '<div class="empty-state">후보 없음</div>';
+    }
+    async function loadCandidates(cityId, card) {
+      const box = document.getElementById('content-candidates');
+      box.innerHTML = '<div class="loading"><div class="spinner"></div>후보 불러오는 중...</div>';
+      try {
+        pickCands = await (await fetch(`${API_BASE}/cities/${cityId}/candidates`)).json();
+        const byId = new Map(pickCands.map((p) => [p.id, p]));
+        document.getElementById('content-now-highlights').innerHTML = (card.highlightIds || [])
+          .map((id, i) => thumb(byId.get(id) || { name: card.highlights?.[i] || ('#' + id) }))
+          .join('') || '<span style="color:#9ca3af;font-size:12px;">없음</span>';
+        renderPicks();
+      } catch (e) {
+        box.innerHTML = '<div class="empty-state">후보를 불러오지 못했습니다</div>';
+      }
+    }
+    function pickHero(id) {
+      const el = document.getElementById('override-hero-place-id');
+      el.value = Number(el.value) === id ? '' : id;
+      renderPicks();
+    }
+    function pickHighlight(id) {
+      const ids = ['override-highlight-1', 'override-highlight-2', 'override-highlight-3'];
+      const cur = ids.map((k) => Number(document.getElementById(k).value) || null).filter(Boolean);
+      const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id].slice(0, 3);
+      ids.forEach((k, i) => { document.getElementById(k).value = next[i] ?? ''; });
+      renderPicks();
+    }
+    function pickReset() {
+      ['override-hero-place-id', 'override-highlight-1', 'override-highlight-2', 'override-highlight-3']
+        .forEach((k) => { document.getElementById(k).value = ''; });
+      renderPicks();
+    }
+
+    // ⚠️ 수정금지(승인필요) 2026-11-15 사장님 결정 = 도시 카드 순서 화면 = 서버 순서(card-order) 그대로 그리고 ▲▼ = 바뀐 순서를 1부터 통째로 저장 (정본 2026-11-15)
+    const ORDER_TABS = [['france', '프랑스'], ['europe', '유럽'], ['asia', '아시아'], ['northAmerica', '북미'], ['southAmerica', '남미'], ['africa', '아프리카'], ['oceania', '오세아니아']];
+    let orderData = {};
+    let orderTab = 'france';
+    async function loadCardOrder() {
+      try {
+        orderData = await (await fetch(`${API_BASE}/cities/card-order?t=${Date.now()}`, { cache: 'no-store' })).json();
+      } catch (e) {
+        document.getElementById('order-list').innerHTML = '<div class="empty-state">순서를 불러오지 못했습니다</div>';
+        return;
+      }
+      renderCardOrder();
+    }
+    function renderCardOrder() {
+      document.getElementById('order-tabs').innerHTML = ORDER_TABS.filter(([k]) => orderData[k]?.length)
+        .map(([k, label]) => `<button class="btn${k === orderTab ? ' btn-primary' : ''}" style="padding:6px 14px;" onclick="orderTab='${k}';renderCardOrder()">${label} ${orderData[k].reduce((n, g) => n + g.cities.length, 0)}</button>`).join('');
+      const groups = orderData[orderTab] || [];
+      const arrow = (on, call) => `<button class="btn" style="padding:2px 8px;font-size:12px;${on ? '' : 'opacity:0.25;pointer-events:none;'}" onclick="${call}">`;
+      document.getElementById('order-list').innerHTML = groups.map((g, gi) => `
+        <div style="border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:8px 10px;margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+            ${arrow(gi > 0, `moveCountry(${gi},-1)`)}▲</button>${arrow(gi < groups.length - 1, `moveCountry(${gi},1)`)}▼</button>
+            <b style="margin-left:4px;">${gi + 1}. ${esc(g.name || g.code)}</b><span style="color:#9ca3af;font-size:12px;">${g.cities.length}곳</span>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;padding-left:4px;">${g.cities.map((c, ci) => `
+            <div style="display:flex;align-items:center;gap:4px;background:rgba(255,255,255,0.05);border-radius:8px;padding:3px 6px;">
+              ${arrow(ci > 0, `moveCity(${gi},${ci},-1)`)}◀</button>
+              <a href="#" style="color:#e5e7eb;font-size:13px;" onclick="pickCity(${c.id});return false;">${ci + 1}. ${esc(c.nameEn || c.nameKo)}</a>
+              ${arrow(ci < g.cities.length - 1, `moveCity(${gi},${ci},1)`)}▶</button>
+            </div>`).join('')}</div>
+        </div>`).join('') || '<div class="empty-state">이 탭에 완비 도시가 없습니다</div>';
+    }
+    async function saveOrder(body) {
+      const res = await fetch(`${API_BASE}/cities/order`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) { alert('순서 저장 실패'); }
+      await loadCardOrder();
+    }
+    function moveCountry(gi, d) {
+      const g = orderData[orderTab];
+      [g[gi], g[gi + d]] = [g[gi + d], g[gi]];
+      renderCardOrder();
+      saveOrder({ countryCodes: g.map((x) => x.code) });
+    }
+    function moveCity(gi, ci, d) {
+      const c = orderData[orderTab][gi].cities;
+      [c[ci], c[ci + d]] = [c[ci + d], c[ci]];
+      renderCardOrder();
+      saveOrder({ cityIds: c.map((x) => x.id) });
+    }
+    function pickCity(id) {
+      const sel = document.getElementById('content-city-select');
+      sel.value = String(id);
+      loadContentPreview(String(id));
+      sel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 번호로 찾아 열기 = 보기 전용(여기서 고치거나 지우지 않는다)
@@ -1637,8 +1761,6 @@
           val('override-highlight-1'), val('override-highlight-2'), val('override-highlight-3'),
         ].filter((v) => v != null),
         videoId: val('override-video-id'),
-        countryOrder: val('override-country-order'),
-        cityOrder: val('override-city-order'),
       };
       try {
         const res = await fetch(`${API_BASE}/cities/${cityId}/content-override`, {
@@ -1657,6 +1779,7 @@
 
     async function loadGuidePrices() {
       loadContentOverrideCities(); // 🖼️ 콘텐츠관리 탭 열 때 도시목록도 같이 채움(§16)
+      loadCardOrder();
       const container = document.getElementById('guide-prices-list');
       try {
         const res = await fetch(`${API_BASE}/guide-prices?t=${Date.now()}`, {
