@@ -74,8 +74,19 @@ const TAG = `city-moved-${new Date().toISOString().slice(0, 10)}`;
          FROM cities WHERE latitude IS NOT NULL AND longitude IS NOT NULL`,
     )
   ).rows;
-  const nearestCity = (lat: number, lng: number) =>
-    nearestOf(cityList, lat, lng);
+  // 시험판 = 거점 지정 이동(--to=<거점 번호>) = 수동지정(--ids)일 때만 · 가장 가까운 도시 대신 사장님이 정한 거점으로 붙인다
+  const forcedTo = manualIds ? Number(argv["to"] || 0) || null : null;
+  const nearestCity = (lat: number, lng: number) => {
+    if (!forcedTo) return nearestOf(cityList, lat, lng);
+    const t = cityList.find((x: any) => x.id === forcedTo);
+    return t
+      ? {
+          id: t.id,
+          name: t.name,
+          d: distanceKmFromCoords(t.lat, t.lng, lat, lng),
+        }
+      : null;
+  };
   const photoAway = (key: string | null, cityId: number): boolean => {
     const m = key?.match(/^(\d+)\/images\//);
     return !!m && Number(m[1]) !== cityId;
@@ -105,8 +116,7 @@ const TAG = `city-moved-${new Date().toISOString().slice(0, 10)}`;
                   NULL::float8 AS dist_col
            FROM place_seed_raw p JOIN cities ci ON ci.id = p.city_id
            WHERE p.id = ANY($1::bigint[])
-             AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL
-             AND p.latitude <> 0 AND p.longitude <> 0`,
+             AND (${forcedTo ? "TRUE" : "p.latitude IS NOT NULL AND p.longitude IS NOT NULL AND p.latitude <> 0 AND p.longitude <> 0"})`,
           [manualIds],
         )
       ).rows.map((r: any) => {
@@ -132,8 +142,17 @@ const TAG = `city-moved-${new Date().toISOString().slice(0, 10)}`;
     `═══ 소속오염 이동 (${onlyCity ? "city " + onlyCity : "전 도시"}) = 대상 ${rows.length}행 ${apply ? "(APPLY)" : "(DRY)"} ═══`,
   );
   for (const r of rows) {
-    const to =
-      r.lat != null && r.lng != null ? nearestCity(r.lat, r.lng) : null;
+    const hasXY = r.lat != null && r.lng != null && r.lat !== 0 && r.lng !== 0;
+    const to = hasXY
+      ? nearestCity(r.lat, r.lng)
+      : forcedTo
+        ? {
+            id: forcedTo,
+            name: cityList.find((x: any) => x.id === forcedTo)?.name,
+            d: 0,
+            noXY: true,
+          }
+        : null;
     (r as any)._to = to;
     if (to && to.id === r.city_id && to.d <= MOVE_MAX_KM) {
       if (photoAway(keyOfR2(r.image_url), r.city_id))
@@ -216,8 +235,8 @@ const TAG = `city-moved-${new Date().toISOString().slice(0, 10)}`;
     const upd = stay
       ? `UPDATE place_seed_raw SET image_url = $2 WHERE id = $1`
       : `UPDATE place_seed_raw SET city_id = ${to.id}, rank = NULL,
-        day_zone = ${zoneForDistanceKm(to.d) === null ? "NULL" : `'${zoneForDistanceKm(to.d)}'`},
-        distance_km_from_center = ${Math.round(to.d * 10) / 10},
+        day_zone = ${to.noXY || zoneForDistanceKm(to.d) === null ? "NULL" : `'${zoneForDistanceKm(to.d)}'`},
+        distance_km_from_center = ${to.noXY ? "NULL" : Math.round(to.d * 10) / 10},
         image_url = COALESCE($2, image_url),
         phase_tags = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(phase_tags, ARRAY[]::text[]) || ARRAY['${TAG}'])))
       WHERE id = $1`;

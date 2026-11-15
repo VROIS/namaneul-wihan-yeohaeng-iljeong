@@ -5,11 +5,13 @@ import { reportDirOf } from "../worker/lib/services/shared/local-paths";
 import { fileURLToPath } from "url";
 import {
   EXIT_LIMITED,
+  latestReport,
   runTsx,
   stampOf,
   waitHumanCleared,
 } from "./steps/common";
 import { LANGS } from "../worker/lib/services/shared/language-instruction";
+const LIST_KEYS = "healing,shopping";
 
 const SKILL = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(SKILL, "..");
@@ -117,8 +119,9 @@ if (!cityId) {
   process.exit(1);
 }
 
-// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 필시티 버전 표기 = v3 를 튜닝하면 3.x(날짜와 함께), 처음부터 새로 쓰면 4 · 이 판 = v3.2 완성본 (정본 §)
-const VERSION = "v3.2 완성본 (2026-10-06)";
+// ⚠️ 수정금지(승인필요) 2026-11-15 사장님 결정 = 필시티 버전 표기 = 이 판 = v4(거점 정리 → 비아토르 용지 → 제미니 투표 → 창고 대조 → 없는 것만 구글맵) (정본 2026-11-14)
+const VERSION =
+  "v4 (2026-11-15 · 거점 정리 → 비아토르 용지 150km → 제미니 투표 30 + 식당 90 → 창고 대조 → 없는 것만 구글맵)";
 const P = (rel: string) => path.join(ROOT, rel);
 const failures: string[] = [];
 const runOnce = (script: string, args: string[]) => runTsx(P(script), args);
@@ -198,6 +201,7 @@ async function trackA() {
           "worker/lib/services/fill/gmaps-preclean.ts",
           [
             `--city-id=${cityId}`,
+            "--skip-stamped=true", // 필시티 v4 = 도장 찍힌 행은 다시 열지 않는다 (정본 2026-11-14)
             ...applyArg,
             ...fxArg,
             `--since=${RUN_START}`,
@@ -208,7 +212,7 @@ async function trackA() {
       () =>
         run(
           "① 소속오염 이동",
-          "worker/lib/services/fill/wrongcity-quarantine.ts",
+          "fillcity/steps/stray-move.ts" /* 필시티 v4 = 소속 정리는 "가장 가까운 도시"가 아니라 "가장 가까운 완비 거점"으로만(2026-11-14 베른 판에서 마터호른 등 7행이 거점이 아닌 샤모니 폴더로 넘어갔다) */,
           [`--city-id=${cityId}`, ...applyArg],
         ),
       () =>
@@ -224,15 +228,18 @@ async function trackA() {
     ),
   );
   await step("lists", () =>
-    run("② 구글 검색어 목록 읽기", "fillcity/steps/discovery-lists.ts", [
-      `--city-id=${cityId}`,
-    ]),
+    // 필시티 v4 = 구글 목록은 힐링·쇼핑 두 문장만(v3.2 검색어 그대로) · 다른 분류는 투표·제휴 목록이 채운다 (정본 2026-11-14)
+    run(
+      "② 구글 검색어 목록 읽기(힐링·쇼핑만)",
+      "fillcity/steps/discovery-lists.ts",
+      [`--city-id=${cityId}`, `--only=${LIST_KEYS}`],
+    ),
   );
   await step("select", () =>
     run(
-      "② 목록 선별(분류마다 모자란 만큼)",
+      "② 목록 선별(힐링·쇼핑에서 모자란 만큼)",
       "fillcity/steps/discovery-lists-select.ts",
-      [`--city-id=${cityId}`],
+      [`--city-id=${cityId}`, `--keys=${LIST_KEYS}`, `--cats=${LIST_KEYS}`],
     ),
   );
   await step("refine", async () => {
@@ -263,19 +270,41 @@ async function trackA() {
 }
 
 async function trackB() {
+  // 필시티 v4 = 투표 용지 = 비아토르 명소 150km · 가까운 거점이 이 도시인 곳만 · 상품 0개 제외 (정본 2026-11-14)
+  await step("ballot", () =>
+    run(
+      "② 투표 용지(비아토르 150km · 가까운 거점만)",
+      "fillcity/steps/ballot-build.ts",
+      [`--city-id=${cityId}`, `--since=${RUN_START}`],
+      1,
+    ),
+  );
   await step("discover", async () => {
     if (!runDiscover) {
       console.log(
-        "\n━━━━━━ ② 7개국어 발굴 ━━━━━━\n⏭️ 건너뜀(🔴 유료 = Gemini 최대 7콜/도시) — 실행하려면 --discover=true 명시",
+        "\n━━━━━━ ② 7개국어 투표 ━━━━━━\n⏭️ 건너뜀(🔴 유료 = Gemini 최대 7콜/도시) — 실행하려면 --discover=true 명시",
       );
       return false;
     }
+    const ballotFile = latestReport(
+      cityId,
+      "ballot",
+      (f) => f.slice(0, 17) >= stampOf(RUN_START),
+    );
+    if (!ballotFile) {
+      console.error(
+        "\n✗ ② 7개국어 투표 = 이 판의 투표 용지가 없다 = 부르지 않는다(자유 발굴로 돌아가지 않는다)",
+      );
+      failures.push("② 7개국어 투표(용지 없음)");
+      return false;
+    }
     return run(
-      "② 7개국어 발굴(동시)",
+      "② 7개국어 투표(용지에서 볼거리 30 + 식당 90 · 동시)",
       "fillcity/steps/discover-parallel.ts",
       [
         `--city-id=${cityId}`,
         `--langs=${langs.join(",")}`,
+        `--ballot=${ballotFile}`,
         `--since=${RUN_START}`, // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 이어 돌기 = 이 판 시작 뒤 이미 받은 언어는 다시 부르지 않는다 (정본 §)
       ],
       0, // ⚠️ 유료 호출은 재시도 0(성공 후 저장 실패해도 재호출 = 이중과금, §9·§18)
@@ -318,7 +347,71 @@ async function trackB() {
     1,
   );
 
+  // 필시티 v4 = 시작점 = 거점 정하기 · 폴더 병합(--merge-from=<옛 폴더 번호들> 을 줄 때만 · 정해진 거점은 건너뜀) → 출발 상태(CID 없는 행 삭제) = 두 트랙보다 먼저 끝낸다 (정본 2026-11-14)
+  // 필시티 v4 = 쓰는 판은 백업부터 = 백업이 안 되면 판을 시작하지 않는다 (정본 2026-11-14)
+  if (apply && only("backup")) {
+    const ok = await run(
+      "⓪ 백업(이 거점 폴더 행 전체)",
+      "fillcity/steps/backup-rows.ts",
+      [`--city-id=${cityId}`, `--since=${RUN_START}`],
+      1,
+    );
+    if (!ok) {
+      console.error("✗ 백업 실패 = 판을 시작하지 않는다");
+      process.exit(1);
+    }
+    done.add("backup");
+    saveProgress();
+  }
+  // 필시티 v4 = 사장님이 지우라고 정한 쓰레기 행(--trash-file=<결정 파일 *_boss-fix.json>)은 판 맨 앞에서 먼저 지운다 = 쓰레기를 다른 거점으로 옮기거나 다시 읽지 않는다 (정본 2026-11-14)
+  await step("trash", async () => {
+    if (!argv["trash-file"] || !apply) return true;
+    return run(
+      "⓪ 쓰레기 행 삭제(사장님 결정 파일)",
+      "fillcity/steps/trash-apply.ts",
+      [`--city-id=${cityId}`, `--file=${argv["trash-file"]}`],
+      0,
+    );
+  });
+  await step("hub", async () => {
+    if (!argv["merge-from"]) {
+      console.log(
+        "\n━━━━━━ ⓪ 거점 정하기 ━━━━━━\n⏭️ 합칠 폴더 없음(--merge-from 안 줌) = 이 도시가 거점으로 정해진 상태 = 건너뜀",
+      );
+      return true;
+    }
+    return run(
+      "⓪ 거점 폴더 병합(창고 + R2)",
+      "fillcity/steps/hub-merge.ts",
+      [
+        `--to=${cityId}`,
+        `--from=${argv["merge-from"]}`,
+        ...(argv["hubs"] ? [`--hubs=${argv["hubs"]}`] : []),
+        ...applyArg,
+      ],
+      0,
+    );
+  });
+  await step("nocid", () =>
+    run(
+      "⓪ 출발 상태(CID 없는 행 삭제)",
+      "fillcity/steps/nocid-drop.ts",
+      [`--city-id=${cityId}`, ...applyArg],
+      0,
+    ),
+  );
+
   await Promise.all([trackA(), trackB()]);
+
+  // 필시티 v4 = 쓰레기를 치운 뒤(트랙 A) 남은 행 중 다른 완비 거점이 더 가까운 행을 내보낸다 → 그다음 선처리가 이 폴더 행과 맞댄다 (정본 2026-11-14)
+  await step("stray", () =>
+    run(
+      "⓪ 가까운 거점으로 내보내기(다른 완비 거점이 더 가까운 행)",
+      "fillcity/steps/stray-move.ts",
+      [`--city-id=${cityId}`, ...applyArg],
+      0,
+    ),
+  );
 
   await step("merge-diff", () => {
     const rebest = (name: string) => () =>
@@ -333,7 +426,7 @@ async function trackB() {
         run(
           "③ 선처리(B1 문지기 매칭)",
           "fillcity/steps/discovery-merge-diff.ts",
-          [`--city-id=${cityId}`],
+          [`--city-id=${cityId}`, "--restaurant-min-langs=2"],
         ),
       ...(rebestMode ? [rebest("clean-tr")] : []),
     );
@@ -347,8 +440,18 @@ async function trackB() {
       2,
       {
         script: "fillcity/steps/discovery-merge-diff.ts",
-        args: [`--city-id=${cityId}`],
+        args: [`--city-id=${cityId}`, "--restaurant-min-langs=2"],
       },
+    ),
+  );
+
+  // 필시티 v4 = 모험 = 비아토르 모험 상품 리뷰 탑 20(업체가 겹치지 않게) → 활동 장소(없으면 출발 장소)의 구글 번호로 페이지 직행 → 업체·활동 장소로 등록된 곳만 남긴다 (정본 2026-11-14)
+  await step("adventure", () =>
+    run(
+      "④ 모험 탑 20(비아토르 상품 → 구글 번호 직행)",
+      "fillcity/steps/adventure-insert.ts",
+      [`--city-id=${cityId}`, `--since=${RUN_START}`, ...applyArg],
+      2,
     ),
   );
 
@@ -365,7 +468,7 @@ async function trackB() {
         run(
           "④ 못 찾은 베스트 1차(일꾼 4명 · CID 직접 입력)",
           "fillcity/steps/find-best.ts",
-          [`--city-id=${cityId}`, ...applyArg],
+          [`--city-id=${cityId}`, "--max-targets=45", ...applyArg],
           0,
         ),
       () =>
@@ -395,6 +498,7 @@ async function trackB() {
           "worker/lib/services/fill/gmaps-preclean.ts",
           [
             `--city-id=${cityId}`,
+            "--skip-stamped=true", // 필시티 v4 = 도장 찍힌 행은 다시 열지 않는다 (정본 2026-11-14)
             ...applyArg,
             ...fxArg,
             "--missing-log=true",
@@ -404,7 +508,7 @@ async function trackB() {
       () =>
         run(
           "④ 소속오염 이동",
-          "worker/lib/services/fill/wrongcity-quarantine.ts",
+          "fillcity/steps/stray-move.ts" /* 필시티 v4 = 소속 정리는 "가장 가까운 도시"가 아니라 "가장 가까운 완비 거점"으로만(2026-11-14 베른 판에서 마터호른 등 7행이 거점이 아닌 샤모니 폴더로 넘어갔다) */,
           [`--city-id=${cityId}`, ...applyArg],
         ),
       () =>
@@ -522,7 +626,7 @@ async function trackB() {
     return run(
       "⑤ 최종 점검(에이전트 4명, 점검표까지)",
       "fillcity/steps/final-check.ts",
-      [`--city-id=${cityId}`, ...applyArg],
+      [`--city-id=${cityId}`, `--since=${RUN_START}`, ...applyArg],
       0,
     );
   });

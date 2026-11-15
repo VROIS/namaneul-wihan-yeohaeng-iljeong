@@ -290,9 +290,22 @@ export default function BestListStep({ planner }: { planner: PlannerApi }) {
                         {t("trip.bestRank", { n: p.rank })}
                       </Text>
                     )}
-                    {!!p.userRatingCount && (
+                    {/* ⚠️ 수정금지(승인필요) 2026-11-14 사장님 결정 = 거점권 장소에 실제 동네 이름(주소의 영어 표기)을 등수 옆에 보여 준다 (정본 2026-11-14) */}
+                    {!!p.locality && (
                       <Text
                         style={[s.meta, { color: theme.textSecondary }]}
+                        numberOfLines={1}
+                      >
+                        {p.locality}
+                      </Text>
+                    )}
+                    {!!p.userRatingCount && (
+                      <Text
+                        style={[
+                          s.meta,
+                          s.metaFixed,
+                          { color: theme.textSecondary },
+                        ]}
                         numberOfLines={1}
                       >
                         {t("trip.googleReviews")}{" "}
@@ -394,13 +407,14 @@ const s = StyleSheet.create({
   textCol: { flex: 1, minWidth: 0 },
   name: { fontSize: 14, lineHeight: 18, fontFamily: Fonts.bold },
   metaRow: { flexDirection: "row", alignItems: "center", gap: Spacing.xs },
-  rank: { fontSize: 11, lineHeight: 15, fontFamily: Fonts.bold },
+  rank: { fontSize: 11, lineHeight: 15, fontFamily: Fonts.bold, flexShrink: 0 },
   meta: {
     fontSize: 11,
     lineHeight: 15,
     fontFamily: Fonts.medium,
     flexShrink: 1,
   },
+  metaFixed: { flexShrink: 0 },
   date: { fontSize: 13, fontFamily: Fonts.medium },
   line: {
     flexDirection: "row",

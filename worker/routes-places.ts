@@ -4,7 +4,6 @@ import * as schema from "../shared/schema";
 import type { DayVideo } from "../shared/schema";
 import {
   cityRepresentativeWhere,
-  cityHighlightWhere,
   cityRepresentativeOrder,
   pickDisplayName,
   cityWithRepresentative,
@@ -32,7 +31,7 @@ export function registerPlaceRoutes(app: Express, openDb: OpenDb): void {
         }
         const lang = String(req.query.lang || "ko");
 
-        // ⚠️ 수정금지(승인필요) 2026-11-07 사장님 결정 = 대표여정 = cityWithRepresentative 1벌 · 얼굴(heritage)·하이라이트(식당·쇼핑 제외)는 기준이 달라 따로 조회 (정본 2026-11-07)
+        // ⚠️ 수정금지(승인필요) 2026-11-15 사장님 결정 = 대표여정 = cityWithRepresentative 1벌 · 얼굴·하이라이트 = 같은 줄(식당만 제외 · 인기 명소 등수순) (정본 2026-11-15)
         const [row, repRows, highlightPool] = await Promise.all([
           cityWithRepresentative(db, cityId),
           db
@@ -57,7 +56,7 @@ export function registerPlaceRoutes(app: Express, openDb: OpenDb): void {
               nameKo: placeSeedRaw.nameKo,
             })
             .from(placeSeedRaw)
-            .where(cityHighlightWhere(cityId))
+            .where(cityRepresentativeWhere(cityId))
             .orderBy(...cityRepresentativeOrder(lang))
             .limit(4),
         ]);
@@ -143,6 +142,8 @@ export function registerPlaceRoutes(app: Express, openDb: OpenDb): void {
             heroPlaceId: row.overrideHeroPlaceId,
             highlightPlaceIds: row.overrideHighlightPlaceIds,
             videoId: row.overrideVideoId,
+            countryOrder: row.countryOrder,
+            cityOrder: row.cityOrder,
           },
         };
 
@@ -211,8 +212,11 @@ export function registerPlaceRoutes(app: Express, openDb: OpenDb): void {
               .filter((v: number | null): v is number => v != null)
           : null;
         const videoId = toIdOrNull(req.body?.videoId);
+        const countryOrder = toIdOrNull(req.body?.countryOrder);
+        const cityOrder = toIdOrNull(req.body?.cityOrder);
 
-        await db
+        // ⚠️ 수정금지(승인필요) 2026-11-15 사장님 결정 = 도시 카드 순서 지정 = 도시 순서는 그 도시에 · 나라 순서는 같은 나라 코드의 도시 전부에 한 번에 쓴다(나라 묶음은 깨지 않는다) (정본 2026-11-15)
+        const [me] = await db
           .update(cities)
           .set({
             overrideHeroPlaceId: heroPlaceId,
@@ -221,11 +225,25 @@ export function registerPlaceRoutes(app: Express, openDb: OpenDb): void {
                 ? highlightPlaceIds
                 : null,
             overrideVideoId: videoId,
+            cityOrder,
           })
-          .where(eq(cities.id, cityId));
+          .where(eq(cities.id, cityId))
+          .returning({ countryCode: cities.countryCode });
+        if (me?.countryCode)
+          await db
+            .update(cities)
+            .set({ countryOrder })
+            .where(eq(cities.countryCode, me.countryCode));
 
         console.log(`[ContentOverride] 도시 ${cityId} 선별입력 저장 완료`);
-        res.json({ cityId, heroPlaceId, highlightPlaceIds, videoId });
+        res.json({
+          cityId,
+          heroPlaceId,
+          highlightPlaceIds,
+          videoId,
+          countryOrder,
+          cityOrder,
+        });
       } catch (error) {
         console.error("[ContentOverride] 저장 실패:", error);
         res.status(500).json({ error: "failed_to_save_content_override" });

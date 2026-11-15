@@ -52,6 +52,8 @@ export function mapBestItems(
     (diffSectionItems(report, section) as NewEntry[])
       .sort(
         (a, b) =>
+          // 필시티 v4 = 순서는 비아토르 상품 수가 먼저(제미니는 넣을지 뺄지만 정한다) · 상품 수가 없는 곳(용지 밖 · 식당 · 옛 산출표)은 종전 순서 그대로 (정본 2026-11-14)
+          ((b as any).products ?? 0) - ((a as any).products ?? 0) ||
           b.langs - a.langs ||
           (a.avgRank ?? Number.MAX_SAFE_INTEGER) -
             (b.avgRank ?? Number.MAX_SAFE_INTEGER) ||

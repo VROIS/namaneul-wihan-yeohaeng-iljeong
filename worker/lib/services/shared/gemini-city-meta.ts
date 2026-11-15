@@ -30,7 +30,7 @@ export async function fetchCityMetaFromGemini(
   "nameEn": "<공식 영어명 = 예 'Pisa'>",
   "nameLocal": "<현지 원어명 = 예 'Pisa'>",
   "countryCode": "<ISO 2 문자 = 예 'IT'>",
-  "country": "<국가 한국어 = 예 '이탈리아'>",
+  "country": "<국가 영어 이름 = 예 'Italy'>",
   "latitude": <도심 위도 6 자리 = 예 43.722840>,
   "longitude": <도심 경도 6 자리 = 예 10.401690>,
   "timezone": "<IANA = 예 'Europe/Rome'>",

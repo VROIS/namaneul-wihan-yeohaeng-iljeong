@@ -4,6 +4,7 @@ import path from "path";
 import { rawDirOf } from "../../worker/lib/services/shared/local-paths";
 import { connectDb, loadEnv, parseArgs, reportDir, stamp } from "./common";
 import { labelOfLine, readListRaws } from "./lists-common";
+import { readDeleted } from "./trash-apply";
 import {
   distanceKmFromCoords,
   CITY_RANGE_KM,
@@ -26,7 +27,11 @@ const SIGHTS = [
 
 function latestLists(): Map<string, { file: string; json: any }> {
   const out = new Map<string, { file: string; json: any }>();
-  for (const x of readListRaws(cityId)) out.set(String(x.json.request?.key), x);
+  // 필시티 v4 = --keys=healing,shopping 이 오면 그 문장의 목록만 본다(다른 문장의 옛 원본은 읽지 않는다) (정본 2026-11-14)
+  const keys = argv["keys"] ? String(argv["keys"]).split(",") : null;
+  for (const x of readListRaws(cityId))
+    if (!keys || keys.includes(String(x.json.request?.key)))
+      out.set(String(x.json.request?.key), x);
   return out;
 }
 
@@ -78,7 +83,13 @@ function latestLists(): Map<string, { file: string; json: any }> {
     notPlace: 0,
     notInTable: 0,
     inList: 0,
+    deleted: 0,
   };
+  const deletedCids = new Set(
+    readDeleted(cityId)
+      .map((d) => d.cid)
+      .filter(Boolean) as string[],
+  );
   const items = new Map<string, any>();
   for (const [key, { json }] of lists) {
     for (const e of json.raw?.entries ?? []) {
@@ -88,6 +99,11 @@ function latestLists(): Map<string, { file: string; json: any }> {
       }
       if (!e.cid) {
         drop.noCid++;
+        continue;
+      }
+      // 필시티 v4 = 사장님이 지운 장소(지운 장소 장부)는 다시 넣지 않는다 (정본 2026-11-14)
+      if (deletedCids.has(String(e.cid))) {
+        drop.deleted++;
         continue;
       }
       const label = labelOfLine(e.line);
@@ -164,10 +180,12 @@ function latestLists(): Map<string, { file: string; json: any }> {
     wh.filter((w) => w.seed_category === cat && w.status === "active").length;
   const picks: Pick[] = [];
   const stats: any[] = [];
+  // 필시티 v4 = --cats=healing,shopping 이 오면 그 분류만 뽑는다(다른 분류는 투표·제휴 목록이 채운다) (정본 2026-11-14)
+  const onlyCats = argv["cats"] ? String(argv["cats"]).split(",") : null;
   const plan = [
     ...SIGHTS.map((cat) => ({ cat, target: PER_CAT })),
     { cat: "restaurant", target: REST_TARGET },
-  ];
+  ].filter((x) => !onlyCats || onlyCats.includes(x.cat));
   for (const { cat, target } of plan) {
     const cands = pool
       .filter((p) => p.cat === cat && !p.inWarehouse)

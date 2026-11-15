@@ -45,6 +45,10 @@ export const cities = pgTable("cities", {
   overrideHeroPlaceId: integer("override_hero_place_id"),
   overrideHighlightPlaceIds: integer("override_highlight_place_ids").array(),
   overrideVideoId: integer("override_video_id"),
+  population: integer("population"), // 도시 인구(도시 카드 노출 순서의 기본값)
+  countryPopulation: integer("country_population"), // 그 도시가 속한 나라의 인구(나라 묶음 순서의 기본값)
+  countryOrder: integer("country_order"), // 관리자 지정 = 대륙 탭 안에서 그 나라 묶음의 순서(같은 나라 도시에 같은 값)
+  cityOrder: integer("city_order"), // 관리자 지정 = 나라 묶음 안에서 그 도시 카드의 순서
   createdAt: timestamp("created_at")
     .default(sql`CURRENT_TIMESTAMP`)
     .notNull(),

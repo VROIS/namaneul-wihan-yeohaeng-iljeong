@@ -7,6 +7,14 @@ import {
 } from "../../worker/lib/services/shared/local-paths";
 import { fileURLToPath } from "url";
 import { DIFF_SECTIONS } from "./common";
+import {
+  ballotMark,
+  doorSameKind,
+  readBallot,
+  sameKindRow,
+  type GroupMember,
+  type RawPlace,
+} from "./ballot-common";
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = 산출표 저장(mkdir+versionedName+쓰기) 1벌 = saveVersionedReport()
 import {
   rawDate,
@@ -15,7 +23,6 @@ import {
 // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 7개 언어 목록·순서 1벌 = worker/lib 판(§16)
 import { LANGS } from "../../worker/lib/services/shared/language-instruction";
 import {
-  recognizePlace,
   RECOGNIZE_ROWS_SQL,
   type RecognizeRow,
 } from "../../worker/lib/services/shared/recognize-place";
@@ -91,41 +98,8 @@ const fromExtractedPath = argv["from-extracted"]
 // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 승인 = 동의 문턱을 밖에서 정한다(안 주면 지금과 동일 = 기존 동작 무변경).
 const RESTAURANT_MIN_LANGS = Number(argv["restaurant-min-langs"] ?? 4); // 사장님 확정 2026-08-26 = 7개국어 중 과반(4+)
 const LANDMARK_MIN_LANGS = Number(argv["landmark-min-langs"] ?? 1); // 1 = 제한없음
-// ⚠️ 수정금지(승인필요) 2026-08-30 재확인(원결정 2026-08-28 = 180→240 상향, 브뤼셀 560항목 컷오프 실측)
-const MAX_TX_SECONDS = 240;
-
-interface RawPlace {
-  type: "landmarks" | "restaurants";
-  lang: string;
-  name_en?: string;
-  name_local?: string;
-  name_ko?: string;
-  lat?: number;
-  lng?: number;
-  c?: string;
-  price_eur?: number;
-  distance_km_from_center?: number;
-  address?: string;
-  rank?: number; // 그 언어 응답 안에서의 순위(1-20) = 리포트 참고값(best_rank 원천 아님 — 2026-08-27 사장님 확정 = best_rank 는 언어코드)
-  summary?: string; // 원어 요약(그 언어) = B2 place_translations 선충전 원천
-  editorial?: string; // 원어 후킹카피(그 언어)
-}
-
-// ⚠️ 수정금지(승인필요) 2026-08-27 사장님 지시 = 그룹 감사 = 병합된 raw 항목 1건의 원본 필드(raw 필드명 그대로) + 문지기 판정 tier.
-interface GroupMember {
-  lang: string;
-  type: "landmarks" | "restaurants";
-  name_en?: string;
-  name_local?: string;
-  name_ko?: string;
-  lat?: number;
-  lng?: number;
-  address?: string;
-  price_eur?: number;
-  distance_km_from_center?: number;
-  raw?: RawPlace;
-  tier: string; // 불변3 | 불변5 | 불변6 | 의심(영어명/한국어명) | 의심(영어명·유니크색인) | new
-}
+// ⚠️ 수정금지(승인필요) 2026-11-15 사장님 결정 = 선처리 드라이런 시간 상한 = 900초(v4 = 볼거리 30 + 식당 90 × 7개 언어) (정본 2026-11-14)
+const MAX_TX_SECONDS = 900;
 
 export interface Group {
   anchor: { kind: "psr" | "tmp"; id: number };
@@ -232,6 +206,13 @@ function deserializeGroup(g: any): Group {
         `⚠️ ${LANGS.filter((l) => !byLang.has(l)).join(",")} 언어 raw 없음 = 부분 실행`,
       );
 
+    // 필시티 v4 = 투표 용지가 있으면 ① 볼거리에 용지의 상품 수를 붙이고(순서의 근거) ② 용지 밖에서 적어 넣은 곳·식당 중 다른 거점이 더 가까운 곳은 버린다(한 장소 = 가까운 거점 하나) (정본 2026-11-14)
+    const ballot = readBallot(cityId);
+    const otherHub: string[] = [];
+    if (ballot)
+      console.log(
+        `투표 용지 = ${ballot.ballot.length}곳(${ballot.generatedAt}) · 비교 거점 ${ballot.hubs.length}곳`,
+      );
     const all: RawPlace[] = [];
     for (const lang of LANGS) {
       const f = byLang.get(lang);
@@ -240,7 +221,13 @@ function deserializeGroup(g: any): Group {
       const res = j.raw?.parsed?.results || j.parsed?.results;
       for (const type of DIFF_SECTIONS) {
         for (const p of res?.[type] || []) {
+          const mark = ballotMark(ballot, cityId, type, p);
+          if (!mark) {
+            otherHub.push(`[${lang}/${type}] ${p.name_en}`);
+            continue;
+          }
           all.push({
+            ...mark,
             type,
             lang,
             name_en: p.name_en,
@@ -260,6 +247,10 @@ function deserializeGroup(g: any): Group {
       }
     }
     console.log(`raw 항목 ${all.length}건(언어 ${byLang.size}개)`);
+    if (otherHub.length)
+      console.log(
+        `  ⏭ 다른 거점이 더 가까워 버린 항목 ${otherHub.length}건 = ${otherHub.slice(0, 40).join(" | ")}`,
+      );
 
     const countQ = `SELECT count(*)::int AS n FROM place_seed_raw WHERE city_id = $1`;
     countBefore = (await c.query(countQ, [cityId])).rows[0].n;
@@ -269,6 +260,7 @@ function deserializeGroup(g: any): Group {
 
     const groups = new Map<string, Group>();
     const tempGroupOf = new Map<number, string>(); // 임시행 id → 그룹 key
+    const ballotGroup = new Map<number, Group>(); // 용지 번호 → 그 번호의 첫 응답이 들어간 묶음
     errors = [];
     tierHistogram = {};
     const bump = (tier: string) =>
@@ -300,6 +292,8 @@ function deserializeGroup(g: any): Group {
       return groups.get(key)!;
     }
     function addMember(g: Group, p: RawPlace, tier: string) {
+      if (p.ballotNo && !ballotGroup.has(p.ballotNo))
+        ballotGroup.set(p.ballotNo, g);
       g.members.push(
         Object.defineProperty(
           {
@@ -313,6 +307,7 @@ function deserializeGroup(g: any): Group {
             address: p.address,
             price_eur: p.price_eur,
             distance_km_from_center: p.distance_km_from_center,
+            products: p.products,
             tier,
           },
           "raw",
@@ -374,18 +369,12 @@ function deserializeGroup(g: any): Group {
           });
           continue;
         }
-        const door = recognizePlace(
-          {
-            name: p.name_en,
-            nameLocal: p.name_local,
-            nameKo: p.name_ko,
-            address: p.address ?? null,
-            lat: p.lat,
-            lng: p.lng,
-            isRestaurant: p.c === "restaurant",
-          },
-          recogRows,
-        );
+        const sameBallot = p.ballotNo ? ballotGroup.get(p.ballotNo) : undefined;
+        if (sameBallot) {
+          addMember(sameBallot, p, "용지번호");
+          continue;
+        }
+        const door = doorSameKind(p, recogRows, ballot);
         if (door) {
           joinTarget(door.row.id, p, `문:${door.why}`);
           continue;
@@ -416,7 +405,10 @@ function deserializeGroup(g: any): Group {
           }
           const n = Number(suspect.slice("의심대상-".length));
           const tmpKey = tempGroupOf.get(n);
-          const joinable = !tmpKey || groups.get(tmpKey)!.anchorCat === p.c;
+          const suspectRow = recogRows.find((r) => r.id === n);
+          const joinable =
+            (!tmpKey || groups.get(tmpKey)!.anchorCat === p.c) &&
+            (!suspectRow || sameKindRow(p.c, suspectRow));
           if (joinable) {
             await c.query("ROLLBACK TO SAVEPOINT s");
             joinTarget(n, p, "의심(영어명/한국어명)");
@@ -592,6 +584,8 @@ function deserializeGroup(g: any): Group {
     const base = {
       name: [...g.names][0],
       langs: g.langs.size,
+      // 필시티 v4 = 순서의 근거 = 용지의 비아토르 상품 수(용지 밖·식당 = 0)
+      products: Math.max(0, ...g.members.map((m) => m.products ?? 0)),
       cat: majorityCat(g.cats),
       price: rep?.price_eur ?? null,
       distanceKm: rep?.distance_km_from_center ?? null,

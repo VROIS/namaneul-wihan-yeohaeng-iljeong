@@ -34,9 +34,11 @@ const RUN = path.join(
   const rawDir = rawDirOf(cityId);
   // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 이어 돌기 = --since(이 판 시작 시각) 뒤 이미 받은 언어는 다시 부르지 않는다 · 이어 돌 때도 이중 호출 0 (정본 §)
   const st = argv["since"] ? stampOf(String(argv["since"])) : stamp();
-  // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 언어별 발굴 실행 = 공용 runTsx 1벌(출력 줄마다 언어 꼬리표) (정본 §)
+  // ⚠️ 수정금지(승인필요) 2026-11-15 사장님 결정 = 언어별 발굴 실행 = 공용 runTsx 1벌(출력 줄마다 언어 꼬리표) · 투표 용지 파일을 그대로 넘긴다 (정본 2026-11-14)
+  // 필시티 v4 = --ballot=<용지 파일> 이 오면 언어마다 그 용지로 투표를 부른다 (정본 2026-11-14)
+  const ballotArg = argv["ballot"] ? [`--ballot=${argv["ballot"]}`] : [];
   const callLang = (lang: string) =>
-    runTsx(RUN, [`--city-id=${cityId}`, `--lang=${lang}`], (l) =>
+    runTsx(RUN, [`--city-id=${cityId}`, `--lang=${lang}`, ...ballotArg], (l) =>
       console.log(`[${lang}] ${l}`),
     );
   const saved = (lang: string) =>

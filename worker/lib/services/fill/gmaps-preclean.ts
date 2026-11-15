@@ -60,7 +60,11 @@ const dropIds = String(argv["drop-ids"] || "")
 // ⚠️ 수정금지(승인필요) 2026-10-01 사장님 결정 = 다시 열 행 = 그 도시 전체(bts·병합 제외) = 구글맵 9요소와 원본 JSON 을 전 행에 새로 남긴다 · --since=시각 을 주면 그 시각 뒤에 이미 읽은 행은 건너뛰어 멈춘 자리부터 이어 읽고 · --missing-log=true 면 읽기 로그가 없는 행(발굴로 새로 들어온 행)만 읽는다 (정본 §)
 const since = argv["since"] ? String(argv["since"]) : null;
 const missingLogOnly = argv["missing-log"] === "true";
-const TARGET_WHERE = `city_id = $1 AND seed_category NOT LIKE 'bts_%' AND status <> 'merged' AND ($2::timestamptz IS NULL OR verified_at IS NULL OR verified_at < $2::timestamptz)`;
+// 필시티 v4 = --skip-stamped=true 면 구글맵 도장(verified_at)이 한 번이라도 찍힌 행은 다시 열지 않는다 = 한 번 연 곳은 누구도 다시 열지 않는다(사장님 2026-11-14) · 도장 없는 행만 연다 (정본 2026-11-14)
+const skipStamped = argv["skip-stamped"] === "true";
+const TARGET_WHERE = skipStamped
+  ? `city_id = $1 AND seed_category NOT LIKE 'bts_%' AND status <> 'merged' AND verified_at IS NULL AND ($2::timestamptz IS NULL OR $2::timestamptz IS NOT NULL)`
+  : `city_id = $1 AND seed_category NOT LIKE 'bts_%' AND status <> 'merged' AND ($2::timestamptz IS NULL OR verified_at IS NULL OR verified_at < $2::timestamptz)`;
 const passing = (why: string) =>
   why.startsWith("오류:") || why === "동의창" || why === LIMITED_WHY;
 
@@ -205,7 +209,6 @@ const passing = (why: string) =>
         },
         stat,
       );
-      if (stat.blocked) await stopLimited("검색");
       for (const rd of reads) {
         const id = (rd.n as any).__rowId;
         const far =
@@ -239,6 +242,7 @@ const passing = (why: string) =>
           console.log(`  ⏸ #${id} ${rd.n.name} ${rd.why} = 베스트 = 안 지움`);
         } else await drop(id, rd.n.name, rd.why);
       }
+      if (stat.blocked) await stopLimited("검색");
     }
   } finally {
     await browser.close().catch(() => {});

@@ -34,6 +34,7 @@ import {
   sameName,
 } from "./gmaps-pid-identity/gates";
 import { PHOTO_MAX_WIDTH_PX } from "../shared/ts-client";
+import { recognizePlace } from "../shared/recognize-place";
 import { uploadToR2 } from "../shared/r2-client";
 import { placeImageKey } from "../../../../shared/r2-paths";
 
@@ -200,6 +201,35 @@ const T2_MAX_KM = 1;
 const T1_MAX_KM = CITY_RANGE_KM; // 랜드마크 = 도시 범위(제미니 좌표가 있을 때)
 const HARD_MAX_KM = 25; // 식당·쇼핑 = 가게는 좌표 가까이(푸켓 실측 = 같은 이름 식당이 106km 밖 다른 도에 있었다)
 const isHard = (cat: string) => cat === "restaurant" || cat === "shopping";
+const doorSame = (n: NewEntry, d: any, km: number | null): boolean => {
+  const row = {
+    id: -1,
+    name_en: d.h1,
+    name_local: null,
+    name_ko: null,
+    address: d.address ?? null,
+    seed_category: n.cat,
+    lat: d.urlLat ?? null,
+    lng: d.urlLng ?? null,
+  };
+  const names = [...new Set([n.name, n.nameLocal, ...(n.aliases ?? [])])];
+  return names.some((a) => {
+    if (!a) return false;
+    const g = {
+      name: a,
+      nameLocal: n.nameLocal,
+      nameKo: n.nameKo,
+      address: n.address,
+      isRestaurant: n.cat === "restaurant",
+    };
+    return (
+      !!recognizePlace({ ...g, lat: null, lng: null }, [row]) ||
+      (km != null &&
+        km <= T2_MAX_KM &&
+        !!recognizePlace({ ...g, lat: n.lat, lng: n.lng }, [row]))
+    );
+  });
+};
 function gateVerdict(
   n: NewEntry,
   d: any,
@@ -220,7 +250,8 @@ function gateVerdict(
   const t1 = isHard(n.cat)
     ? exactMain(n, d.h1, stop) ||
       exactName(n.aliases, [d.h1], stop) ||
-      (coversName(n.aliases, [d.h1], stop) && km != null && km <= T2_MAX_KM)
+      (coversName(n.aliases, [d.h1], stop) && km != null && km <= T2_MAX_KM) ||
+      doorSame(n, d, km)
     : pageName(n, d.h1, stop);
   if (t1) return { why: null, tier: "T1" };
   const chipCats = categoriesOfLabel(d.category);

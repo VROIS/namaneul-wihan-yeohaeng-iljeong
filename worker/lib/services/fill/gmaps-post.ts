@@ -277,6 +277,10 @@ export async function runGmapsPost(o: {
         });
     }
     log(`   ${JSON.stringify(stat)}`);
+    if (stat.blocked)
+      throw new Error(
+        "제한보기 = 이름 검색이 연속으로 막힘 = 읽은 곳까지 쓰고 멈춤",
+      );
   }
   const { purgeMergedRows } = await import("../place-upsert");
   const purged = await purgeMergedRows(cityId);

@@ -1,6 +1,6 @@
 // ⚠️ 수정금지(승인필요) 2026-11-10 최적값 = 도시 찾기 = 거점 100km 구조 1벌(city-hub.ts) · 완비도시 목록에 국가 코드 동봉 (정본 2026-11-10)
 
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import * as schema from "../../shared/schema";
 
 import { readySql, servingGateSql } from "../lib/services/shared/pool-radius";
@@ -14,22 +14,32 @@ import type { Db } from "../db-types";
 const { cities, placeSeedRaw } = schema;
 
 export function readyCities(db: Db) {
-  return db
-    .select({
-      id: cities.id,
-      nameKo: cities.name,
-      nameEn: cities.nameEn,
-      countryCode: cities.countryCode,
-      rows: sql<number>`COUNT(*)::int`,
-    })
-    .from(cities)
-    .innerJoin(
-      placeSeedRaw,
-      and(eq(placeSeedRaw.cityId, cities.id), servingGateSql()),
-    )
-    .groupBy(cities.id, cities.name, cities.nameEn, cities.countryCode)
-    .having(readySql())
-    .orderBy(desc(sql`COUNT(*)`));
+  return (
+    db
+      .select({
+        id: cities.id,
+        nameKo: cities.name,
+        nameEn: cities.nameEn,
+        countryCode: cities.countryCode,
+        rows: sql<number>`COUNT(*)::int`,
+      })
+      .from(cities)
+      .innerJoin(
+        placeSeedRaw,
+        and(eq(placeSeedRaw.cityId, cities.id), servingGateSql()),
+      )
+      .groupBy(cities.id, cities.name, cities.nameEn, cities.countryCode)
+      .having(readySql())
+      // ⚠️ 수정금지(승인필요) 2026-11-15 사장님 결정 = 도시 카드 노출 순서 = 나라 묶음(지정 순서 → 나라 인구) → 묶음 안 도시(지정 순서 → 도시 인구) = 한 나라의 도시는 항상 붙어 나온다 (정본 2026-11-15)
+      .orderBy(
+        sql`${cities.countryOrder} ASC NULLS LAST`,
+        sql`${cities.countryPopulation} DESC NULLS LAST`,
+        cities.countryCode,
+        sql`${cities.cityOrder} ASC NULLS LAST`,
+        sql`${cities.population} DESC NULLS LAST`,
+        cities.id,
+      )
+  );
 }
 
 export interface CityReadyResult {

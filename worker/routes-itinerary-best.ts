@@ -45,15 +45,18 @@ const pickedForm = (formData: TripFormData): TripFormData => ({
   travelPace: "Packed",
 });
 
-// ⚠️ 수정금지(승인필요) 2026-10-19 사장님 결정 = 베스트 순서 = 산출표 순위(앞자리) → 동의 수 → 리뷰수 · 목록·예상 여정도 이 순서를 쓴다 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-11-14 사장님 결정 = 인기 명소(목록·그 여정의 식당) = 그 거점 폴더의 행만 · 거리 제한 없음 = 창고의 등수가 화면에 그대로 나간다 · 순서 = 산출표 순위 → 동의 수 → 리뷰수 · 취향 여정 수정 완료의 식당만 반경 풀 (정본 2026-11-14)
 async function selectBest(
   db: Db,
   cityId: number,
   cityCoords: { lat: number; lng: number } | null | undefined,
   isRestaurant: boolean,
+  byFolder: boolean,
 ) {
   const center = cityCoords ?? null;
-  const poolWhere = poolWhereSql(cityId, center);
+  const poolWhere = byFolder
+    ? eq(placeSeedRaw.cityId, cityId)
+    : poolWhereSql(cityId, center);
   const rows: any[] = await db
     .select(AG2_SELECT_COLS)
     .from(placeSeedRaw)
@@ -78,6 +81,14 @@ async function selectBest(
 
 const BEST_LIST_PER_DAY = 6;
 
+const localityOf = (address: string | null | undefined) =>
+  String(address ?? "")
+    .split(",")
+    .slice(-2)
+    .map((x) => x.trim().match(/^\d{4,5}\s+(\p{L}.*)$/u)?.[1])
+    .filter(Boolean)
+    .pop() ?? null;
+
 export async function listBest(
   db: Db,
   formData: TripFormData,
@@ -87,7 +98,7 @@ export async function listBest(
   const cityCoords = cityCoordsOf(cityCheck);
   const skeleton = await buildSkeleton(pickedForm(formData));
   const [rows, hourlyRate] = await Promise.all([
-    selectBest(db, cityId, cityCoords, false),
+    selectBest(db, cityId, cityCoords, false, true),
     cityHourlyRate(db, cityId),
   ]);
   const best = rows.filter((r) => r.bestRank != null);
@@ -123,6 +134,7 @@ export async function listBest(
         id: r.id,
         nameEn: p.name,
         nameLocal: p.nameLocal,
+        locality: localityOf(r.address),
         image: p.image,
         userRatingCount: p.userRatingCount,
         rank: bestRankOrdinal(r.bestRank),
@@ -175,7 +187,9 @@ export async function runPipelinePicked(
           .from(placeSeedRaw)
           .where(inArray(placeSeedRaw.id, ids))
       : Promise.resolve([] as any[]),
-    finalDays ? selectBest(db, cityId, cityCoords, true) : Promise.resolve([]),
+    finalDays
+      ? selectBest(db, cityId, cityCoords, true, best)
+      : Promise.resolve([]),
   ]);
   const imagePidMap = await loadImagePidMap([
     cityId,

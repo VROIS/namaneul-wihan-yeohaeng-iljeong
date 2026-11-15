@@ -27,7 +27,7 @@ const TARGET = [
   "healing",
   "photospot",
 ] as const;
-const VIATOR = "https://api.viator.com/partner";
+export const VIATOR = "https://api.viator.com/partner";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 type PartnerPlace = {
@@ -37,6 +37,7 @@ type PartnerPlace = {
   lat: number | null;
   lng: number | null;
   street: string | null;
+  products?: number;
 };
 type City = {
   id: number;
@@ -46,7 +47,7 @@ type City = {
   lng: number;
 };
 
-function viatorHeaders() {
+export function viatorHeaders() {
   return {
     "exp-api-key": process.env.VIATOR_API_KEY!,
     Accept: "application/json;version=2.0",
@@ -55,7 +56,10 @@ function viatorHeaders() {
   };
 }
 
-async function viatorPlaces(city: City, dests: any[]): Promise<PartnerPlace[]> {
+export async function viatorPlaces(
+  city: City,
+  dests: any[],
+): Promise<PartnerPlace[]> {
   const near = dests.filter(
     (d) =>
       d.center &&
@@ -97,6 +101,7 @@ async function viatorPlaces(city: City, dests: any[]): Promise<PartnerPlace[]> {
           lat: a.center?.latitude ?? null,
           lng: a.center?.longitude ?? null,
           street: a.address?.street ?? null,
+          products: a.productCount ?? 0,
         });
       await sleep(700);
       if (start + 30 > (j.totalCount ?? 0)) break;

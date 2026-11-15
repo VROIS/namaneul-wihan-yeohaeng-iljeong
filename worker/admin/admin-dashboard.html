@@ -606,6 +606,14 @@
             <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">영상 번호</label>
             <input type="number" id="override-video-id" class="form-input" placeholder="saved_videos.id">
           </div>
+          <div>
+            <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">나라 순서(대륙 탭 안 · 비우면 나라 인구순)</label>
+            <input type="number" id="override-country-order" class="form-input" placeholder="1 = 맨 앞 · 같은 나라 도시 전부에 적용">
+          </div>
+          <div>
+            <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">도시 순서(나라 안 · 비우면 도시 인구순)</label>
+            <input type="number" id="override-city-order" class="form-input" placeholder="1 = 그 나라 안에서 맨 앞">
+          </div>
         </div>
         <div style="margin-top: 16px;">
           <button class="btn btn-primary" id="content-apply-override-btn" onclick="applyContentOverride()">적용</button>
@@ -1502,7 +1510,7 @@
     //   이전 도시에 입력하던 값이 남아 있다가 다음 도시에 [적용]을 누를 때 같이 저장돼 엉뚱한 override 가 생김.
     //   도시가 바뀔 때는 무조건 5칸부터 전부 비운다(저장된 값 유무와 무관, 입력 중이던 것도 함께 삭제).
     function clearOverrideInputs() {
-      ['override-hero-place-id', 'override-highlight-1', 'override-highlight-2', 'override-highlight-3', 'override-video-id']
+      ['override-hero-place-id', 'override-highlight-1', 'override-highlight-2', 'override-highlight-3', 'override-video-id', 'override-country-order', 'override-city-order']
         .forEach((id) => { document.getElementById(id).value = ''; });
     }
 
@@ -1548,6 +1556,8 @@
         document.getElementById('override-highlight-2').value = highlights[1] ?? '';
         document.getElementById('override-highlight-3').value = highlights[2] ?? '';
         document.getElementById('override-video-id').value = ov.videoId ?? '';
+        document.getElementById('override-country-order').value = ov.countryOrder ?? '';
+        document.getElementById('override-city-order').value = ov.cityOrder ?? '';
 
         btn.dataset.cityId = cityId;
       } catch (err) {
@@ -1627,6 +1637,8 @@
           val('override-highlight-1'), val('override-highlight-2'), val('override-highlight-3'),
         ].filter((v) => v != null),
         videoId: val('override-video-id'),
+        countryOrder: val('override-country-order'),
+        cityOrder: val('override-city-order'),
       };
       try {
         const res = await fetch(`${API_BASE}/cities/${cityId}/content-override`, {

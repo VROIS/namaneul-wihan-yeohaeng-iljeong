@@ -45,8 +45,13 @@ const INSTRUCTION = path.join(
     await c.query(
       `SELECT id, substring(google_maps_uri from 'cid=([0-9]+)') AS cid, name_en, seed_category, price_eur::float8 AS price_eur
          FROM place_seed_raw WHERE city_id=$1 AND merged_into IS NULL AND seed_category NOT LIKE 'bts%' AND google_maps_uri LIKE '%cid=%'
+          AND ($2::timestamptz IS NULL OR verified_at >= $2::timestamptz OR created_at >= $2::timestamptz)
         ORDER BY id`,
-      [cityId],
+      // 필시티 v4 = --since=<판 시작 시각> 이 오면 이번 판에 구글맵에서 읽었거나 새로 들어온 행만 점검한다 = 지난 판에 이미 검수한(도장 찍힌) 행을 일꾼이 다시 열지 않는다 (정본 2026-11-14)
+      [
+        cityId,
+        argv["since"] ? new Date(String(argv["since"])).toISOString() : null,
+      ],
     )
   ).rows.map((r: any, order: number) => ({ order, ...r }));
   // 창고에 이미 있는 이 도시 가게 이름 = 시설 안 가게를 이미 넣었으면 빠뜨림이 아니다

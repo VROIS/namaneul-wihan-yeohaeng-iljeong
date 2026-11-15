@@ -23,7 +23,10 @@ import {
   newStat,
   upsertTranslations,
 } from "../../worker/lib/services/fill/gmaps-shared";
-import { absorbInto } from "../../worker/lib/services/fill/gmaps-absorb";
+import {
+  absorbInto,
+  crossKind,
+} from "../../worker/lib/services/fill/gmaps-absorb";
 import { decidePrice } from "../../worker/lib/services/shared/price-eur";
 import { upsertPlace } from "../../worker/lib/services/place-upsert";
 import { CITY_RANGE_KM } from "../../worker/lib/services/shared/geo-distance";
@@ -107,6 +110,18 @@ type Found = {
         pageName: e?.pageName ?? null,
       };
     });
+  // 필시티 v4 = 일꾼이 구글 검색으로 찾으러 나가는 곳 수의 상한(--max-targets) = 넘으면 일꾼을 띄우지 않고 멈춘다 = 선처리·입력이 잘못돼 대상이 부풀었을 때 사람 인증이 쏟아지는 것을 막는다(2026-11-13 베른 84건) (정본 2026-11-14)
+  const maxTargets = Number(argv["max-targets"] || 0);
+  if (maxTargets && targets.length > maxTargets) {
+    console.error(
+      `✗ 못 찾은 베스트 ${round}차 city ${cityId} = 맡을 것 ${targets.length}곳 > 상한 ${maxTargets} = 일꾼 안 띄움(원인부터 본다) · 앞 10 = ${targets
+        .slice(0, 10)
+        .map((t) => `${t.entry.name}(${t.why})`)
+        .join(" | ")}`,
+    );
+    await c.end();
+    process.exit(1);
+  }
   if (!targets.length) {
     console.log(
       `═══ 못 찾은 베스트 ${round}차 city ${cityId} = 산출본 베스트 ${best.length} 중 맡을 것 0 = 일꾼 안 띄움 ═══`,
@@ -374,29 +389,35 @@ type Found = {
     if (exist) {
       // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 창고에 그 CID 행이 있으면 흡수 도구 1벌(gmaps-absorb absorbInto)로 합친다 = 제미니 몫·가격 결정·베스트 언어·번역이 ④ 흡수와 같은 길 · gmaps-shared 부품은 정적 import 한 번 (정본 §)
       const stat = newStat();
+      const hinted = {
+        ...n,
+        psrHint: {
+          psrId: exist.id,
+          psrName: exist.name_en,
+          psrCat: exist.seed_category,
+          psrTags: exist.category_tags ?? null,
+          by: `find-best CID ${r.cid}`,
+        },
+      };
+      // 필시티 v4 = 일꾼이 찾은 번호가 엇갈린 종류의 행(볼거리 안의 식당 등)이면 값은 덮지 않고 짝만 장부에 적는다 = 버리지 않는다 (정본 2026-11-14 M)
+      const pairOnly = crossKind(hinted);
       await absorbInto(
         c,
         upsertPlace,
-        {
-          ...n,
-          psrHint: {
-            psrId: exist.id,
-            psrName: exist.name_en,
-            psrCat: exist.seed_category,
-            psrTags: exist.category_tags ?? null,
-            by: `find-best CID ${r.cid}`,
-          },
-        },
+        hinted,
         { cityId, provenanceTag: TAG },
         stat,
       );
-      if (stat.absorbedHint)
+      if (stat.absorbedHint || pairOnly)
         ledger[x.key] = {
           ...ledger[x.key],
           ...baseOf(x.order),
           verdict: "worker-absorbed",
           rowId: exist.id,
           cid: String(r.cid),
+          ...(pairOnly
+            ? { why: "식당·볼거리 엇갈림 = 값은 안 덮고 짝만 적음" }
+            : {}),
           at: new Date().toISOString(),
         };
       continue;

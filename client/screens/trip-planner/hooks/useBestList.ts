@@ -10,6 +10,7 @@ export type BestListPlace = {
   id: number;
   nameEn: string;
   nameLocal?: string | null;
+  locality?: string | null;
   image?: string | null;
   userRatingCount?: number;
   rank: number | null;
