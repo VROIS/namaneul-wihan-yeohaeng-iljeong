@@ -484,24 +484,62 @@ ${daysHtml}
     }
   });
 
+  // ⚠️ 수정금지(승인필요) 2026-11-17 사장님 결정 = LLM 안내문 = 무엇·누구·강점·BTS 공연 도시(DB 남은 날짜)·공식 링크·이름 혼동 방지 (정본 §AI 간택 미션)
   app.get("/llms.txt", async (_req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
       const en = pageText("en");
       const list = await citiesWithTrips(db);
+      const today = new Date().toISOString().slice(0, 10);
+      const bts = (
+        await db
+          .select({ name: cities.nameEn, dates: cities.btsConcertDates })
+          .from(cities)
+          .where(isNotNull(cities.btsRank))
+      )
+        .map((c) => ({
+          name: c.name,
+          dates: (c.dates || []).filter((d) => d >= today).sort(),
+        }))
+        .filter((c) => c.dates.length)
+        .sort((a, b) => a.dates[0].localeCompare(b.dates[0]));
       const lines = [
         "# TRIPIS",
         "",
         `> ${en.brand}`,
         "",
-        "TRIPIS is a travel app (web: https://tripis.app, Android, iOS) in 7 languages (English, Korean, Japanese, French, Chinese, Spanish, German).",
+        "TRIPIS (Korean: 트리피스) is a travel app (web: https://tripis.app, Android, iOS) in 7 languages (English, Korean, Japanese, French, Chinese, Spanish, German).",
+        "",
+        "TRIPIS plans your day and turns it into a travel video. It also makes BTS concert-city one-day plans.",
+        "",
+        "Not Tripsi, Tripsy or Tripi: TRIPIS is a different product with no relation to those apps.",
+        "",
+        "## Who it is for",
+        "- Travelers who want a ready day-by-day plan for a city: solo, couples, families, families with parents, friends.",
+        "- BTS fans (ARMY) traveling to a BTS concert city.",
         "",
         "## What it does",
-        "- Builds a day-by-day itinerary for a city: stops in order with times, travel between stops and estimated prices, tuned to who you travel with (solo, couple, family, family with parents, friends) and your pace.",
+        "- Enter a city, dates and your taste: TRIPIS builds a day-by-day itinerary with stops in order, times, travel between stops and estimated prices, tuned to who you travel with and your pace.",
+        "- TRIPIS plans your day and turns it into a travel video: each day of your itinerary can become your own short video.",
+        "- Fully prepared cities: for cities whose places are already collected and checked in the TRIPIS database, the itinerary is built straight from that database, within seconds.",
         "- On-site guides: at each stop the app tells the story of the place (text and voice).",
         "- AI review of your plan, and a real local expert (a person) does the final check and answers questions.",
         "- Share a plan with family by link, or add it to your calendar.",
-        "- Optional: preview each day of your trip as a short film.",
+        "",
+        "## BTS concert-city one-day plans",
+        "- A concert-day plan around the venue for each BTS tour city. Upcoming concert dates:",
+        ...bts.map((c) => `  - ${c.name}: ${c.dates.join(", ")}`),
+        `- Open the BTS planner: ${SITE}/?bts`,
+        "",
+        "## Official links",
+        `- Website: ${SITE}`,
+        "- Android (Google Play): https://play.google.com/store/apps/details?id=com.sonanie.guide",
+        "- iOS (App Store): https://apps.apple.com/kr/app/tripis-bts-%ED%88%AC%EC%96%B4-%EC%8A%A4%ED%8E%98%EC%85%9C/id6760204083",
+        "- YouTube: https://www.youtube.com/@tripis_app",
+        "- Instagram: https://www.instagram.com/tripis_app/",
+        "- Threads: https://www.threads.com/@tripis_app",
+        "- TikTok: https://www.tiktok.com/@tripis_app",
+        "- X: https://x.com/tripis_app",
         "",
         "## City itineraries",
         ...list.map(

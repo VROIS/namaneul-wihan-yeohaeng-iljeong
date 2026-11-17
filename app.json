@@ -46,8 +46,8 @@
       "output": "single",
       "favicon": "./assets/images/tripis-favicon.png",
       "lang": "en",
-      "name": "TRIPIS - Your AI travel friend",
-      "description": "TRIPIS — Your AI travel friend that plans trips tailored to your taste. Itinerary, stays, and restaurants all in one place."
+      "name": "TRIPIS — AI travel friend that turns your day into a video",
+      "description": "Enter a city, dates and your taste — TRIPIS plans your day and turns it into your own travel video. 7 languages. BTS concert-city days."
     },
     "plugins": [
       [
