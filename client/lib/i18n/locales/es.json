@@ -45,7 +45,8 @@
     "ageGroup40s": "40 años",
     "ageGroup50s": "50 años",
     "ageGroup60sPlus": "60 años+",
-    "optional": "(opcional)"
+    "optional": "(opcional)",
+    "signupBonus": "+{{n}} free"
   },
   "credit": {
     "shortTitle": "Créditos bajos",

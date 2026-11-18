@@ -45,7 +45,8 @@
     "ageGroup40s": "40代",
     "ageGroup50s": "50代",
     "ageGroup60sPlus": "60代+",
-    "optional": "(任意)"
+    "optional": "(任意)",
+    "signupBonus": "+{{n}} free"
   },
   "credit": {
     "shortTitle": "クレジット不足",

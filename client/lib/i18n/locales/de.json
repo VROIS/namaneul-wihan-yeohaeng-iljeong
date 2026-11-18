@@ -45,7 +45,8 @@
     "ageGroup40s": "40er",
     "ageGroup50s": "50er",
     "ageGroup60sPlus": "60er+",
-    "optional": "(optional)"
+    "optional": "(optional)",
+    "signupBonus": "+{{n}} free"
   },
   "credit": {
     "shortTitle": "Guthaben knapp",

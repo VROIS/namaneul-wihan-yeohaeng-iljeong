@@ -19,6 +19,7 @@ import { Colors, Brand } from "@/constants/theme";
 import { useMapToggle } from "@/contexts/MapToggleContext";
 import { useLogin } from "./hooks/useLogin";
 import { BIRTHDATE_REQUIRED } from "@shared/birthdate-policy";
+import { getPricing } from "@/screens/profile/creditsApi";
 import { styles } from "./styles";
 
 function LoginSheetForm({ onClose }: { onClose: () => void }) {
@@ -54,6 +55,16 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
   const canUseEmail = !BIRTHDATE_REQUIRED || !!ageGroup;
   const busy = oauthLoading || emailLoading;
   const emailBtnDisabled = busy || !canUseEmail || !emailInput.trim();
+  const [signupBonus, setSignupBonus] = useState<number | null>(null);
+  useEffect(() => {
+    let alive = true;
+    getPricing().then((p) => {
+      if (alive && p) setSignupBonus(p.signupBonus);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
   // ⚠️ 사장님 SSOT 2026-07-27(AOS 실기기) = 로그인 요청~응답 약 1초 동안 화면이 그대로라
 
   return (
@@ -71,7 +82,7 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
         </View>
       </View>
 
-      {/* ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = 생년월일 필수/선택 마커 = 토글(shared/birthdate-policy) 1벌 */}
+      {/* ⚠️ 수정금지(승인필요) 2026-11-18 사장님 결정 = 로그인 창 생년월일 줄 오른쪽 '첫 가입 보너스' 한 줄(숫자 = /api/credits/pricing signupBonus) (정본 §가입 보너스 안내) */}
       <View style={styles.formSection}>
         {/* ⚠️ 사장님 SSOT 2026-07-25 = 힌트("실제 생년월일…") 설명문 제거(§23) + "(필수 입력)"을 라벨 같은 줄에 작게 = 사용자가 필수임을 즉시 인식(설명 아닌 마커). 행(baseline)+간격 style = RN 크로스플랫폼 정석(공백 하드코딩 아님). */}
         <View style={styles.labelRow}>
@@ -81,6 +92,14 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
           <Text style={[styles.labelRequired, { color: theme.textTertiary }]}>
             {t(BIRTHDATE_REQUIRED ? "login.required" : "login.optional")}
           </Text>
+          {signupBonus ? (
+            <Text
+              style={[styles.labelBonus, { color: Brand.primary }]}
+              numberOfLines={1}
+            >
+              {t("login.signupBonus", { n: signupBonus })}
+            </Text>
+          ) : null}
         </View>
         <View style={styles.dateInputRow}>
           <View

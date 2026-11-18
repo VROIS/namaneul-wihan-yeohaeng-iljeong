@@ -45,7 +45,8 @@
     "ageGroup40s": "40多岁",
     "ageGroup50s": "50多岁",
     "ageGroup60sPlus": "60多岁+",
-    "optional": "(选填)"
+    "optional": "(选填)",
+    "signupBonus": "+{{n}} free"
   },
   "credit": {
     "shortTitle": "积分不足",

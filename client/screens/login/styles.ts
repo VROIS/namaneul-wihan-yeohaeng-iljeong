@@ -90,6 +90,13 @@ export const styles = StyleSheet.create({
     fontFamily: Fonts.medium,
     marginLeft: Spacing.xs,
   },
+  // ⚠️ 수정금지(승인필요) 2026-11-18 사장님 결정 = 로그인 창 생년월일 줄 오른쪽 '첫 가입 보너스' 한 줄(숫자 = /api/credits/pricing signupBonus) (정본 §가입 보너스 안내)
+  labelBonus: {
+    fontSize: 11,
+    fontFamily: Fonts.medium,
+    marginLeft: "auto",
+    flexShrink: 1,
+  },
   dateInputRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
   dateInputBox: {
     borderRadius: BorderRadius.lg,

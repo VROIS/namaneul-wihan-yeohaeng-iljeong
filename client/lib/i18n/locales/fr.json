@@ -45,7 +45,8 @@
     "ageGroup40s": "40 ans",
     "ageGroup50s": "50 ans",
     "ageGroup60sPlus": "60 ans+",
-    "optional": "(facultatif)"
+    "optional": "(facultatif)",
+    "signupBonus": "+{{n}} free"
   },
   "credit": {
     "shortTitle": "Crédits insuffisants",

@@ -45,7 +45,8 @@
     "ageGroup40s": "40s",
     "ageGroup50s": "50s",
     "ageGroup60sPlus": "60s+",
-    "optional": "(optional)"
+    "optional": "(optional)",
+    "signupBonus": "+{{n}} free"
   },
   "credit": {
     "shortTitle": "Low Credits",
