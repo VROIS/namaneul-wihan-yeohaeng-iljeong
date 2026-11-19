@@ -287,7 +287,7 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     await startNativeSocial("apple");
   };
 
-  // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 확정 = **이메일창은 가입이 아니라 "이미 있는 내 계정 찾기"**.
+  // ⚠️ 수정금지(승인필요) 2026-11-19 사장님 결정 = 이메일창 = 이메일 + 생년월일로 신규 가입·기존 로그인(인증 메일 없음) (정본 §외부 영상 → 여정)
   const [emailInput, setEmailInput] = useState("");
   const [emailLoading, setEmailLoading] = useState(false);
   const handleEmailLogin = async () => {

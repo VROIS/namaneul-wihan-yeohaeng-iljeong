@@ -71,7 +71,7 @@ export async function clearAuth(): Promise<void> {
   notifyAuthChanged();
 }
 
-// ⚠️ 수정금지(승인필요) 2026-10-29 사장님 결정 = 이메일창 = 가입이 아니라 "이미 있는 내 계정 찾기" · 처음 들어온 링크 ref 를 함께 보낸다 (정본 §큰 일 4)
+// ⚠️ 수정금지(승인필요) 2026-11-19 사장님 결정 = 이메일창 = 이메일 + 생년월일로 신규 가입·기존 로그인(인증 메일 없음, 서버 /api/auth/email-login 과 같음) · 처음 들어온 링크 ref 를 함께 보낸다 (정본 §외부 영상 → 여정)
 export async function emailLogin(data: {
   email: string;
   birthDate?: string; // 2026-08-24 = 생년월일 선택 정책(shared/birthdate-policy)

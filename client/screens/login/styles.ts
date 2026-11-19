@@ -144,8 +144,10 @@ export const styles = StyleSheet.create({
   socialSection: { gap: Spacing.sm, paddingBottom: Spacing.sm },
   emailLoginBox: { gap: Spacing.xs, marginTop: Spacing.sm },
   emailLoginRow: { flexDirection: "row", gap: Spacing.sm },
+  // ⚠️ 수정금지(승인필요) 2026-11-19 사장님 결정 = 폭 320 웹(웹뷰)에서 이메일 칸이 줄어들어 [로그인] 버튼이 카드 안에 들어온다 (정본 §외부 영상 → 여정)
   emailInput: {
     flex: 1,
+    minWidth: 0,
     height: 40,
     paddingHorizontal: Spacing.md,
     paddingVertical: 0,

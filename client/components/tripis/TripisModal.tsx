@@ -62,13 +62,14 @@ export interface GuideRow {
   createdAt: string;
 }
 
-// ⚠️ 수정금지(승인필요) 2026-11-10 최적값 = 통합 모달 = 숏폼 영상(itinerary) · 가이드 해설(guide) 재생 (정본 2026-11-10)
+// ⚠️ 수정금지(승인필요) 2026-11-18 사장님 결정 = 외부 링크(?video=)로 들어온 영상만 소리 끈 채 자동 재생 · 끝나면 그 여정 화면 자동 전환 · 앱 안 동작 그대로 (정본 §외부 영상 → 여정)
 export type TripisOpenParams =
   | {
       mode: "itinerary";
       itineraryId: number;
       day?: number;
       canGenerate?: boolean;
+      fromLink?: boolean;
     }
   | { mode: "guide"; guides: GuideRow[]; index: number };
 
@@ -279,6 +280,7 @@ function TripisModalInner({
         <View style={styles.contentFrame}>
           {viewMode === "itinerary" && itineraryId != null ? (
             itinerary ? (
+              // ⚠️ 수정금지(승인필요) 2026-11-18 사장님 결정 = 외부 링크(?video=)로 들어온 영상만 소리 끈 채 자동 재생 · 끝나면 그 여정 화면 자동 전환 · 앱 안 동작 그대로 (정본 §외부 영상 → 여정)
               <VideoPlaySlot
                 key={effectiveDay}
                 itineraryId={itineraryId}
@@ -290,6 +292,12 @@ function TripisModalInner({
                 onGenerate={handleGenerate}
                 onVideoByDay={setVideoByDay}
                 pauseSignal={pauseSignal}
+                onFinish={
+                  params.mode === "itinerary" && params.fromLink
+                    ? handleViewItinerary
+                    : undefined
+                }
+                startMuted={params.mode === "itinerary" && params.fromLink}
               />
             ) : (
               <View style={styles.loadingWrap}>
