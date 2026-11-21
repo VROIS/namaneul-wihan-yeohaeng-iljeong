@@ -45,6 +45,8 @@ export const cities = pgTable("cities", {
   overrideHeroPlaceId: integer("override_hero_place_id"),
   overrideHighlightPlaceIds: integer("override_highlight_place_ids").array(),
   overrideVideoId: integer("override_video_id"),
+  // ⚠️ 수정금지(승인필요) 2026-11-21 사장님 결정 = 거점 깃발 = 사장님이 정한 거점(비어 있어도 거점) · 가장 가까운 거점 판정·통폐합·끌어오기는 이 칸만 본다 (정본 2026-11-21)
+  isHub: boolean("is_hub").notNull().default(false),
   population: integer("population"), // 도시 인구(도시 카드 노출 순서의 기본값)
   countryPopulation: integer("country_population"), // 그 도시가 속한 나라의 인구(나라 묶음 순서의 기본값)
   countryOrder: integer("country_order"), // 관리자 지정 = 대륙 탭 안에서 그 나라 묶음의 순서(같은 나라 도시에 같은 값)

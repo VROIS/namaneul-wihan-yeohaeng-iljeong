@@ -1,8 +1,6 @@
-// 필시티 v4 = 투표 용지 만들기 = 비아토르 명소(제휴 API · 무료)를 거점 반경으로 받아, 가장 가까운 거점이 이 도시인 곳만 남긴다(완비 도시 = readyCities 1벌 + 지금 돌리는 거점) · 상품 0개는 뺀다 · 용지는 이름순(순서에 뜻 없음) · DB 쓰기 0 (정본 2026-11-14)
+// ⚠️ 수정금지(승인필요) 2026-11-21 사장님 결정 = 필시티 v4.1 투표 용지 만들기 = 비아토르 명소(제휴 API · 무료)를 거점 반경으로 받아, 붙을 거점이 이 도시인 곳만 남긴다(거점 = 깃발 hubCities 1벌 + 지금 돌리는 거점) · 상품 0개는 뺀다 · 용지는 이름순(순서에 뜻 없음) · DB 쓰기 0 (정본 2026-11-21)
 import fs from "fs";
 import path from "path";
-import { drizzle } from "drizzle-orm/node-postgres";
-import * as schema from "../../shared/schema";
 import {
   connectDb,
   loadEnv,
@@ -16,8 +14,13 @@ import {
   viatorHeaders,
 } from "../../worker/lib/services/fill/affiliate-links";
 import { distanceKmFromCoords as km } from "../../worker/lib/services/shared/geo-distance";
-import { nearestHub, readBallot, type BallotFile } from "./ballot-common";
-import { readyCities } from "../../worker/best-itinerary/city-resolver";
+import {
+  hubCities,
+  nearestHub,
+  readBallot,
+  viatorCountryOf,
+  type BallotFile,
+} from "./ballot-common";
 
 loadEnv();
 const argv = parseArgs();
@@ -53,15 +56,7 @@ if (process.argv[1] && /ballot-build\.ts$/.test(process.argv[1]))
       console.error(`✗ 도시 ${cityId} 좌표 없음`);
       process.exit(1);
     }
-    const readyIds: number[] = (
-      await readyCities(drizzle(c, { schema }) as any)
-    ).map((r: any) => r.id);
-    const hubs: BallotFile["hubs"] = (
-      await c.query(
-        "SELECT id, name, latitude::float8 lat, longitude::float8 lng FROM cities WHERE id = ANY($1::int[]) AND latitude IS NOT NULL",
-        [[...new Set([cityId, ...readyIds])]],
-      )
-    ).rows;
+    const hubs = await hubCities(c, [cityId]);
     await c.end();
 
     const H = viatorHeaders();
@@ -120,13 +115,19 @@ if (process.argv[1] && /ballot-build\.ts$/.test(process.argv[1]))
     const dropped = { otherHub: 0, noProduct: 0, overMax: 0, cityItself: 0 };
     const cityNames: string[] = [];
     const mine: any[] = [];
+    const countryOf = viatorCountryOf(allDests);
     for (const a of seen.values()) {
       const lat = a.center?.latitude,
         lng = a.center?.longitude;
       if (lat == null || lng == null) continue;
       const d = km(self.lat, self.lng, lat, lng);
       if (d > RADIUS_KM) continue;
-      if (nearestHub(hubs, lat, lng) !== cityId) {
+      const primary =
+        (a.destinations ?? []).find((x: any) => x.primary) ??
+        a.destinations?.[0];
+      if (
+        nearestHub(hubs, lat, lng, countryOf(primary?.id, lat, lng)) !== cityId
+      ) {
         dropped.otherHub++;
         continue;
       }

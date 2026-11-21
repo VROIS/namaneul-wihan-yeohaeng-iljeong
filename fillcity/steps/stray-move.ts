@@ -1,56 +1,63 @@
-// 필시티 v4 = 한 장소는 가장 가까운 거점 하나에만 = 이 거점 폴더의 행 중 다른 완비 거점(readyCities 1벌)이 더 가까운 행을 그 거점 폴더로 옮긴다(내보내기만 · 남의 폴더에서 끌어오지 않는다 = 완성된 도시는 건드리지 않는다) · 이동은 기존 이동 도구(wrongcity-quarantine --ids --to) 한 길 (정본 2026-11-14)
+// ⚠️ 수정금지(승인필요) 2026-11-21 사장님 결정 = 필시티 v4.1 = 한 장소는 붙을 거점(nearestHub 1벌) 하나 = 이 거점 폴더에서 다른 거점이 붙을 곳인 행은 내보내고 · 다른 거점 폴더에서 이 거점이 붙을 곳인 행은 끌어온다 · 거점 = 깃발(hubCities 1벌) · 이동은 기존 이동 도구(wrongcity-quarantine --ids --to = 행에 딸린 것 전부 이사) 한 길 (정본 2026-11-21)
 import path from "path";
-import { drizzle } from "drizzle-orm/node-postgres";
-import * as schema from "../../shared/schema";
 import { ROOT, connectDb, loadEnv, parseArgs, runTsx } from "./common";
-import { nearestHub } from "./ballot-common";
-import { readyCities } from "../../worker/best-itinerary/city-resolver";
+import { countryOfAddress, hubCities, nearestHub } from "./ballot-common";
 
 loadEnv();
 const argv = parseArgs();
 const cityId = Number(argv["city-id"] || 0);
 const apply = argv["apply"] === "true";
+const pullOnly = argv["pull-only"] === "true";
 (async () => {
   if (!cityId) {
-    console.error("Usage: --city-id=<N> [--apply]");
+    console.error("Usage: --city-id=<N> [--pull-only=true] [--apply]");
     process.exit(1);
   }
   const c = await connectDb();
-  const readyIds: number[] = (
-    await readyCities(drizzle(c, { schema }) as any)
-  ).map((r: any) => r.id);
-  const hubs = (
-    await c.query(
-      "SELECT id, name, latitude::float8 lat, longitude::float8 lng FROM cities WHERE id = ANY($1::int[]) AND latitude IS NOT NULL",
-      [[...new Set([cityId, ...readyIds])]],
-    )
-  ).rows;
+  const hubs = await hubCities(c, [cityId]);
   const rows: any[] = (
     await c.query(
-      `SELECT id, name_en, seed_category, best_rank IS NOT NULL AS best, latitude::float8 lat, longitude::float8 lng
+      `SELECT id, city_id, name_en, address, verified_at IS NOT NULL AS read, best_rank IS NOT NULL AS best, latitude::float8 lat, longitude::float8 lng
          FROM place_seed_raw
-        WHERE city_id = $1 AND status <> 'merged' AND seed_category NOT LIKE 'bts%'
+        WHERE city_id = ANY($1::int[]) AND status <> 'merged' AND seed_category NOT LIKE 'bts%'
           AND latitude IS NOT NULL AND longitude IS NOT NULL AND latitude <> 0 AND longitude <> 0`,
-      [cityId],
+      [hubs.map((h: any) => h.id)],
     )
   ).rows;
   await c.end();
   const plan = new Map<number, any[]>();
   for (const r of rows) {
-    const h = nearestHub(hubs, r.lat, r.lng);
-    if (h !== cityId) plan.set(h, [...(plan.get(h) ?? []), r]);
+    const h = nearestHub(
+      hubs,
+      r.lat,
+      r.lng,
+      countryOfAddress(r.address, r.read),
+    );
+    if (
+      h !== r.city_id &&
+      ((r.city_id === cityId && !pullOnly) || h === cityId)
+    )
+      plan.set(h, [...(plan.get(h) ?? []), r]);
   }
-  const total = [...plan.values()].reduce((s, a) => s + a.length, 0);
+  const out = [...plan].filter(([h]) => h !== cityId);
+  const pull = plan.get(cityId) ?? [];
+  const nameOf = (id: number) => hubs.find((x: any) => x.id === id)?.name;
   console.log(
-    `═══ 가까운 거점으로 내보내기 city ${cityId} = 좌표 있는 행 ${rows.length} 중 다른 거점이 더 가까운 행 ${total} · ${apply ? "APPLY" : "DRY"} ═══`,
+    `═══ 가까운 거점 정리 city ${cityId} = 내보낼 행 ${out.reduce((s, [, a]) => s + a.length, 0)} · 끌어올 행 ${pull.length} · ${apply ? "APPLY" : "DRY"} ═══`,
   );
+  const show = (list: any[]) =>
+    list
+      .map((r) => `#${r.id} ${r.name_en}${r.best ? "(베스트)" : ""}`)
+      .join(" | ");
+  for (const [h, list] of out)
+    console.log(`  → ${nameOf(h)}(${h}) ${list.length}행 = ${show(list)}`);
+  for (const f of [...new Set(pull.map((r) => r.city_id))]) {
+    const list = pull.filter((r) => r.city_id === f);
+    console.log(`  ← ${nameOf(f)}(${f}) ${list.length}행 = ${show(list)}`);
+  }
+  if (!apply) process.exit(0);
   let failed = 0;
   for (const [h, list] of plan) {
-    const name = hubs.find((x: any) => x.id === h)?.name;
-    console.log(
-      `  → ${name}(${h}) ${list.length}행 = ${list.map((r) => `#${r.id} ${r.name_en}${r.best ? "(베스트)" : ""}`).join(" | ")}`,
-    );
-    if (!apply) continue;
     const ids = list.map((r) => r.id);
     for (let i = 0; i < ids.length; i += 150) {
       const code = await runTsx(
@@ -62,6 +69,6 @@ const apply = argv["apply"] === "true";
   }
   process.exit(failed ? 1 : 0);
 })().catch((e) => {
-  console.error("✗ 가까운 거점으로 내보내기 실패:", e?.message || e);
+  console.error("✗ 가까운 거점 정리 실패:", e?.message || e);
   process.exit(1);
 });

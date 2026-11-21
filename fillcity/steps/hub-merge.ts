@@ -1,8 +1,8 @@
-// 시험판(임시 폴더 전용) = 거점 병합 한 줄 = 옛 도시 폴더를 통째로 잘라 거점에 붙인다(자르기·붙여넣기) · 순서 고정 = ① 백업 ② 옛 폴더 쓰레기 버림(자료 전무 행 + LLM 검토) ③ 덮인 등수 되돌림 ④ 행 이동 ⑤ 여정·가이드·외부 호출 기록 도시 번호 ⑥ 저장소(R2·이 PC) 붙이고 주소 바꿈 ⑦ 옛 주소 0 확인 뒤 옛 R2 폴더·도시 행 삭제 · 끝난 단계는 다시 돌려도 건너뛴다
+// ⚠️ 수정금지(승인필요) 2026-11-21 사장님 결정 = 필시티 v4.1 거점 통폐합 = 없어지는 도시 폴더의 행은 한 장소씩 붙을 거점(nearestHub 1벌 = 같은 나라 거점 우선 · 없으면 가장 가까운 거점 · 후보 = 깃발 거점(hubCities 1벌) + 받는 거점)으로 이사(좌표 없는 행은 받는 거점) · 순서 고정 = ① 백업 ② 옛 폴더 쓰레기 버림 ③ 덮인 등수 되돌림 ④ 행 이사 ⑤ 여정·가이드·외부 호출 기록 도시 번호 ⑥ 저장소(R2·이 PC) 붙이고 주소 바꿈 ⑦ 옛 주소 0 확인 뒤 옛 R2 폴더·도시 행 삭제 · 끝난 단계는 다시 돌려도 건너뛴다 (정본 2026-11-21)
 import fs from "fs";
 import path from "path";
 import { ROOT, connectDb, loadEnv, parseArgs, runTsx, stamp } from "./common";
-import { distanceKmFromCoords } from "../../worker/lib/services/shared/geo-distance";
+import { countryOfAddress, hubCities, nearestHub } from "./ballot-common";
 import { listR2 } from "../../worker/lib/services/shared/r2-client";
 
 loadEnv();
@@ -137,23 +137,13 @@ async function mergeTwins(c: any, hub: number): Promise<number> {
     process.exit(1);
   }
   const c = await connectDb();
-  const hubs: any[] = (
-    await c.query(
-      "SELECT id, name, latitude::float8 AS lat, longitude::float8 AS lng FROM cities WHERE id = ANY($1::int[])",
-      [hubIds],
-    )
-  ).rows;
+  const hubs: any[] = (await hubCities(c, hubIds)).filter(
+    (h) => !froms.includes(h.id),
+  );
   if (!hubs.some((h) => h.id === to))
     throw new Error(`거점 ${to} 도시 행이 없다`);
   console.log(
-    `═══ 거점 병합 = ${froms.join(",")} → ${to}(${hubs.find((h) => h.id === to).name})${
-      hubs.length > 1
-        ? ` · 가까운 쪽으로 갈 수 있는 다른 거점 ${hubs
-            .filter((h) => h.id !== to)
-            .map((h) => h.id + " " + h.name)
-            .join(", ")}`
-        : ""
-    } · ${apply ? "APPLY" : "DRY(쓰기 0)"} ═══`,
+    `═══ 거점 병합 = ${froms.join(",")} → ${to}(${hubs.find((h) => h.id === to).name}) · 한 장소씩 붙을 거점 후보 ${hubs.length}곳 · ${apply ? "APPLY" : "DRY(쓰기 0)"} ═══`,
   );
 
   for (const from of froms) {
@@ -291,28 +281,23 @@ async function mergeTwins(c: any, hub: number): Promise<number> {
       );
     else console.log("  ③ 등수 되돌림 = 순위표나 베스트가 없어 건너뜀");
 
-    // ④ 행 이동 = 가장 가까운 거점으로(좌표 없는 행은 이 거점)
+    // ④ 행 이사 = 한 장소씩 붙을 거점으로(좌표 없는 행은 받는 거점)
     const live: any[] = (
       await c.query(
-        "SELECT id, latitude::float8 AS lat, longitude::float8 AS lng FROM place_seed_raw WHERE city_id=$1 ORDER BY id",
+        "SELECT id, address, verified_at IS NOT NULL AS read, latitude::float8 AS lat, longitude::float8 AS lng FROM place_seed_raw WHERE city_id=$1 ORDER BY id",
         [from],
       )
     ).rows;
     const plan = new Map<number, number[]>();
     for (const r of live) {
       const dst =
-        r.lat && r.lng && hubs.length > 1
-          ? hubs
-              .map((h) => ({
-                id: h.id,
-                d: distanceKmFromCoords(h.lat, h.lng, r.lat, r.lng),
-              }))
-              .sort((a, b) => a.d - b.d)[0].id
+        r.lat && r.lng
+          ? nearestHub(hubs, r.lat, r.lng, countryOfAddress(r.address, r.read))
           : to;
       plan.set(dst, [...(plan.get(dst) ?? []), r.id]);
     }
     console.log(
-      `  ④ 행 이동 = ${[...plan].map(([h, ids]) => `${h} 로 ${ids.length}행`).join(" · ") || "옮길 행 없음"}`,
+      `  ④ 행 이사 = ${[...plan].map(([h, ids]) => `${h} ${hubs.find((x) => x.id === h)?.name ?? ""} 로 ${ids.length}행`).join(" · ") || "옮길 행 없음"}`,
     );
     if (apply)
       for (const [h, ids] of plan)

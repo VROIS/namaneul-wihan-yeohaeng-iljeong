@@ -56,11 +56,11 @@ const TAG = `city-moved-${new Date().toISOString().slice(0, 10)}`;
   const { deletePlaceRow } = await import(
     pathToFileURL(path.join(ROOT, "worker/lib/services/place-upsert.ts")).href
   );
-  const { copyR2Object, deleteFromR2 } = await import(
+  const { copyR2Object, deleteFromR2, listR2 } = await import(
     pathToFileURL(path.join(ROOT, "worker/lib/services/shared/r2-client.ts"))
       .href
   );
-  const { placeImageKeyInCity } = await import(
+  const { placeImageKeyInCity, stampedName } = await import(
     pathToFileURL(path.join(ROOT, "shared/r2-paths.ts")).href
   );
   const r2Prefix = (process.env.R2_PUBLIC_URL || "").replace(/\/+$/, "") + "/";
@@ -95,6 +95,7 @@ const TAG = `city-moved-${new Date().toISOString().slice(0, 10)}`;
   const all = (
     await c.query(
       `SELECT p.id, p.city_id, ci.name_en AS city, p.name_en, p.seed_category, p.day_zone, p.image_url,
+              p.google_place_id AS pid, substring(p.google_maps_uri from 'cid=([0-9]+)') AS cid,
               p.latitude::float8 AS lat, p.longitude::float8 AS lng,
               p.distance_km_from_center::float8 AS dist_col,
               ci.latitude::float8 AS clat, ci.longitude::float8 AS clng
@@ -112,6 +113,7 @@ const TAG = `city-moved-${new Date().toISOString().slice(0, 10)}`;
     ? (
         await c.query(
           `SELECT p.id, p.city_id, ci.name_en AS city, p.name_en, p.seed_category, p.day_zone, p.image_url,
+                  p.google_place_id AS pid, substring(p.google_maps_uri from 'cid=([0-9]+)') AS cid,
                   p.latitude::float8 AS lat, p.longitude::float8 AS lng,
                   NULL::float8 AS dist_col
            FROM place_seed_raw p JOIN cities ci ON ci.id = p.city_id
@@ -193,6 +195,55 @@ const TAG = `city-moved-${new Date().toISOString().slice(0, 10)}`;
       console.log(`  ⚠️ 옛 사진 삭제 실패 ${key}: ${e?.message || e}`),
     );
   };
+  // ⚠️ 수정금지(승인필요) 2026-11-21 사장님 결정 = 필시티 v4.1 이사 = 행이 옮겨 가면 딸린 것도 전부 = 해설 도시 번호 · 옛 도시 R2·로컬 원본 폴더에서 이름에 그 장소 번호(CID·PID 가 이름 안에 · 다섯 자리 이상 행 번호는 이름 끝 토막)가 든 파일(옛 사진 사본·건건 원본 로그)을 새 도시 같은 자리로 옮기고 옛 자리는 지운다 · 번역본은 행 번호로 묶여 그대로 따라간다 (정본 2026-11-21)
+  const cityKeys = new Map<number, string[]>();
+  const keysOf = async (city: number) => {
+    if (!cityKeys.has(city))
+      cityKeys.set(
+        city,
+        (await listR2(`${city}/`)).map((o: any) => o.key),
+      );
+    return cityKeys.get(city)!;
+  };
+  const moveBelongings = async (r: any, toCity: number) => {
+    await c.query("UPDATE guides SET city_id = $2 WHERE place_id = $1", [
+      r.id,
+      toCity,
+    ]);
+    const idTok = String(r.id).length >= 5 ? String(r.id) : null;
+    const dash = (s: string) => s.replace(/[^0-9a-z]+/gi, "-");
+    const keys = [r.cid, r.pid].filter(Boolean).map(dash);
+    const own = (name: string) => {
+      const base = stampedName(name) ?? name.replace(/\.[^.]+$/, "");
+      const tail = base
+        .split(/[_.\-]/)
+        .filter((t: string) => !/^\d{1,2}$/.test(t))
+        .pop();
+      return (
+        (!!idTok && tail === idTok) || keys.some((k) => dash(base).includes(k))
+      );
+    };
+    const cur = keyOfR2(r.image_url);
+    let files = 0;
+    for (const k of await keysOf(r.city_id)) {
+      if (k === cur || !own(k.slice(k.lastIndexOf("/") + 1))) continue;
+      const nk = `${toCity}/${k.slice(k.indexOf("/") + 1)}`;
+      const type = k.endsWith(".json") ? "application/json" : "image/jpeg";
+      if (!(await copyR2Object(k, nk, type))) continue;
+      await deleteFromR2(k);
+      files++;
+    }
+    const localFrom = path.join(ROOT, "docs/raw", String(r.city_id));
+    const localTo = path.join(ROOT, "docs/raw", String(toCity));
+    for (const f of fs.existsSync(localFrom)
+      ? fs.readdirSync(localFrom).filter(own)
+      : []) {
+      fs.mkdirSync(localTo, { recursive: true });
+      fs.renameSync(path.join(localFrom, f), path.join(localTo, f));
+      files++;
+    }
+    if (files) console.log(`  📦 id=${r.id} 딸린 파일 ${files}개 → ${toCity}`);
+  };
   for (const r of rows) {
     const to = (r as any)._to;
     if (!to) {
@@ -272,6 +323,7 @@ const TAG = `city-moved-${new Date().toISOString().slice(0, 10)}`;
       await deleteFromR2(newKey).catch((e: any) =>
         console.log(`  ⚠️ 새 사진 되돌림 실패 ${newKey}: ${e?.message || e}`),
       );
+    if (moved && !stay) await moveBelongings(r, to.id);
   }
   console.log(
     `\n═══ 이동 ${done}행 (검문면제 경유 ${viaSkip}) / 사진만 제자리로 ${photoOnly}행 / 삭제 ${orphan}행 / 실패 ${failed} ═══`,

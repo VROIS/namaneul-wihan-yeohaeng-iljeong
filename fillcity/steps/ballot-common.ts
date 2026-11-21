@@ -11,7 +11,7 @@ export type BallotFile = {
   cityId: number;
   generatedAt: string;
   radiusKm: number;
-  hubs: { id: number; name: string; lat: number; lng: number }[];
+  hubs: { id: number; name: string; lat: number; lng: number; cc?: string }[];
   dropped: {
     otherHub: number;
     noProduct: number;
@@ -41,17 +41,111 @@ export function readBallot(cityId: number, since?: string): BallotFile | null {
   return p ? JSON.parse(fs.readFileSync(p, "utf-8")) : null;
 }
 
-/** 좌표에서 가장 가까운 거점 번호. */
+// ⚠️ 수정금지(승인필요) 2026-11-21 사장님 결정 = 장소의 나라 = 주소 끝 토막의 나라 이름(여러 언어 · 우편번호 붙어도) · 나라 이름이 없고 우편번호가 다섯 자리이며 그 주소가 구글맵 페이지에서 읽은 것(도장 있는 행)이면 구글맵을 읽는 곳의 나라(구글은 읽는 사람 나라를 주소에서 뺀다 · 이 PC = 프랑스) · 제미니 주소는 나라를 안 넣으므로 이 추정을 하지 않는다 · 그 밖은 모름 (정본 2026-11-21)
+const READER_COUNTRY = "FR";
+const COUNTRY_BY_NAME = (() => {
+  const m = new Map<string, string>();
+  const old = /^(FX|EU|UN|EZ|DD|YU|CS|SU|ZR|BU|TP|NT|YD|AN|QO|ZZ)$/;
+  for (const loc of ["en", "fr", "de", "it", "es", "pt", "nl", "ko"]) {
+    const dn = new Intl.DisplayNames([loc], { type: "region" });
+    for (let a = 65; a <= 90; a++)
+      for (let b = 65; b <= 90; b++) {
+        const c = String.fromCharCode(a, b);
+        if (old.test(c)) continue;
+        try {
+          const n = dn.of(c)?.toLowerCase();
+          if (n && n !== c.toLowerCase() && !m.has(n)) m.set(n, c);
+        } catch {}
+      }
+  }
+  m.set("uk", "GB").set("usa", "US").set("vatican city", "VA");
+  return m;
+})();
+
+/** 비아토르 장소의 나라 = 목적지 계층(lookupId "대륙.나라.…")의 둘째 토막 나라 목적지(실측 2026-11-21 = 3,405곳 전부 나라를 찾음) · 주 목적지가 장소에서 25km 넘게 떨어져 있으면(예: 샤모니 케이블카가 제네바 목적지에 묶임) 장소에서 가장 가까운 목적지의 나라 */
+export function viatorCountryOf(destinations: any[]) {
+  const byId = new Map<number, any>(
+    destinations.map((d) => [Number(d.destinationId), d]),
+  );
+  const places = destinations.filter(
+    (d) => d.center && !/^(COUNTRY|REGION|STATE|PROVINCE)$/.test(d.type),
+  );
+  const ccOf = (d: any): string | null => {
+    const top = byId.get(Number(String(d?.lookupId ?? "").split(".")[1]));
+    return top?.type === "COUNTRY"
+      ? (COUNTRY_BY_NAME.get(String(top.name).toLowerCase()) ?? null)
+      : null;
+  };
+  return (
+    destId: number | null | undefined,
+    lat?: number,
+    lng?: number,
+  ): string | null => {
+    const d = byId.get(Number(destId));
+    if (lat == null || lng == null || !d?.center) return ccOf(d);
+    const far = km(lat, lng, d.center.latitude, d.center.longitude) > 25;
+    if (!far) return ccOf(d);
+    const near = places
+      .map((p) => ({
+        p,
+        k: km(lat, lng, p.center.latitude, p.center.longitude),
+      }))
+      .sort((a, b) => a.k - b.k)[0]?.p;
+    return ccOf(near ?? d);
+  };
+}
+
+export function countryOfAddress(
+  address: string | null | undefined,
+  readFromGoogle = false,
+) {
+  const parts = String(address ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (!parts.length) return null;
+  const words = parts[parts.length - 1]
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => !/\d/.test(w));
+  for (const k of [words.join(" "), words[0], words[words.length - 1]])
+    if (k && COUNTRY_BY_NAME.has(k)) return COUNTRY_BY_NAME.get(k)!;
+  return readFromGoogle && /(^|\s)\d{5}(\s|$)/.test(parts.slice(-2).join(" "))
+    ? READER_COUNTRY
+    : null;
+}
+
+// ⚠️ 수정금지(승인필요) 2026-11-21 사장님 결정 = 거점 목록 1벌 = 거점 깃발(cities.is_hub)이 꽂힌 도시 + 지금 다루는 도시(extra) · 완비 여부와 관계없다 (정본 2026-11-21)
+export async function hubCities(
+  c: { query: (q: string, v?: any[]) => Promise<{ rows: any[] }> },
+  extra: number[] = [],
+): Promise<BallotFile["hubs"]> {
+  return (
+    await c.query(
+      "SELECT id, name, country_code cc, latitude::float8 lat, longitude::float8 lng FROM cities WHERE (is_hub OR id = ANY($1::int[])) AND latitude IS NOT NULL",
+      [extra],
+    )
+  ).rows;
+}
+
+// ⚠️ 수정금지(승인필요) 2026-11-21 사장님 결정 = 한 장소가 붙을 거점 = 그 나라(cc · 창고 행은 주소 · 비아토르 명소는 목적지 계층)에 거점이 있으면(150km 안) 그 나라 거점 중 가장 가까운 곳 · 그 나라에 거점이 없거나(도시국가 등) 나라를 모르면 나라와 관계없이 가장 가까운 거점 (정본 2026-11-21)
+export const SAME_COUNTRY_KM = 150;
 export const nearestHub = (
   hubs: BallotFile["hubs"],
   lat: number,
   lng: number,
-): number =>
-  hubs
-    .map((h) => ({ id: h.id, d: km(h.lat, h.lng, lat, lng) }))
-    .sort((a, b) => a.d - b.d)[0].id;
+  cc?: string | null,
+): number => {
+  const near = (list: BallotFile["hubs"]) =>
+    list
+      .map((h) => ({ id: h.id, d: km(h.lat, h.lng, lat, lng) }))
+      .sort((a, b) => a.d - b.d)[0];
+  const same = cc ? hubs.filter((h) => h.cc === cc) : [];
+  const s = same.length ? near(same) : null;
+  return s && s.d <= SAME_COUNTRY_KM ? s.id : near(hubs).id;
+};
 
-// ⚠️ 수정금지(승인필요) 2026-11-15 사장님 결정 = 응답 한 건의 용지 표시 = 용지에 있는 볼거리면 상품 수와 번호 · 용지 밖인데 다른 거점이 더 가까우면 버림(null) = 한 장소는 가까운 거점 하나 (정본 2026-11-14)
+// ⚠️ 수정금지(승인필요) 2026-11-21 사장님 결정 = 응답 한 건의 용지 표시 = 용지에 있는 볼거리면 상품 수와 번호 · 용지 밖인데 붙을 거점(주소의 나라로 nearestHub 1벌)이 다른 곳이면 버림(null) = 한 장소는 거점 하나 (정본 2026-11-21)
 export function ballotMark(
   ballot: BallotFile | null,
   cityId: number,
@@ -67,7 +161,12 @@ export function ballotMark(
     !on &&
     Number(p.lat) &&
     Number(p.lng) &&
-    nearestHub(ballot.hubs, Number(p.lat), Number(p.lng)) !== cityId
+    nearestHub(
+      ballot.hubs,
+      Number(p.lat),
+      Number(p.lng),
+      countryOfAddress(p.address),
+    ) !== cityId
   )
     return null;
   return on ? { products: on.products, ballotNo: on.no } : {};

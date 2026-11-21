@@ -196,11 +196,18 @@ async function trackA() {
   await step("clean", () =>
     runSeq(
       () =>
+        run("① 가까운 거점 끌어오기", "fillcity/steps/stray-move.ts", [
+          `--city-id=${cityId}`,
+          "--pull-only=true",
+          ...applyArg,
+        ]),
+      () =>
         run(
-          "① 사전 정제(구글맵 열기·9요소·장소 아님 삭제)",
+          "① 사전 정제(가격 비우기·구글맵 열기·9요소·장소 아님 삭제)",
           "worker/lib/services/fill/gmaps-preclean.ts",
           [
             `--city-id=${cityId}`,
+            "--clear-prices=true",
             "--skip-stamped=true", // 필시티 v4 = 도장 찍힌 행은 다시 열지 않는다 (정본 2026-11-14)
             ...applyArg,
             ...fxArg,
@@ -211,7 +218,7 @@ async function trackA() {
         ),
       () =>
         run(
-          "① 소속오염 이동",
+          "① 가까운 거점 정리(내보내기·끌어오기)",
           "fillcity/steps/stray-move.ts" /* 필시티 v4 = 소속 정리는 "가장 가까운 도시"가 아니라 "가장 가까운 완비 거점"으로만(2026-11-14 베른 판에서 마터호른 등 7행이 거점이 아닌 샤모니 폴더로 넘어갔다) */,
           [`--city-id=${cityId}`, ...applyArg],
         ),
@@ -403,10 +410,10 @@ async function trackB() {
 
   await Promise.all([trackA(), trackB()]);
 
-  // 필시티 v4 = 쓰레기를 치운 뒤(트랙 A) 남은 행 중 다른 완비 거점이 더 가까운 행을 내보낸다 → 그다음 선처리가 이 폴더 행과 맞댄다 (정본 2026-11-14)
+  // ⚠️ 수정금지(승인필요) 2026-11-21 사장님 결정 = 필시티 v4.1 = 쓰레기를 치운 뒤(트랙 A) 가까운 거점 정리(내보내기 + 다른 완비 거점 폴더에서 끌어오기) → 그다음 선처리가 이 폴더 행과 맞댄다 (정본 2026-11-21)
   await step("stray", () =>
     run(
-      "⓪ 가까운 거점으로 내보내기(다른 완비 거점이 더 가까운 행)",
+      "⓪ 가까운 거점 정리(내보내기·끌어오기)",
       "fillcity/steps/stray-move.ts",
       [`--city-id=${cityId}`, ...applyArg],
       0,

@@ -11,7 +11,12 @@ import {
   stamp,
   stampOf,
 } from "./common";
-import { nearestHub, readBallot } from "./ballot-common";
+import {
+  nearestHub,
+  readBallot,
+  viatorCountryOf,
+  type BallotFile,
+} from "./ballot-common";
 import { readDeleted } from "./trash-apply";
 import {
   VIATOR,
@@ -46,11 +51,12 @@ type Pick = {
   supplier: string;
   startPid: string | null;
   activityPid: string | null;
+  cc?: string | null;
 };
 
 async function viatorTop(
   self: { lat: number; lng: number },
-  hubs: { id: number; name: string; lat: number; lng: number }[],
+  hubs: BallotFile["hubs"],
   radiusKm: number,
 ): Promise<Pick[]> {
   const H = viatorHeaders();
@@ -76,7 +82,9 @@ async function viatorTop(
     const n = String(t.allNamesByLocale?.en || "").trim();
     if (ADV.test(n)) tagName.set(t.tagId, n);
   }
-  const dests = ((await call("/destinations")).destinations ?? []).filter(
+  const allDests: any[] = (await call("/destinations")).destinations ?? [];
+  const countryOf = viatorCountryOf(allDests);
+  const dests = allDests.filter(
     (d: any) =>
       d.center &&
       !["COUNTRY", "REGION", "STATE", "PROVINCE"].includes(
@@ -84,16 +92,21 @@ async function viatorTop(
       ) &&
       km(self.lat, self.lng, d.center.latitude, d.center.longitude) <=
         radiusKm &&
-      nearestHub(hubs, d.center.latitude, d.center.longitude) === cityId,
+      nearestHub(
+        hubs,
+        d.center.latitude,
+        d.center.longitude,
+        countryOf(d.destinationId),
+      ) === cityId,
   );
   // 상품의 대표 목적지가 이 거점 몫일 때만(권역 목적지에 딸려 온 다른 거점 도시의 상품을 뺀다)
   const mineDest = new Set<string>(
     dests.map((d: any) => String(d.destinationId)),
   );
+  const primaryOf = (pr: any) =>
+    (pr.destinations ?? []).find((x: any) => x.primary) ?? pr.destinations?.[0];
   const primaryMine = (pr: any) => {
-    const d =
-      (pr.destinations ?? []).find((x: any) => x.primary) ??
-      pr.destinations?.[0];
+    const d = primaryOf(pr);
     return !!d && mineDest.has(String(d.ref));
   };
   const prods = new Map<string, any>();
@@ -161,6 +174,7 @@ async function viatorTop(
     supplier: p.sup,
     startPid: pidOf(p.startRef),
     activityPid: p.actRef && p.actRef !== p.startRef ? pidOf(p.actRef) : null,
+    cc: countryOf(Number(primaryOf(p.pr)?.ref)),
   }));
 }
 
@@ -288,14 +302,14 @@ async function viatorTop(
     );
     return rec;
   };
-  // 등록된 곳 = 이름·구글 분류·후기가 있고, 좌표가 이 거점 몫(가장 가까운 거점이 이 도시)
-  const registered = (r: any) =>
+  // ⚠️ 수정금지(승인필요) 2026-11-21 사장님 결정 = 등록된 곳 = 이름·구글 분류·후기가 있고, 붙을 거점(상품 주 목적지의 나라로 nearestHub 1벌)이 이 도시 (정본 2026-11-21)
+  const registered = (r: any, cc?: string | null) =>
     !!r?.name &&
     !!r.category &&
     r.reviews > 0 &&
     r.lat != null &&
     r.lng != null &&
-    nearestHub(ballot.hubs, Number(r.lat), Number(r.lng)) === cityId;
+    nearestHub(ballot.hubs, Number(r.lat), Number(r.lng), cc) === cityId;
   const chosen: { p: Pick; pid: string; page: any; by: string }[] = [];
   const tally: Record<string, number> = {};
   const bump = (k: string) => (tally[k] = (tally[k] || 0) + 1);
@@ -316,7 +330,7 @@ async function viatorTop(
         const r = await peek(pid);
         if (limited) break;
         if (
-          registered(r) &&
+          registered(r, p.cc) &&
           (kind === "활동 장소" || namesAgree(r.name, [p.supplier]))
         ) {
           if (r.cid && haveCid.has(r.cid)) by = "창고에 이미 있음";

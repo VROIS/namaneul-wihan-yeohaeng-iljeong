@@ -122,13 +122,37 @@ const passing = (why: string) =>
   for (const d of drops) console.log(`  [LLM 삭제] #${d.id} ${d.name_en}`);
   for (const r of rows)
     console.log(`  [${r.direct ? "직행" : "검색"}] #${r.id} ${r.name_en}`);
+  // ⚠️ 수정금지(승인필요) 2026-11-21 사장님 결정 = 필시티 v4.1 = ① 정제 단계(--clear-prices=true 를 받을 때만 · ④ 읽기 2차는 비우지 않는다)에서 그 거점 폴더의 가격은 전부 비운다(행은 살림) = 이 판의 제미니 값(없으면 구글맵)으로만 다시 채운다 · 비우기는 upsertPlace 의 가격 비우기 칸 한 길 · 사장님 결정값(*_boss-fix)은 판정 전에 다시 들어간다 (정본 2026-11-21)
+  const priced: any[] =
+    argv["clear-prices"] === "true"
+      ? (
+          await c.query(
+            "SELECT id, seed_category, name_en FROM place_seed_raw WHERE city_id = $1 AND seed_category NOT LIKE 'bts_%' AND status <> 'merged' AND price_eur IS NOT NULL ORDER BY id",
+            [cityId],
+          )
+        ).rows
+      : [];
+  console.log(`  [가격 비우기] 가격 있는 행 ${priced.length}`);
   if (!apply) {
     await c.end();
     process.exit(0);
   }
 
   let removed = 0,
-    later = 0;
+    later = 0,
+    cleared = 0;
+  for (const r of priced) {
+    const res = await upsertPlace({
+      cityId,
+      seedCategory: r.seed_category,
+      nameEn: r.name_en,
+      targetRowId: r.id,
+      followTriggerDup: true,
+      clearPriceEur: true,
+    });
+    if (res.action === "updated") cleared++;
+  }
+  console.log(`  💸 가격 비움 ${cleared}/${priced.length}행`);
   const drop = async (id: number, name: string, why: string) => {
     if (!(await deletePlaceRow(id))) return;
     removed++;
